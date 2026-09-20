@@ -1174,7 +1174,8 @@ dashboard.get("/tickets", async (c) => {
         sla:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.sla])),
         priorityClocks:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.priorityClock?{
           remainingHours:item.priorityClock.timeRemainingHours,paused:item.priorityClock.paused,asOf:result.asOf,
-        }:null])),triageOverdueCount:result.triageOverdueCount,asOf:result.asOf,next:result.next};
+        }:null])),triageOverdueCount:result.triageOverdueCount,asOf:result.asOf,next:result.next,
+        nextPriorityChangeAt:result.nextPriorityChangeAt};
       assertConversationResponseBounds(body);
       const response=c.json(body);completed=result;return response;
     }catch(error){

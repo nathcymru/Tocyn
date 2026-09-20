@@ -421,7 +421,7 @@ it('shows all three priority views with authoritative triage clocks and the sepa
         return json({data:classified,meta:{page:1,limit:2,total:7,total_pages:4},
           sla:Object.fromEntries(classified.map(ticket=>[ticket.id,unavailableSla])),
           priorityClocks:Object.fromEntries(classified.map((ticket,index)=>[ticket.id,{remainingHours:index===0?-0.5:-1,paused:false,asOf:snapshot}])),
-          triageOverdueCount:7,asOf:snapshot,next:'signed-next-page'});
+          triageOverdueCount:7,nextPriorityChangeAt: null, asOf:snapshot,next:'signed-next-page'});
       }
     }
     return base(url,options);
@@ -477,18 +477,57 @@ it('restarts an expired priority snapshot without displaying stale ordinary rows
       priorityReads++;
       return priorityReads===1?json({code:'priority_sort_restart',error:'Snapshot expired'},409)
         :json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
-          priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:snapshot}},triageOverdueCount:0,asOf:snapshot,next:null});
+          priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:snapshot}},triageOverdueCount:0,nextPriorityChangeAt: null, asOf:snapshot,next:null});
     }
     return base(url,options);
   });
   showInbox('/inbox/all');
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   await chooseView('Needs Attention');
-  const restart=await screen.findByRole('button',{name:'Restart priority ordering'});
+  const restart=await screen.findByRole('button',{name:'Retry conversations'});
   expect(within(screen.getByRole('listbox')).queryAllByRole('option')).toHaveLength(0);
+  expect(screen.queryByText(/Priority order set/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Refresh priority ordering'})).not.toBeInTheDocument();
   fireEvent.click(restart);
   expect(await within(screen.getByRole('listbox')).findByRole('meter',{name:/Alpha contract, level 4 priority triage clock/})).toBeInTheDocument();
   expect(priorityReads).toBe(2);
+});
+
+it('keeps Retry visible after a transient priority refresh failure and reconciles again while visible', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      priorityReads++;
+      if(priorityReads===2)return json({code:'temporarily_unavailable',error:'Temporary read failure'},503);
+      const sampledAt=new Date().toISOString();
+      return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+        priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:sampledAt}},
+        triageOverdueCount:0,nextPriorityChangeAt: null, asOf:sampledAt,next:null});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await chooseView('Needs Attention');
+  await waitFor(()=>expect(priorityReads).toBe(1));
+
+  vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+  try{
+    await act(async()=>{
+      const pending=client.invalidateQueries({queryKey:['tickets','priority-matrix']});
+      await vi.advanceTimersByTimeAsync(0);
+      await pending;
+    });
+    expect(priorityReads).toBe(2);
+    expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
+
+    await act(async()=>{await vi.advanceTimersByTimeAsync(30_000);});
+    expect(priorityReads).toBe(3);
+  }finally{vi.useRealTimers();}
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'Retry conversations'})).not.toBeInTheDocument());
+  expect(await within(screen.getByRole('listbox')).findByRole('meter',{name:/Alpha contract, level 4 priority triage clock/})).toBeInTheDocument();
 });
 
 it('restarts the priority snapshot at page one after classification changes and keeps the selected conversation', async () => {
@@ -501,7 +540,7 @@ it('restarts the priority snapshot at page one after classification changes and 
       const sampledAt=new Date().toISOString();
       return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
         priorityClocks:{[classified.id]:{remainingHours:priorityReads===1?1:0.5,paused:false,asOf:sampledAt}},
-        triageOverdueCount:0,asOf:sampledAt,next:null});
+        triageOverdueCount:0,nextPriorityChangeAt: null, asOf:sampledAt,next:null});
     }
     return base(url,options);
   });
@@ -538,7 +577,7 @@ it('removes a due ticket from the visible Snoozed priority view on the next boun
         return json({data:rows,meta:{page:1,limit:20,total:rows.length,total_pages:1},
           sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
           priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:24,paused:false,asOf}])),
-          triageOverdueCount:0,asOf,next:null});
+          triageOverdueCount:0,nextPriorityChangeAt: null, asOf,next:null});
       }
     }
     return base(url,options);
@@ -563,6 +602,72 @@ it('removes a due ticket from the visible Snoozed priority view on the next boun
   }finally{vi.useRealTimers();}
 });
 
+it('reconciles priority ordering when a hidden Inbox becomes visible after the snapshot ages', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4};
+  const started=Date.now();
+  let advanced=false;
+  let visible=false;
+  const visibility=vi.spyOn(document,'visibilityState','get').mockImplementation(()=>visible?'visible':'hidden');
+  vi.spyOn(Date,'now').mockImplementation(()=>started+(advanced?31_000:0));
+  let reads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      reads++;
+      const asOf=new Date(Date.now()).toISOString();
+      return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+        priorityClocks:{[classified.id]:{remainingHours:48,paused:false,asOf}},triageOverdueCount:0,nextPriorityChangeAt: null, asOf,next:null});
+    }
+    return base(url,options);
+  });
+  try{
+    showInbox('/inbox/all');
+    await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    await chooseView('Needs Attention');
+    await waitFor(()=>expect(reads).toBe(1));
+    advanced=true;
+    act(()=>document.dispatchEvent(new Event('visibilitychange')));
+    expect(reads).toBe(1);
+    visible=true;
+    act(()=>document.dispatchEvent(new Event('visibilitychange')));
+    await waitFor(()=>expect(reads).toBe(2));
+  }finally{visibility.mockRestore();}
+});
+
+it('reorders the whole priority view when its next drift boundary is reached', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified=[
+    {...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+    {...tickets[1],contract_sla_tier:'charlie',criticality_tier:2,priority_score:8},
+  ];
+  const nextPriorityChangeAt=new Date(Date.now()+5_000).toISOString();
+  let reads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      reads++;
+      const rows=reads===1?classified:[classified[1],classified[0]];
+      const asOf=new Date().toISOString();
+      return json({data:rows,meta:{page:1,limit:20,total:2,total_pages:1},sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
+        priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:reads===1?24:23,paused:false,asOf}])),
+        triageOverdueCount:0,nextPriorityChangeAt:reads===1?nextPriorityChangeAt:null,asOf,next:null});
+    }
+    return base(url,options);
+  });
+  vi.useFakeTimers({toFake:['setInterval','clearInterval']});
+  try{
+    showInbox('/inbox/all');
+    await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    await chooseView('Needs Attention');
+    await waitFor(()=>expect(reads).toBe(1));
+    const list=screen.getByRole('listbox',{name:'Conversation list'});
+    expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 1');
+    await act(async()=>{vi.advanceTimersByTime(6_000);});
+    await waitFor(()=>expect(reads).toBe(2));
+    expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 2');
+    expect(screen.queryByRole('button',{name:/Refresh priority ordering/})).not.toBeInTheDocument();
+  }finally{vi.useRealTimers();}
+});
+
 it('restarts a later Snoozed cursor page at page one when its snapshot ages, preserving the open conversation', async () => {
   const base=vi.mocked(fetch).getMockImplementation()!;
   const classified=[
@@ -584,7 +689,7 @@ it('restarts a later Snoozed cursor page at page one when its snapshot ages, pre
         return json({data:rows,meta:{page:cursor?2:1,limit:1,total:due?1:2,total_pages:due?1:2},
           sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
           priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:24,paused:false,asOf}])),
-          triageOverdueCount:0,asOf,next:cursor||due?null:'signed-next-page'});
+          triageOverdueCount:0,nextPriorityChangeAt: null, asOf,next:cursor||due?null:'signed-next-page'});
       }
     }
     return base(url,options);
@@ -1042,13 +1147,12 @@ it('uses whole-view SLA ordering and same-snapshot projections, then restarts an
   await waitFor(()=>expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 20'));
   expect(vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/ticket-sla/projections')).toHaveLength(before);
   fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
-  await screen.findByRole('button',{name:'Restart SLA ordering'});
+  await waitFor(()=>expect(slaRequests).toHaveLength(3));
+  expect(slaRequests[2]).not.toContain('cursor=');
   expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
-  expect(within(list).queryAllByRole('option')).toHaveLength(0);
-  fireEvent.click(screen.getByRole('button',{name:'Restart SLA ordering'}));
   await within(list).findByRole('option',{name:/Fixture conversation 20/});
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
-  expect(slaRequests).toHaveLength(3);
+  expect(screen.queryByRole('button',{name:'Restart SLA ordering'})).not.toBeInTheDocument();
 });
 
 it('restarts an SLA-sorted page-two snapshot after classification save without rereading the old cursor', async () => {

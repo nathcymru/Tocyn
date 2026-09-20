@@ -1,5 +1,5 @@
 import type { D1Database, DurableObjectNamespace } from '@cloudflare/workers-types';
-import { comparePriorityTickets, type PrioritySortTicket, type PriorityView, type ResourceAmounts } from '@luminatick/shared';
+import { absoluteWindowHours, comparePriorityTickets, type PrioritySortTicket, type PriorityView, type ResourceAmounts } from '@luminatick/shared';
 import { SignJWT, jwtVerify } from 'jose';
 import { assertConversationResponseBounds } from '../services/conversation-read-bounds';
 import type { VerifiedTenantScope } from '../types/tenant';
@@ -21,7 +21,7 @@ export const SLA_QUEUE_CANDIDATE_WORK=12_000_000;
 export class SlaQueueRestart extends Error {readonly code='sla_sort_restart';}
 export type PriorityQueueSort='sla_priority'|'priority_focus'|'priority_criticality'|'priority_commitment';
 export type SlaQueueItem=Readonly<{ticket:Ticket & {snippet:string|null};sla:TicketSlaProjection|null;deadline:number|null;priorityClock:PriorityClockProjection|null}>;
-export type SlaQueuePage=Readonly<{data:readonly SlaQueueItem[];total:number;page:number;asOf:string;next:string|null;triageOverdueCount:number}>;
+export type SlaQueuePage=Readonly<{data:readonly SlaQueueItem[];total:number;page:number;asOf:string;next:string|null;triageOverdueCount:number;nextPriorityChangeAt:string|null}>;
 const selectionKeys=['customerEmail','filterId','status','priority','assignedTo','groupId','ticketNo','search','queue','draftNotExpiredAt'];
 async function hash(raw:string){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw))),n=>n.toString(16).padStart(2,'0')).join('');}
 function safeTotal(...values:number[]){let total=0;for(const n of values){if(!Number.isSafeInteger(n)||n<0||!Number.isSafeInteger(total+n))throw new SlaQueueUnavailable('Unsafe read bound');total+=n;}return total;}
@@ -62,6 +62,27 @@ function ordered(items:readonly SlaQueueItem[],meter:SlaEvaluationMeter,sort:Pri
  while(runs.length>1){const next:SlaQueueItem[][]=[];for(let r=0;r<runs.length;r+=2){const left=runs[r],right=runs[r+1];if(!right){next.push(left);continue;}
   const out:SlaQueueItem[]=[];let i=0,j=0;while(i<left.length&&j<right.length)out.push(compare(left[i],right[j])<=0?left[i++]:right[j++]);
   meter.charge(left.length-i+right.length-j);out.push(...left.slice(i),...right.slice(j));next.push(out);}runs=next;}return runs[0];
+}
+
+/** Earliest future drift or expiry in the complete authorised snapshot, including off-page tickets. */
+export function nextPriorityChangeAt(items:readonly SlaQueueItem[],asOf:number):string|null{
+ if(!Number.isSafeInteger(asOf)||asOf<0)throw new SlaQueueUnavailable('Invalid priority evaluation instant');
+ let next:number|null=null;
+ for(const {ticket,priorityClock} of items){
+  if(!priorityClock||priorityClock.paused||ticket.status==='resolved'||ticket.status==='closed'
+   ||!ticket.contract_sla_tier||!ticket.criticality_tier||ticket.priority_score==null)continue;
+  const window=absoluteWindowHours(ticket.contract_sla_tier,ticket.criticality_tier);
+  const remainingMs=window*3_600_000-priorityClock.elapsedActiveMs;
+  if(!Number.isSafeInteger(remainingMs))throw new SlaQueueUnavailable('Invalid priority clock remaining time');
+  for(const threshold of [24,4,1,0]){
+   if(threshold>=window||remainingMs<=threshold*3_600_000)continue;
+   const candidate=asOf+remainingMs-threshold*3_600_000;
+   if(!Number.isSafeInteger(candidate)||candidate>8_640_000_000_000_000)
+    throw new SlaQueueUnavailable('Invalid priority change instant');
+   if(next===null||candidate<next)next=candidate;
+  }
+ }
+ return next===null?null:new Date(next).toISOString();
 }
 
 /** Request-scoped, currently unmounted candidate backend. Call finish only after constructing the response. */
@@ -132,11 +153,13 @@ export class SlaPriorityQueueService{
    meter.charge(items.length);
    const triageOverdueCount=items.filter(item=>item.priorityClock&&!item.priorityClock.paused
     &&item.ticket.status!=='resolved'&&item.ticket.status!=='closed'&&item.priorityClock.timeRemainingHours<=0).length;
+   meter.charge(4*items.length);
+   const nextChangeAt=nextPriorityChangeAt(items,asOf);
    const nextOffset=offset+limit;
    const next=nextOffset<sorted.length?await new SignJWT({tenant:this.scope.tenantId,session:this.credential.sessionVersion,selection:selectionHash,sort,asOf,offset:nextOffset,digest,limit})
     .setProtectedHeader({alg:'HS256'}).setAudience('sla-priority-queue-v1').setSubject(this.scope.actorId).setExpirationTime(Math.floor((asOf+30000)/1000)).sign(secret):null;
    meter.charge(Math.min(limit,sorted.length-offset));
-   const page=Object.freeze({data:sorted.slice(offset,nextOffset),total:sorted.length,page:Math.floor(offset/limit)+1,asOf:new Date(asOf).toISOString(),next,triageOverdueCount});
+   const page=Object.freeze({data:sorted.slice(offset,nextOffset),total:sorted.length,page:Math.floor(offset/limit)+1,asOf:new Date(asOf).toISOString(),next,triageOverdueCount,nextPriorityChangeAt:nextChangeAt});
    meter.charge(Math.ceil(6*bytes/64)+limit);
    assertConversationResponseBounds(page);
    // Recheck all snapshot IDs: lost visibility aborts the whole page rather than silently removing rows.

@@ -1428,9 +1428,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }:
             <Info className={detailStyles.attachmentIcon} />
             Ticket Details
           </h3>
-          <section aria-label="A4 triage classification" className={css({ display: 'grid', gap: '2', p: '3', borderWidth: '1px', borderColor: 'border.default', borderRadius: 'l2', bg: 'bg.surface' })}>
+          <section aria-label="Priority classification" className={css({ display: 'grid', gap: '2', p: '3', borderWidth: '1px', borderColor: 'border.default', borderRadius: 'l2', bg: 'bg.surface' })}>
             <div className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '2' })}>
-              <h4 className={css({ m: 0, fontSize: 'sm', fontWeight: 'semibold' })}>A4 triage classification</h4>
+              <h4 className={css({ m: 0, fontSize: 'sm', fontWeight: 'semibold' })}>Priority classification</h4>
               <ParkButton ref={classificationTrigger} type="button" variant="outline" disabled={!Number.isSafeInteger(ticket.priority_classification_revision)} onClick={() => setClassificationOpen(true)}>Edit classification</ParkButton>
             </div>
             <dl className={css({ display: 'grid', gridTemplateColumns: { base: '1fr 1fr', md: 'repeat(4, minmax(0, 1fr))' }, gap: '2', m: 0, fontSize: 'sm' })}>
@@ -1467,7 +1467,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }:
                   className={detailStyles.contextFieldControl}
                   options={priorityOptions}
                 />
-                <p className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>This legacy label does not change the A4 score or countdown above.</p>
+                <p className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>This original priority label does not change the calculated score or countdown above.</p>
               </div>
             </div>
             <div>

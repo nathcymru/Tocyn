@@ -280,7 +280,11 @@ function LayoutContent() {
       void queryClient.cancelQueries({ queryKey: ['tickets'], predicate: query =>
         query.queryKey.length === 3 && typeof query.queryKey[1] === 'object' && query.state.data === undefined,
       }).then(() =>
-        queryClient.invalidateQueries({ queryKey: ['tickets'] }));
+        // Cursor snapshots must restart as a whole from page one. The Inbox
+        // priority hook consumes this signal and creates a new ledger.
+        queryClient.invalidateQueries({ queryKey: ['tickets'], predicate: query =>
+          query.queryKey[1] !== 'priority-matrix' && query.queryKey[1] !== 'sla-priority',
+        }));
       void queryClient.invalidateQueries({ queryKey: ['stats'] });
       const ticketId = lastMessage.type === 'article.created'
         ? lastMessage.payload?.ticket_id ?? lastMessage.payload?.ticketId : lastMessage.payload?.id;

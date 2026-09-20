@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { Ticket } from '@luminatick/shared';
 import { ApiError, dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
+import { useOptionalCollaboration } from '../components/CollaborationContext';
 import { assignmentIdentity } from './useTicketAssignment';
 import { parseTicketSla, type TicketSla } from './useTicketSla';
 import type { TicketQueryPage } from './useSlaPriorityTickets';
@@ -27,6 +28,8 @@ export type PriorityMatrixTicketQueryPage = TicketQueryPage & Readonly<{
   /** Whole eligible queue, counted before page slicing. */
   triageOverdueCount: number;
   asOf: string;
+  /** First whole-queue drift or expiry boundary after asOf, if any. */
+  nextPriorityChangeAt: string | null;
   next: string | null;
 }>;
 
@@ -48,6 +51,7 @@ export function parsePriorityMatrixPage(value: unknown, expectedPage: number): P
   const data = response?.data;
   const slaInput = record(response?.sla);
   const clocksInput = record(response?.priorityClocks);
+  const nextPriorityChangeAt = response?.nextPriorityChangeAt;
   const next = response?.next;
   if (!response || !meta || !Array.isArray(data) || !slaInput || !clocksInput
     || meta.page !== expectedPage || !Number.isSafeInteger(meta.total) || (meta.total as number) < 0
@@ -57,6 +61,8 @@ export function parsePriorityMatrixPage(value: unknown, expectedPage: number): P
     || meta.total_pages !== Math.ceil((meta.total as number) / (meta.limit as number))
     || !Number.isSafeInteger(response.triageOverdueCount) || (response.triageOverdueCount as number) < 0
     || !validTimestamp(response.asOf)
+    || (nextPriorityChangeAt !== null && (!validTimestamp(nextPriorityChangeAt)
+      || Date.parse(nextPriorityChangeAt) <= Date.parse(response.asOf as string)))
     || (next !== null && (typeof next !== 'string' || !next || next.length > 2048))) {
     throw new Error('Malformed priority queue response');
   }
@@ -86,16 +92,30 @@ export function parsePriorityMatrixPage(value: unknown, expectedPage: number): P
   }
   return { ...response, data: data as Ticket[], meta: meta as PriorityMatrixTicketQueryPage['meta'],
     sla, priorityClocks, triageOverdueCount: response.triageOverdueCount as number,
-    asOf: response.asOf, next: next as string | null };
+    asOf: response.asOf, nextPriorityChangeAt: nextPriorityChangeAt as string | null, next: next as string | null };
 }
 
 /** Three mathematical views share one scoped cursor ledger, never a page-local sort. */
 export function usePriorityMatrixTickets(params: Record<string, string>, enabled: boolean, onPeriodicRestart?: () => void) {
   const user = useAuthStore(state => state.user);
   const generation = useAuthStore(state => state.sessionGeneration);
+  const collaboration = useOptionalCollaboration();
+  const lastMessage = collaboration?.lastMessage;
+  const seenMessage = useRef(lastMessage);
+  const wasEnabled = useRef(enabled);
+  const everEnabled = useRef(enabled);
+  const connection = useRef({ connected: collaboration?.isConnected ?? false, everConnected: collaboration?.isConnected ?? false });
   const identity = JSON.stringify([generation, user?.tenant_id, user?.id, user?.role]);
   const sort = isPriorityMatrixSort(params.sort) ? params.sort : 'priority_focus';
   const [revision, setRevision] = useState(0);
+  useLayoutEffect(() => {
+    const resumed = enabled && !wasEnabled.current && everEnabled.current;
+    wasEnabled.current = enabled;
+    everEnabled.current ||= enabled;
+    // A disabled view does not consume live ordering signals. Always begin a
+    // fresh whole-queue snapshot when the operator returns to it.
+    if (resumed) setRevision(value => value + 1);
+  }, [enabled]);
   const periodicRestartRef = useRef(onPeriodicRestart);
   useLayoutEffect(() => { periodicRestartRef.current = onPeriodicRestart; }, [onPeriodicRestart]);
   const selection = JSON.stringify(Object.entries(params).filter(([key]) => !['page', 'sort', 'cursor'].includes(key)).sort(([a], [b]) => a.localeCompare(b)));
@@ -130,6 +150,34 @@ export function usePriorityMatrixTickets(params: Record<string, string>, enabled
     },
   });
   useLayoutEffect(() => {
+    if (seenMessage.current === lastMessage) return;
+    seenMessage.current = lastMessage;
+    if (!enabled || !lastMessage || !['ticket.created', 'ticket.updated', 'article.created'].includes(lastMessage.type)
+      || !ledger.active || assignmentIdentity() !== identity) return;
+    // Signals contain no authoritative row data. Re-read the whole order with
+    // a new cursor ledger, returning later pages to page one first.
+    periodicRestartRef.current?.();
+    setRevision(value => value + 1);
+  }, [enabled, identity, lastMessage, ledger]);
+  useLayoutEffect(() => {
+    const connected = collaboration?.isConnected ?? false;
+    const restored = connected && !connection.current.connected && connection.current.everConnected;
+    connection.current = { connected, everConnected: connection.current.everConnected || connected };
+    if (restored && enabled && ledger.active && assignmentIdentity() === identity) {
+      periodicRestartRef.current?.();
+      setRevision(value => value + 1);
+    }
+  }, [collaboration?.isConnected, enabled, identity, ledger]);
+  useLayoutEffect(() => {
+    if (!enabled || page <= 1 || !ledger.active || assignmentIdentity() !== identity) return;
+    if (periodicRestartRef.current && (missingCursor || query.error instanceof ApiError && query.error.code === 'priority_sort_restart')) {
+      // An old cursor cannot recover by refetching its page. The fresh first
+      // page is the only safe place to resume after a changed or expired view.
+      periodicRestartRef.current?.();
+      setRevision(value => value + 1);
+    }
+  }, [enabled, identity, ledger, missingCursor, page, query.error]);
+  useLayoutEffect(() => {
     if (!enabled || !user?.tenant_id || !user.id || !query.data?.asOf || query.error) return;
     let requested = false;
     const restart = () => {
@@ -145,14 +193,30 @@ export function usePriorityMatrixTickets(params: Record<string, string>, enabled
     // small floor for skewed/stale timestamps so malformed upstream timing
     // cannot create an unbounded request loop.
     const remaining = 30_000 - (Date.now() - Date.parse(ledger.asOf));
-    const delay = Math.min(30_000, Math.max(1_000, remaining));
+    const untilPriorityChange = query.data.nextPriorityChangeAt
+      ? Date.parse(query.data.nextPriorityChangeAt) - Date.now() : Number.POSITIVE_INFINITY;
+    const delay = Math.min(30_000, Math.max(1_000, Math.min(remaining, untilPriorityChange)));
     const interval = window.setInterval(restart, delay);
     const onVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - Date.parse(ledger.asOf) >= 30_000) restart();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
-  }, [enabled, identity, ledger, page, query.data?.asOf, query.error, user?.id, user?.tenant_id]);
+  }, [enabled, identity, ledger, page, query.data?.asOf, query.data?.nextPriorityChangeAt, query.error, user?.id, user?.tenant_id]);
+  useLayoutEffect(() => {
+    if (!enabled || !query.error || !ledger.active || page > 1 && !periodicRestartRef.current) return;
+    // Keep the explicit Retry control, but do not leave a transient network
+    // failure frozen forever after realtime or timer reconciliation fails.
+    const retry = () => {
+      if (document.visibilityState === 'visible' && ledger.active && assignmentIdentity() === identity) {
+        periodicRestartRef.current?.();
+        setRevision(value => value + 1);
+      }
+    };
+    const timeout = window.setTimeout(retry, 30_000);
+    document.addEventListener('visibilitychange', retry);
+    return () => { window.clearTimeout(timeout); document.removeEventListener('visibilitychange', retry); };
+  }, [enabled, identity, ledger, page, query.error]);
   const error = missingCursor ? restartError() : query.error;
   return { ...query, error, isError: Boolean(error), isLoading: missingCursor ? false : query.isLoading,
     data: error ? undefined : query.data, restartPriorityMatrix: () => setRevision(value => value + 1) };

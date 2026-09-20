@@ -1,4 +1,5 @@
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -72,6 +73,7 @@ function stubInboxApi(arrived: () => boolean, oldRead?: () => Promise<Response> 
     if (url === '/api/workspace/drafts?limit=50') return json({ items: [], next: null });
     if (url === '/api/settings/filters') return json([]);
     if (url === '/api/settings') return json({ TICKET_PREFIX: '#' });
+    if (url.startsWith('/api/activities?')) return json({ page: { items: [], next: null }, unread: { status: 'available', count: 0 } });
     if (url === '/api/tickets/queue-counts') return json({ scope: 'standard_queues', counts: {
       all: arrived() ? 1 : 0, actionable: arrived() ? 1 : 0, mine: 0, unassigned: arrived() ? 1 : 0,
       mentions: 0, drafts: 0, snoozed: 0,
@@ -86,6 +88,78 @@ function stubInboxApi(arrived: () => boolean, oldRead?: () => Promise<Response> 
   }));
   return () => reads;
 }
+
+async function chooseView(label: string) {
+  await userEvent.click(screen.getByRole('button', { name: 'Inbox views' }));
+  await userEvent.click(within(await screen.findByRole('menu', { name: 'Inbox views' })).getByRole('menuitem', { name: label }));
+}
+
+function stubSnapshotSort(sort: 'priority_focus' | 'sla_priority') {
+  stubInboxApi(() => false);
+  const fallback = vi.mocked(fetch).getMockImplementation()!;
+  const replacement = { ...ticket, id: 'replacement', ticket_no: 64, subject: 'Fresh queue order after return' };
+  let changed = false;
+  let reads = 0;
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    if (url === '/api/workspace/state') return json({
+      revision: 1, view: 'all', sort, filters: {}, listQuery: '', listAnchor: 'page:1',
+      selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-09T00:00:00Z',
+    });
+    if (String(url).startsWith('/api/tickets?')
+      && new URL(String(url), 'http://localhost').searchParams.get('sort') === sort) {
+      reads++;
+      const row = changed ? replacement : ticket;
+      return json({ data: [row], meta: { page: 1, limit: 20, total: 1, total_pages: 1 },
+        sla: { [row.id]: null }, priorityClocks: { [row.id]: null },
+        triageOverdueCount: 0, nextPriorityChangeAt: null, asOf: new Date().toISOString(), next: null });
+    }
+    return fallback(url, options);
+  });
+  return { reads: () => reads, change: () => { changed = true; } };
+}
+
+it.each([
+  ['priority_focus', 'Needs Attention'],
+  ['sla_priority', 'Contract SLAs'],
+] as const)('re-reads %s immediately when returning after an event in another view', async (sort, label) => {
+  const snapshot = stubSnapshotSort(sort);
+  renderInbox();
+  const list = screen.getByRole('listbox', { name: 'Conversation list' });
+  await within(list).findByRole('option', { name: /Authoritative post-event arrival/ });
+  await waitFor(() => expect(snapshot.reads()).toBe(1));
+
+  await chooseView('All tickets');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Inbox views' })).toHaveTextContent('All tickets'));
+  snapshot.change();
+  act(() => Socket.latest.emit({ type: 'ticket.created', payload: { id: 'replacement' } }));
+
+  await chooseView(label);
+  await waitFor(() => expect(snapshot.reads()).toBe(2));
+  await within(list).findByRole('option', { name: /Fresh queue order after return/ });
+});
+
+it.each([
+  ['priority_focus'],
+  ['sla_priority'],
+] as const)('re-reads %s immediately after reconnect without refetching on the first connection', async sort => {
+  const snapshot = stubSnapshotSort(sort);
+  renderInbox();
+  const list = screen.getByRole('listbox', { name: 'Conversation list' });
+  await within(list).findByRole('option', { name: /Authoritative post-event arrival/ });
+  await waitFor(() => expect(snapshot.reads()).toBe(1));
+
+  const firstSocket = Socket.latest;
+  act(() => firstSocket.onopen?.());
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  expect(snapshot.reads()).toBe(1);
+
+  act(() => firstSocket.onclose?.());
+  snapshot.change();
+  await waitFor(() => expect(Socket.latest).not.toBe(firstSocket), { timeout: 2_000 });
+  act(() => Socket.latest.onopen?.());
+  await waitFor(() => expect(snapshot.reads()).toBe(2));
+  await within(list).findByRole('option', { name: /Fresh queue order after return/ });
+});
 
 it.each(['ticket.updated', 'article.created'] as const)('reloads the active inbox from the API for %s instead of displaying event hints', async type => {
   let arrived = false;
@@ -170,4 +244,79 @@ it('replaces a pending initial inbox read when a ticket is created', async () =>
   await act(async () => { releaseOldRead(json(empty)); });
   expect(within(list).getByRole('option', { name: /Authoritative post-event arrival/ })).toBeInTheDocument();
   expect(screen.queryByText('Untrusted event display hint')).not.toBeInTheDocument();
+});
+
+it.each(['ticket.created', 'ticket.updated', 'article.created'] as const)(
+  'starts a new whole priority order after %s without a manual refresh', async type => {
+    stubInboxApi(() => false);
+    const fallback = vi.mocked(fetch).getMockImplementation()!;
+    const second = { ...ticket, id: 'second-priority', ticket_no: 64, subject: 'Second priority ticket' };
+    let changed = false;
+    let reads = 0;
+    vi.mocked(fetch).mockImplementation(async (url, options) => {
+      if (url === '/api/workspace/state') return json({
+        revision: 1, view: 'all', sort: 'priority_focus', filters: {}, listQuery: '', listAnchor: 'page:1',
+        selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-09T00:00:00Z',
+      });
+      if (String(url).startsWith('/api/tickets?')) {
+        reads++;
+        const rows = changed ? [second, ticket] : [ticket, second];
+        const asOf = new Date().toISOString();
+        return json({ data: rows, meta: { page: 1, limit: 20, total: 2, total_pages: 1 },
+          sla: Object.fromEntries(rows.map(row => [row.id, null])),
+          priorityClocks: Object.fromEntries(rows.map(row => [row.id, null])),
+          triageOverdueCount: 0, nextPriorityChangeAt: null, asOf, next: null });
+      }
+      return fallback(url, options);
+    });
+    renderInbox();
+    const list = screen.getByRole('listbox', { name: 'Conversation list' });
+    await within(list).findByRole('option', { name: /Authoritative post-event arrival/ });
+    await waitFor(() => expect(reads).toBe(1));
+    changed = true;
+    act(() => Socket.latest.emit({ type, payload: type === 'article.created'
+      ? { ticket_id: ticket.id, article_id: 'synthetic-article' } : { id: ticket.id },
+    }));
+    await waitFor(() => expect(reads).toBe(2));
+    await waitFor(() => expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Second priority ticket'));
+    expect(screen.queryByText(/Priority order set/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Refresh priority ordering/ })).not.toBeInTheDocument();
+  },
+);
+
+it.each(['priority_focus', 'sla_priority'] as const)('returns a later %s page to page one after a live event without reusing its cursor', async sort => {
+  stubInboxApi(() => false);
+  const fallback = vi.mocked(fetch).getMockImplementation()!;
+  const second = { ...ticket, id: 'second-priority', ticket_no: 64, subject: 'Second priority ticket' };
+  let changed = false;
+  const requests: string[] = [];
+  const snapshot = new Date().toISOString();
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    if (url === '/api/workspace/state') return json({
+      revision: 1, view: 'all', sort, filters: {}, listQuery: '', listAnchor: 'page:1',
+      selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '2026-09-09T00:00:00Z',
+    });
+    if (String(url).startsWith('/api/tickets?')) {
+      requests.push(String(url));
+      const cursor = new URL(String(url), 'http://localhost').searchParams.get('cursor');
+      const rows = cursor ? [second] : [changed ? second : ticket];
+      return json({ data: rows, meta: { page: cursor ? 2 : 1, limit: 1, total: 2, total_pages: 2 },
+        sla: Object.fromEntries(rows.map(row => [row.id, null])),
+        priorityClocks: Object.fromEntries(rows.map(row => [row.id, null])),
+        triageOverdueCount: 0, nextPriorityChangeAt: null, asOf: changed ? new Date().toISOString() : snapshot,
+        next: cursor ? null : 'synthetic-cursor' });
+    }
+    return fallback(url, options);
+  });
+  renderInbox();
+  const list = screen.getByRole('listbox', { name: 'Conversation list' });
+  await within(list).findByRole('option', { name: /Authoritative post-event arrival/ });
+  act(() => screen.getByRole('button', { name: 'Next conversation page' }).click());
+  await within(list).findByRole('option', { name: /Second priority ticket/ });
+  expect(requests[1]).toContain('cursor=synthetic-cursor');
+  changed = true;
+  act(() => Socket.latest.emit({ type: 'ticket.updated', payload: { id: ticket.id } }));
+  await waitFor(() => expect(requests).toHaveLength(3));
+  expect(requests[2]).not.toContain('cursor=');
+  await waitFor(() => expect(screen.getByText('Page 1 of 2')).toBeInTheDocument());
 });

@@ -120,7 +120,9 @@ test('priority views sort the complete authorised clock snapshot before paginati
   const criticality=await f.read({}, {sort:'priority_criticality'});
   assert.deepEqual(criticality.data.map(item=>item.ticket.id),rows.map(row=>row[0]));
   const commitment=await f.read({}, {sort:'priority_commitment'});
-  assert.deepEqual(commitment.data.map(item=>item.ticket.id),['a-high','a-low','drift-fast','drift-one','drift-four','fresh-charlie','waiting']);
+  // Drift puts D1 with 0.25h left into the A4 effective tier; remaining time
+  // then places it before the two native A4 tickets with 0.5h left.
+  assert.deepEqual(commitment.data.map(item=>item.ticket.id),['drift-fast','a-high','a-low','drift-one','drift-four','fresh-charlie','waiting']);
   for(const [id,age] of [['overdue-one',2],['overdue-two',1.5]] as const){
    await f.ticket(id,3_600_000,'normal','a',at(age));
    await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
@@ -159,14 +161,59 @@ test('the 24-hour drift boundary joins the stricter queue tier before pagination
   }
   const first=await f.read({}, {sort:'priority_criticality',limit:2});
   assert.deepEqual(first.data.map(item=>item.ticket.id),['just-below','fresh-charlie']);
+  assert.equal(first.nextPriorityChangeAt,new Date(f.now+1000).toISOString(),
+   'the next change comes from a ticket outside the visible first page');
   assert.ok(first.next);
   const second=await f.read({}, {sort:'priority_criticality',limit:2,cursor:first.next!});
   assert.deepEqual(second.data.map(item=>item.ticket.id),['exact','just-above']);
+  assert.equal(second.nextPriorityChangeAt,first.nextPriorityChangeAt,
+   'later cursor pages retain the whole-queue snapshot boundary');
   assert.equal(second.data[0].priorityClock?.timeRemainingHours,24);
   assert.ok((second.data[1].priorityClock?.timeRemainingHours??0)>24);
   const commitment=await f.read({}, {sort:'priority_commitment'});
+  // Both rows have effective Charlie/Level 2 priority after drift. The older
+  // Delta row has 23.999h left and therefore precedes the fresh 24h row.
   assert.deepEqual(commitment.data.map(item=>item.ticket.id),
-   ['fresh-charlie','just-below','exact','just-above']);
+   ['just-below','fresh-charlie','exact','just-above']);
+  f.clock(f.now+1000);
+  const atBoundary=await f.read({}, {sort:'priority_criticality',limit:2});
+  assert.notEqual(atBoundary.nextPriorityChangeAt,first.nextPriorityChangeAt,
+   'a new whole-queue snapshot advances past the inclusive drift boundary');
+  assert.ok(Date.parse(atBoundary.nextPriorityChangeAt!)>f.now+1000);
+ }finally{await f.mf.dispose();}
+});
+
+test('next priority change covers off-page work and excludes paused or foreign clocks',async()=>{
+ const f=await fixture();try{
+  const at=(elapsedMs:number)=>new Date(f.now-elapsedMs).toISOString();
+  const hour=3_600_000;
+  const rows:[string,'a'|'b','alpha'|'delta',1|4,number][]=[
+   ['visible','a','alpha',4,30*60*1000],
+   ['off-page','a','delta',1,24*hour-1000],
+   ['paused','a','alpha',4,hour-500],
+   ['foreign','b','delta',1,24*hour-100],
+  ];
+  for(const [id,tenant,contract,criticality,elapsed] of rows){
+   await f.ticket(id,hour,'normal',tenant,at(elapsed));
+   await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+    priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+    priority_score=1,contract_sla_tier=?,criticality_tier=? WHERE tenant_id=? AND id=?`)
+    .bind(contract,criticality,tenant,id).run();
+  }
+  await f.db.prepare(`UPDATE ticket_support_state SET definition_id='legacy-pending',waiting_reason='awaiting customer',
+   changed_at=?,revision=revision+1 WHERE tenant_id='a' AND ticket_id='paused'`).bind(at(300)).run();
+  const first=await f.read({}, {sort:'priority_focus',limit:1});
+  assert.equal(first.total,3);
+  assert.deepEqual(first.data.map(item=>item.ticket.id),['visible']);
+  assert.equal(first.nextPriorityChangeAt,new Date(f.now+1000).toISOString());
+  const second=await f.read({}, {sort:'priority_focus',limit:1,cursor:first.next!});
+  assert.deepEqual(second.data.map(item=>item.ticket.id),['off-page']);
+  assert.equal(second.nextPriorityChangeAt,first.nextPriorityChangeAt,
+   'the signed second page retains the complete snapshot boundary');
+  f.clock(f.now+1000);
+  const refreshed=await f.read({}, {sort:'priority_focus',limit:1});
+  assert.equal(refreshed.nextPriorityChangeAt,new Date(f.now+30*60*1000).toISOString(),
+   'the crossed drift threshold is no longer scheduled');
  }finally{await f.mf.dispose();}
 });
 
@@ -184,6 +231,8 @@ test('reopened work inherits active time debt in queue rank and overdue count',a
   const waiting=await f.read({}, {sort:'priority_focus'});
   assert.deepEqual(waiting.data.map(item=>item.ticket.id),['fresh','reopened']);
   assert.equal(waiting.triageOverdueCount,0);
+  assert.equal(waiting.nextPriorityChangeAt,new Date(f.now+1_800_000).toISOString(),
+   'an overdue paused ticket cannot schedule a false urgency refresh');
   assert.equal(waiting.data[1].priorityClock?.paused,true);
   assert.equal(waiting.data[1].priorityClock?.timeRemainingHours,-0.5);
   await f.db.prepare(`UPDATE ticket_support_state SET definition_id='legacy-open',waiting_reason=NULL,
@@ -377,15 +426,17 @@ test('actual staff HTTP SLA contract preserves selectors and settles only comple
   apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{outcomes.push(outcome);original(authority,outcome,now);};
   try{
    const first=await f.request(url+'&filter_id=sla-saved',{token:agent.token});assert.equal(first.status,200,await first.clone().text());
-   const body=await first.json<{data:Array<{id:string}>;meta:{total:number;page:number};sla:Record<string,unknown>;asOf:string;next:string}>();
+   const body=await first.json<{data:Array<{id:string}>;meta:{total:number;page:number};sla:Record<string,unknown>;asOf:string;next:string;nextPriorityChangeAt:string|null}>();
    assert.equal(body.meta.total,2);assert.equal(body.meta.page,1);assert.equal(body.data[0].id,'sla-a');assert.ok('sla-a' in body.sla);assert.ok(body.next);assert.ok(Number.isFinite(Date.parse(body.asOf)));
+   assert.ok(body.nextPriorityChangeAt===null||Number.isFinite(Date.parse(body.nextPriorityChangeAt)));
    assert.deepEqual(outcomes,['committed','committed']);
    const matrix=await f.request('/api/tickets?sort=priority_focus&limit=1&search=needle&customer_email=match%40example.test',{token:agent.token});
    assert.equal(matrix.status,200,await matrix.clone().text());
-   const matrixBody=await matrix.json<{data:Array<{id:string;priority_score:number}>;priorityClocks:Record<string,{remainingHours:number;paused:boolean;asOf:string}|null>;sla:Record<string,unknown>;next:string}>();
+   const matrixBody=await matrix.json<{data:Array<{id:string;priority_score:number}>;priorityClocks:Record<string,{remainingHours:number;paused:boolean;asOf:string}|null>;sla:Record<string,unknown>;next:string;nextPriorityChangeAt:string|null}>();
    assert.equal(matrixBody.data[0].id,'sla-a');assert.equal(matrixBody.data[0].priority_score,1);
    assert.equal(typeof matrixBody.priorityClocks['sla-a']?.remainingHours,'number');
    assert.equal(matrixBody.priorityClocks['sla-a']?.paused,false);
+   assert.ok(matrixBody.nextPriorityChangeAt&&Number.isFinite(Date.parse(matrixBody.nextPriorityChangeAt)));
    assert.ok('sla-a' in matrixBody.sla);assert.ok(matrixBody.next);
    const next=await f.request(url+'&filter_id=sla-saved&cursor='+encodeURIComponent(body.next),{token:agent.token});assert.equal(next.status,200,await next.clone().text());
    const second=await next.json<{data:Array<{id:string}>;meta:{page:number};next:null}>();assert.equal(second.meta.page,2);assert.equal(second.data[0].id,'sla-b');assert.equal(second.next,null);
@@ -394,8 +445,9 @@ test('actual staff HTTP SLA contract preserves selectors and settles only comple
    assert.equal((await f.request(url+'&page=2&cursor='+encodeURIComponent(body.next),{token:agent.token})).status,409,'numbered pagination cannot contradict the signed cursor');
    const empty=await f.request('/api/tickets?sort=sla_priority&limit=20&customer_email=absent%40example.test',{token:agent.token});
    assert.equal(empty.status,200,await empty.clone().text());
-   const emptyBody=await empty.json<{data:unknown[];meta:{total:number;total_pages:number;page:number};sla:Record<string,unknown>;next:null}>();
+   const emptyBody=await empty.json<{data:unknown[];meta:{total:number;total_pages:number;page:number};sla:Record<string,unknown>;next:null;nextPriorityChangeAt:null}>();
    assert.deepEqual(emptyBody.data,[]);assert.deepEqual(emptyBody.sla,{});assert.equal(emptyBody.meta.total,0);assert.equal(emptyBody.meta.total_pages,0);assert.equal(emptyBody.meta.page,1);assert.equal(emptyBody.next,null);
+   assert.equal(emptyBody.nextPriorityChangeAt,null);
 
    await f.db.prepare("UPDATE ticket_filters SET conditions='[ ]' WHERE tenant_id=? AND id='sla-saved'").bind(tenant).run();
    const changed=await f.request(url+'&filter_id=sla-saved&cursor='+encodeURIComponent(body.next),{token:agent.token});assert.equal(changed.status,409);

@@ -150,3 +150,8 @@ export function useCollaboration() {
   if (!context) throw new Error('CollaborationProvider is required for dashboard collaboration.');
   return context;
 }
+
+/** A route can also render in isolation in focused component tests. */
+export function useOptionalCollaboration() {
+  return useContext(CollaborationContext);
+}

@@ -1,5 +1,4 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
-import { ApiError } from '../api/client';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
@@ -8,7 +7,6 @@ import { ChevronDown,ChevronLeft,ChevronRight,Filter,IconChartBar,IconCircleExcl
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { SlaQueueNotice } from '../components/SlaQueueNotice';
 import { PriorityTriageRing, type PriorityRingTicket } from '../components/PriorityTriageRing';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { useInboxGlobalAlert } from '../components/InboxGlobalAlert';
@@ -463,18 +461,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
       </section>}
       {(recoveringPage||query.isPlaceholderData||workspace.status==='saving'||status) && <p role="status" aria-label="Inbox status" className={css({ px: '4', pb: '2', color: 'text.muted', fontSize: 'xs' })}>{recoveringPage?'Loading the first page after the conversation list changed…':query.isPlaceholderData?'Refreshing…':workspace.status==='saving'?'Saving view…':status}</p>}
     </header>
-    {createMounted&&<NewTicketDialog open={createOpen} onOpenChange={setCreateOpen} trigger={createTrigger} onCreated={()=>setStatus('Ticket created.')} />}
-    {slaSort&&<SlaQueueNotice asOf={query.data?.asOf} error={query.error} busy={query.isFetching} restart={restartSla} />}
-    {priorityMatrixSort&&<section aria-label="Priority ordering" className={css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '2', px: '4', py: '2', borderBottomWidth: '1px', borderColor: 'border.default', bg: 'bg.surface', fontSize: 'xs' })}>
-      <p role="status" className={css({ m: '0', color: 'fg.muted' })}>{query.error instanceof ApiError&&query.error.code==='priority_sort_restart'
-        ? 'This priority view changed or expired. Restart ordering to continue.'
-        : query.error ? 'Priority ordering is unavailable. No partial order is shown.'
-          : query.data?.asOf ? <>Priority order set <time dateTime={query.data.asOf}>{new Date(query.data.asOf).toLocaleTimeString()}</time>.</>
-            : 'Calculating priority order for the whole view…'}</p>
-      <ParkButton type="button" variant="plain" disabled={query.isFetching} onClick={restartPriority} className={css({ minH: '8', px: '2' })}>
-        {query.error instanceof ApiError&&query.error.code==='priority_sort_restart'?'Restart priority ordering':'Refresh priority ordering'}
-      </ParkButton>
-    </section>}
+    {createMounted&&<NewTicketDialog open={createOpen} onOpenChange={setCreateOpen} trigger={createTrigger} onCreated={()=>{if(priorityMatrixSort)restartPriority();setStatus('Ticket created.');}} />}
     {query.error&&<ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
       <ParkAlert.Description>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</ParkAlert.Description>
       <ParkButton ref={retryButton} type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():priorityMatrixSort?restartPriority():void query.refetch()}>Retry conversations</ParkButton>
@@ -519,8 +506,8 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
         rowRefs={rowRefs}
         onFocus={()=>setFocusedIndex(index)} onMoveFocus={moveFocus} onExpanded={setExpandedTicketId}
         onOpen={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}}
-        onResolve={()=>ticketMutation.mutate({id:ticket.id,status:'resolved'},{onSuccess:()=>{setStatus(`Resolved ${ticketReference(ticket,prefix)}.`);if(ticket.id===selectedTicketId)advanceRef.current?.(ticket.id);}})}
-        onUrgent={()=>ticketMutation.mutate({id:ticket.id,priority:'urgent'},{onSuccess:()=>setStatus(`Marked ${ticketReference(ticket,prefix)} urgent.`)})}
+        onResolve={()=>ticketMutation.mutate({id:ticket.id,status:'resolved'},{onSuccess:()=>{if(priorityMatrixSort&&!(advanceEnabled&&ticket.id===selectedTicketId))restartPriority();setStatus(`Resolved ${ticketReference(ticket,prefix)}.`);if(ticket.id===selectedTicketId)advanceRef.current?.(ticket.id);}})}
+        onUrgent={()=>ticketMutation.mutate({id:ticket.id,priority:'urgent'},{onSuccess:()=>{if(priorityMatrixSort)restartPriority();setStatus(`Marked ${ticketReference(ticket,prefix)} urgent.`);}})}
       />)}
     </div>
     {meta.total_pages>1&&<footer className={pageStyles.inboxPagination}><span role="status">Page {meta.page} of {meta.total_pages}</span><div>

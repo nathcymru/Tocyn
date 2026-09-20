@@ -11,7 +11,7 @@ export function useTickets(params: Record<string, string> = {}, enabled = true, 
   const generation = useAuthStore(state => state.sessionGeneration);
   const identity = JSON.stringify([generation, user?.tenant_id, user?.id, user?.role]);
   const queryParams = new URLSearchParams(params).toString();
-  const sla = useSlaPriorityTickets(params, enabled && params.sort === 'sla_priority');
+  const sla = useSlaPriorityTickets(params, enabled && params.sort === 'sla_priority', onPriorityPeriodicRestart);
   const priorityMatrixSort = isPriorityMatrixSort(params.sort);
   const priorityMatrix = usePriorityMatrixTickets(params, enabled && priorityMatrixSort, onPriorityPeriodicRestart);
   const ordinary = useQuery({

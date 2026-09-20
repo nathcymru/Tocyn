@@ -150,7 +150,7 @@ it('prefills the Park classification editor, saves all seven fields, refreshes d
   expect(screen.queryByRole('dialog', { name: 'Edit ticket classification' })).not.toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this reply while triaging');
   expect(await screen.findByText('Priority score')).toBeInTheDocument();
-  expect(screen.getByRole('region', { name: 'A4 triage classification' })).toHaveTextContent('37');
+  expect(screen.getByRole('region', { name: 'Priority classification' })).toHaveTextContent('37');
   expect(screen.getByRole('combobox', { name: 'Legacy priority' })).toBeInTheDocument();
 });
 
