@@ -100,8 +100,12 @@ it('keeps cached definitions and identifies them as stale after a failed refresh
   expect(alert).toHaveTextContent('Support states could not be refreshed');
   expect(alert).toHaveTextContent('last loaded version');
   expect(screen.getByText('Waiting on customer')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Create state' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Edit Waiting on customer' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Deactivate Waiting on customer' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry loading support states' }));
   await waitFor(() => expect(screen.queryByText('Support states could not be refreshed')).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Create state' })).toBeEnabled();
   expect(attempts).toBe(3);
 });
 
@@ -129,6 +133,7 @@ it('keeps an unsaved first-state draft visible when a cached empty list fails to
   expect(screen.getByLabelText('State ID')).toHaveValue('first-state');
   expect(screen.getByLabelText('Internal label')).toHaveValue('First state draft');
   expect(screen.getByLabelText('Customer-visible label')).toHaveValue('We are working on this');
+  expect(screen.getByRole('button', { name: 'Create state' })).toBeDisabled();
   expect(screen.queryByText('No support states found.')).not.toBeInTheDocument();
   expect(screen.queryByText('Support states could not be loaded')).not.toBeInTheDocument();
 

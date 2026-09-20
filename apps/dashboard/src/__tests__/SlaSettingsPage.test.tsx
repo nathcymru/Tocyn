@@ -115,3 +115,13 @@ it('shows a Park error alert after save failure without clearing the entered pol
   expect(saveError).toHaveTextContent('Synthetic save failure');
   expect(response).toHaveValue('90');
 });
+
+it('rejects fractional target minutes without sending a policy mutation', async () => {
+  render(<SlaSettingsPage />);
+  const response = screen.getByRole('textbox', { name: 'Response target (minutes, optional)' });
+  fireEvent.change(response, { target: { value: '1.5' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save SLA policy' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Configured targets must be whole minutes');
+  expect(response).toHaveValue('1.5');
+  expect(mocks.mutateAsync).not.toHaveBeenCalled();
+});
