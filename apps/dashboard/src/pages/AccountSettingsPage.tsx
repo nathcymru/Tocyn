@@ -1,5 +1,6 @@
-import { useNavigate } from 'react-router-dom';
-import { ParkButton, ParkCard, ParkPage } from '@luminatick/ui/park';
+import { Link } from 'react-router-dom';
+import { ParkCard, ParkPage } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useAuthStore } from '../store/authStore';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
@@ -7,7 +8,6 @@ import { OperatorPreferencesControl, OperatorThemeControl } from '../components/
 
 export function AccountSettingsPage() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
   const page = ParkPage('account');
   return <div className={[page.root, page.content].join(' ')}>
     <header className={page.header}>
@@ -16,7 +16,7 @@ export function AccountSettingsPage() {
         <h1 className={css({ m: '0', color: 'fg.default', textStyle: '2xl', fontWeight: 'semibold' })}>Account settings</h1>
         <p className={css({ color: 'fg.muted' })}>Manage your operator identity, appearance, workspace preferences and current work.</p>
       </div>
-      <ParkButton type="button" onClick={() => navigate('/profile/security')}>Security profile</ParkButton>
+      <ParkLink asChild><Link to="/profile/security">Security profile</Link></ParkLink>
     </header>
     <ParkCard.Root variant="outline" aria-labelledby="account-identity-title">
       <ParkCard.Header><ParkCard.Title asChild><h2 id="account-identity-title">Your identity</h2></ParkCard.Title></ParkCard.Header>

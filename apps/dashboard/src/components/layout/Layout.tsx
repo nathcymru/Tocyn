@@ -67,10 +67,12 @@ function UserMenu({ onNavigate }: SidebarProps) {
   <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
     <ParkMenu.Trigger asChild>
       <ParkIconButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
-        <ParkAvatar className={shellStyles.personaAvatar}>
-          <ParkAvatarFallback name={user?.full_name || 'Operator'} />
+        <span className={shellStyles.personaAvatarWrap}>
+          <ParkAvatar className={shellStyles.personaAvatar}>
+            <ParkAvatarFallback name={user?.full_name || 'Operator'} />
+          </ParkAvatar>
           <span className={shellStyles.personaStatus} aria-hidden="true" />
-        </ParkAvatar>
+        </span>
       </ParkIconButton>
     </ParkMenu.Trigger>
     <ParkMenu.Positioner>

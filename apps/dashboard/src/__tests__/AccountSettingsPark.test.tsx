@@ -32,6 +32,8 @@ it('keeps account sections readable and reaches the security profile', async () 
   expect(screen.getByRole('heading', { level: 2, name: 'Your identity' }).closest('.card__root')).toBeInTheDocument();
   expect(screen.getByText('very.long.synthetic.operator.name@example.test')).toBeVisible();
   expect(screen.getByRole('heading', { level: 2, name: 'Current work' })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Security profile' }));
+  const securityLink = screen.getByRole('link', { name: 'Security profile' });
+  expect(securityLink).toHaveAttribute('href', '/profile/security');
+  await userEvent.click(securityLink);
   expect(await screen.findByRole('heading', { name: 'Security profile destination' })).toBeInTheDocument();
 });

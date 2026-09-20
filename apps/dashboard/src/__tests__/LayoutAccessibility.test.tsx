@@ -136,9 +136,16 @@ it('keeps compact navigation icons inside the focus target', async () => {
 it('names account/connection disclosures and restores focus when their child actions close', async () => {
   const result=await renderReady();
   const account = screen.getByRole('button', { name: 'Account options' });
-  expect(account.querySelector('.avatar__root')).toHaveClass('avatar__root--shape_full');
+  const avatar = account.querySelector('.avatar__root');
+  expect(avatar).toHaveClass('avatar__root--shape_full');
   expect(account.querySelector('.avatar__fallback')).toHaveTextContent('O');
-  expect(account.querySelector('.shell__personaStatus')).toHaveAttribute('aria-hidden', 'true');
+  const avatarWrap = account.querySelector('.shell__personaAvatarWrap');
+  const status = account.querySelector('.shell__personaStatus');
+  expect(avatarWrap).toContainElement(avatar as HTMLElement);
+  expect(avatarWrap).toContainElement(status as HTMLElement);
+  expect(avatar?.contains(status)).toBe(false);
+  expect(status).toHaveAttribute('aria-hidden', 'true');
+  expect(account).toHaveAttribute('aria-label', 'Account options');
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
   const accountItem = await screen.findByRole('menuitem', { name: 'Account' });
   expect(accountItem).toBeVisible();

@@ -121,6 +121,37 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 });
 
+it('renders spaced ticket surfaces with a left SLA anchor, stable marker slots and an expandable preview',async()=>{
+  showInbox();
+  const row=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const surface=row.querySelector('[data-part="ticket-row-surface"]');
+  const slaAnchor=row.querySelector('[data-part="ticket-sla-anchor"]');
+  const preview=row.querySelector('[data-part="ticket-preview"]');
+  expect(surface).toBeInTheDocument();
+  expect(surface?.firstElementChild).toBe(slaAnchor);
+  expect(slaAnchor).toHaveTextContent('H');
+  expect(within(row).getByText('#1')).toBeInTheDocument();
+  expect(within(row).getByRole('heading',{name:'Fixture conversation 1'})).toBeInTheDocument();
+  expect(row.querySelectorAll('[data-part="ticket-pill-slot"]')).toHaveLength(2);
+  expect(row.querySelector('[data-part="ticket-pill-slots"]')).toHaveTextContent('Unassigned');
+  expect(preview).toHaveTextContent('Last confirmed message 1');
+  expect(preview).toHaveAttribute('data-expanded','false');
+  fireEvent.mouseEnter(row);
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.mouseLeave(row);
+  expect(preview).toHaveAttribute('data-expanded','false');
+  act(()=>row.focus());
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.mouseLeave(row);
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.keyDown(row,{key:' '});
+  expect(preview).toHaveAttribute('data-expanded','false');
+  fireEvent.keyDown(row,{key:' '});
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.blur(row,{relatedTarget:document.body});
+  expect(preview).toHaveAttribute('data-expanded','false');
+});
+
 it('uses the authoritative actionable and snoozed queue views without losing the inbox surface',async()=>{
   showInbox();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});

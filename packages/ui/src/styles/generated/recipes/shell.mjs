@@ -98,6 +98,10 @@ const shellSlotNames = [
     "shell__personaTrigger"
   ],
   [
+    "personaAvatarWrap",
+    "shell__personaAvatarWrap"
+  ],
+  [
     "personaAvatar",
     "shell__personaAvatar"
   ],
