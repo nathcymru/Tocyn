@@ -26,6 +26,7 @@ const unsupportedFormat = () => new TicketMutationError(400,'unsupported_article
 const staleDraft = () => new TicketMutationError(409,'staff_reply_stale','The saved draft or conversation changed. Review and rebase before sending.');
 const unavailableMention = () => new TicketMutationError(409,'mention_recipient_unavailable','A mentioned colleague no longer has access to this internal note. Review the mention selection; your draft is retained.');
 const ownerConflict = () => new TicketMutationError(409,'responsible_owner_conflict','The responsible owner changed. Refresh the ticket before assigning it.');
+const classificationConflict = () => new TicketMutationError(409,'priority_classification_conflict','The classification changed. Refresh the ticket before saving.');
 // Match the current reply capability and dashboard request contract before
 // admission; Markdown rendering enforces the same character and byte bounds.
 const MAX_ARTICLE_BODY_SIZE = 16_000;
@@ -73,10 +74,18 @@ export class StaffTicketMutationService {
   private normalize(input: StaffMutationInput): StaffMutationInput {
     if (input.operation === 'dashboard.ticket.update') {
       if (typeof input.ticketId !== 'string' || !input.ticketId || !input.data || Object.getPrototypeOf(input.data) !== Object.prototype) throw invalid();
-      const allowed = ['status','priority','assigned_to','group_id','custom_fields','responsibleOwnerAssignment','expectedAssignedTo','capacityOverride'];
+      const allowed = ['status','priority','assigned_to','group_id','custom_fields','responsibleOwnerAssignment','expectedAssignedTo','capacityOverride','classification','expectedClassificationRevision'];
       const supplied = Object.keys(input.data);
       if (!supplied.length || supplied.some(key => !allowed.includes(key))) throw invalid();
       const data = input.data;
+      if (data.classification !== undefined || data.expectedClassificationRevision !== undefined) {
+        const classification = priorityClassificationSchema.safeParse(data.classification);
+        if (supplied.length !== 2 || !classification.success || !Number.isSafeInteger(data.expectedClassificationRevision)
+          || data.expectedClassificationRevision! < 0 || data.expectedClassificationRevision! >= Number.MAX_SAFE_INTEGER) throw invalid();
+        return {operation:input.operation,ticketId:input.ticketId,data:{
+          classification:classification.data,expectedClassificationRevision:data.expectedClassificationRevision,
+        }};
+      }
       if (data.status !== undefined && !['open','pending','resolved','closed'].includes(data.status)) throw invalid();
       if (data.priority !== undefined && !['low','normal','high','urgent'].includes(data.priority)) throw invalid();
       if (data.assigned_to !== undefined && data.assigned_to !== null && (typeof data.assigned_to !== 'string' || !data.assigned_to)) throw invalid();
@@ -175,6 +184,8 @@ export class StaffTicketMutationService {
     await this.authorize({ capability: this.capability });
     if (key !== undefined && !/^[A-Za-z0-9._~-]{1,128}$/.test(key)) throw invalid();
     const normalized = this.normalize(input);
+    if (normalized.operation === 'dashboard.ticket.update' && normalized.data.classification !== undefined && key === undefined)
+      throw new TicketMutationError(400,'idempotency_key_required','Idempotency-Key is required for classification updates');
     const serialized = canonicalMutationJson(normalized);
     if (new TextEncoder().encode(serialized).byteLength > 128 * 1024) throw new TicketMutationError(413,'payload_too_large','Payload too large');
     const requirements: { capability?: CapabilityWriteFence; ticket?: { id: string; groupId: string | null } } = { capability: this.capability };
@@ -285,6 +296,10 @@ export class StaffTicketMutationService {
           if (ticket && ticket.assigned_to !== (input.data.expectedAssignedTo ?? null)) throw ownerConflict();
           if (!await this.receipts.capacityAvailable(input.ticketId,input.data.assigned_to??null,input.data.capacityOverride?.reason))
             throw new TicketMutationError(409,'assignment_capacity_unavailable','Assignment is unavailable under current capacity policy');
+        }
+        if (input.data.classification !== undefined) {
+          const ticket = await this.receipts.ticket(input.ticketId);
+          if (ticket && ticket.priority_classification_revision !== input.data.expectedClassificationRevision) throw classificationConflict();
         }
         throw unavailable();
       }

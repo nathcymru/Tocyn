@@ -27,6 +27,17 @@ function legacy() {
 }
 
 describe('Real Phase 1 migration chain', () => {
+  it('adds a separate classification revision without inventing values for historical tickets',()=>{
+    const db=legacy();
+    try{
+      apply(db,14,82);
+      expect(db.prepare("SELECT priority_classification_revision,priority_category FROM tickets WHERE tenant_id='default-tenant' AND id='old-ticket'").get())
+        .toEqual({priority_classification_revision:0,priority_category:null});
+      expect(db.prepare("SELECT count(*) AS count FROM ticket_priority_classification_events").get()).toEqual({count:0});
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+    }finally{db.close();}
+  });
+
   it('preserves historical tickets while rejecting partial or forged priority classifications', () => {
     const db = legacy();
     try {

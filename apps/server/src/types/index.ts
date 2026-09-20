@@ -41,6 +41,7 @@ export interface Ticket {
   priority_score?: number | null;
   contract_sla_tier?: ContractTier | null;
   criticality_tier?: CriticalityTier | null;
+  priority_classification_revision?: number;
   customer_id?: string | null;
   customer_email: string;
   assigned_to?: string | null;

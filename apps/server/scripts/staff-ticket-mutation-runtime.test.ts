@@ -22,7 +22,8 @@ import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-adm
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { StaffTicketMutationService } from '../src/services/staff-ticket-mutation.service';
-import { priorityClassificationColumns } from '../src/domain/priority-classification';
+import { priorityClassificationColumns, type PriorityClassificationInput } from '../src/domain/priority-classification';
+import { PriorityClockRepository } from '../src/repositories/priority-clock.repository';
 import { OperatorActivityRepository } from '../src/repositories/operator-activity.repository';
 import { OperatorActivityService } from '../src/services/operator-activity.service';
 import type { TenantRequestDeps } from '../src/middleware/tenant.middleware';
@@ -186,6 +187,9 @@ const completeClassification = {category:'security-privacy',scope:'systemic',reg
   vipBlocked:true,hardDeadline:false,contractTier:'alpha',criticalityTier:4} as const;
 const create = ():StaffMutationInput => ({operation:'dashboard.ticket.create',data:{subject:'Staff intake',customer_email:'CUSTOMER-A@EXAMPLE.TEST',body:'Synthetic intake',group_id:'group',classification:completeClassification}});
 const update = (data: AuditedTicketUpdate = { status:'pending' }): StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data });
+const correctClassification = (expectedClassificationRevision:number, classification:PriorityClassificationInput=completeClassification):StaffMutationInput => ({
+  operation:'dashboard.ticket.update',ticketId:'ticket',data:{classification,expectedClassificationRevision},
+});
 const responsibleOwner = (ownerId:string|null,expectedOwnerId:string|null):StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data:{
   assigned_to:ownerId,responsibleOwnerAssignment:true,expectedAssignedTo:expectedOwnerId,
 } });
@@ -213,6 +217,173 @@ test('staff create requires complete classification before admission and compute
     const expected=priorityClassificationColumns(completeClassification);
     assert.deepEqual(row,{priority_category:expected.priority_category,priority_scope:expected.priority_scope,
       priority_score:expected.priority_score,contract_sla_tier:expected.contract_sla_tier,criticality_tier:expected.criticality_tier});
+  }finally{await f.mf.dispose();}
+});
+
+test('staff classification correction is complete, receipted, tenant-fenced and preserves the running triage clock',async()=>{
+  const f=await fixture();try{
+    const s=f.service();
+    const before=await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first();
+    await assert.rejects(s.prepareStaffMutation(correctClassification(0)),(error:any)=>error.status===400&&error.code==='idempotency_key_required');
+    for(const data of [
+      {classification:{...completeClassification,hardDeadline:undefined},expectedClassificationRevision:0},
+      {classification:{...completeClassification,priority_score:999},expectedClassificationRevision:0},
+      {classification:completeClassification,expectedClassificationRevision:0,status:'closed'},
+      {classification:completeClassification,expectedClassificationRevision:-1},
+    ])await assert.rejects(s.prepareStaffMutation({operation:'dashboard.ticket.update',ticketId:'ticket',data} as StaffMutationInput,crypto.randomUUID()),
+      (error:any)=>error.status===400&&error.code==='invalid_mutation');
+    const first=await accept(s,correctClassification(0),'classify-first');
+    assert.equal(first.outcome.ticket.priority_classification_revision,1);
+    assert.equal(first.outcome.ticket.priority_score,40);
+    assert.deepEqual(await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first(),before);
+    const event=await f.db.prepare(`SELECT previous_revision,next_revision,before_classification,after_classification
+      FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'`).first<any>();
+    assert.deepEqual([event.previous_revision,event.next_revision,event.before_classification],[0,1,null]);
+    assert.equal(JSON.parse(event.after_classification).score,40);
+    const replay=await s.prepareStaffMutation(correctClassification(0),'classify-first');
+    assert.equal(replay.replay?.replayed,true);
+    assert.equal(replay.replay?.ticket.priority_classification_revision,1);
+    await assert.rejects(s.prepareStaffMutation(correctClassification(1),'classify-first'),(error:any)=>error.status===409&&error.code==='idempotency_conflict');
+    await assert.rejects(s.prepareStaffMutation({operation:'dashboard.ticket.update',ticketId:'foreign',data:{classification:completeClassification,expectedClassificationRevision:0}},'classify-foreign'),
+      (error:any)=>error.status===403);
+    const revoked=await s.prepareStaffMutation(correctClassification(1),'classify-revoked');
+    assert.equal((await s.admit(revoked)).status,'spent');
+    f.before(async()=>{await f.db.prepare("DELETE FROM user_groups WHERE tenant_id='a' AND user_id='staff' AND group_id='group'").run();});
+    await assert.rejects(s.commit(revoked),(error:any)=>error.status===403);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,1);
+  }finally{await f.mf.dispose();}
+});
+
+test('stale classification CAS rolls back audit and receipt, then a fresh correction retains clock debt',async()=>{
+  const f=await fixture();try{
+    const s=f.service();
+    const stale=await s.prepareStaffMutation(correctClassification(0),'classify-stale');
+    assert.equal((await s.admit(stale)).status,'spent');
+    await accept(f.service(),correctClassification(0),'classify-winner');
+    const state=await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first<{started_at:string;accrued_active_ms:number}>();
+    assert.ok(state);
+    const asOf=Date.parse(state.started_at.includes(' ') ? `${state.started_at.replace(' ','T')}Z` : state.started_at)+2*3_600_000;
+    const priorityClock=new PriorityClockRepository(f.db,f.scope());
+    const clockFence={tenantId:'a',actorId:'staff',role:'agent' as const,sessionVersion:1};
+    const beforeProjection=await priorityClock.getForStaff('ticket',clockFence,asOf);
+    assert.equal(beforeProjection?.elapsedActiveMs,7_200_000);
+    assert.equal(beforeProjection?.timeRemainingHours,-1,'the initial Alpha/Level 4 window is overdue after two active hours');
+    const count=await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>();
+    await assert.rejects(s.commit(stale),(error:any)=>error.status===409&&error.code==='priority_classification_conflict');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,count?.n);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,1);
+    assert.deepEqual(await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first(),state);
+    const second={...completeClassification,contractTier:'delta' as const,criticalityTier:1 as const};
+    const fresh=await accept(f.service(),correctClassification(1,second),'classify-fresh');
+    assert.equal(fresh.outcome.ticket.priority_classification_revision,2);
+    assert.equal(fresh.outcome.ticket.contract_sla_tier,'delta');
+    assert.deepEqual(await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first(),state);
+    const afterProjection=await priorityClock.getForStaff('ticket',clockFence,asOf);
+    assert.equal(afterProjection?.elapsedActiveMs,beforeProjection?.elapsedActiveMs,'classification never resets accrued active time');
+    assert.equal(afterProjection?.clockRevision,beforeProjection?.clockRevision,'classification does not mutate the clock revision');
+    assert.equal(afterProjection?.timeRemainingHours,46,'Delta/Level 1 gives a 48-hour window with the same two-hour debt');
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,2);
+    const correctionAudit=await f.db.prepare(`SELECT before_classification,after_classification
+      FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket' AND previous_revision=1`)
+      .first<{before_classification:string;after_classification:string}>();
+    assert.deepEqual(JSON.parse(correctionAudit!.before_classification),{
+      category:'security-privacy',scope:'systemic',regulatoryOfficerOnSite:true,vipBlocked:true,
+      hardDeadline:false,score:40,contractTier:'alpha',criticalityTier:4,
+    });
+    assert.deepEqual(JSON.parse(correctionAudit!.after_classification),{...second,score:40});
+    f.lose();const lost=await accept(f.service(),correctClassification(2,completeClassification),'classify-lost');
+    assert.equal(lost.outcome.replayed,true);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,3);
+  }finally{await f.mf.dispose();}
+});
+
+test('local-beta admission charges one classification correction and rejects exhausted capacity atomically',async()=>{
+  const f=await fixture();try{
+    const beta=f.betaService();
+    const first=await accept(beta.service,correctClassification(0),'classify-beta');
+    assert.equal(first.outcome.ticket.priority_classification_revision,1);
+    assert.equal((await f.betaCounters())?.mutations,1);
+    assert.equal((await beta.service.prepareStaffMutation(correctClassification(0),'classify-beta')).replay?.replayed,true);
+    assert.equal((await f.betaCounters())?.mutations,1);
+    await f.db.prepare("UPDATE local_beta_runs SET mutations=mutation_limit WHERE run_id='staff-beta'").run();
+    const blocked=await beta.service.prepareStaffMutation(
+      correctClassification(1,{...completeClassification,scope:'isolated'}),'classify-beta-exhausted');
+    assert.equal((await beta.service.admit(blocked)).status,'spent');
+    await assert.rejects(beta.service.commit(blocked));
+    assert.equal((await f.db.prepare("SELECT priority_classification_revision FROM tickets WHERE tenant_id='a' AND id='ticket'").first<{priority_classification_revision:number}>())?.priority_classification_revision,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,1);
+  }finally{await f.mf.dispose();}
+});
+
+test('identical classification save is a receipted no-op without revision, audit or local-beta charge',async()=>{
+  const f=await fixture();try{
+    const beta=f.betaService();
+    await accept(beta.service,correctClassification(0),'classify-original');
+    const clock=await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first();
+    const before=await f.db.prepare("SELECT priority_classification_revision,updated_at FROM tickets WHERE tenant_id='a' AND id='ticket'").first();
+    const noOp=await accept(beta.service,correctClassification(1),'classify-noop');
+    assert.deepEqual(noOp.outcome.body,{success:true});
+    assert.equal(noOp.outcome.ticket.priority_classification_revision,1);
+    assert.deepEqual(await f.db.prepare("SELECT priority_classification_revision,updated_at FROM tickets WHERE tenant_id='a' AND id='ticket'").first(),before);
+    assert.deepEqual(await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first(),clock);
+    assert.equal((await f.betaCounters())?.mutations,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,2);
+    const replay=await beta.service.prepareStaffMutation(correctClassification(1),'classify-noop');
+    assert.equal(replay.replay?.replayed,true);
+    assert.equal(replay.replay?.ticket.priority_classification_revision,1);
+    const event=await f.db.prepare("SELECT before_classification,after_classification FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{before_classification:string|null;after_classification:string}>();
+    assert.equal(event?.before_classification,null);
+    assert.deepEqual(JSON.parse(event!.after_classification),{...completeClassification,score:40});
+    const stale=await beta.service.prepareStaffMutation(correctClassification(0),'classify-stale-identical');
+    assert.equal((await beta.service.admit(stale)).status,'spent');
+    await assert.rejects(beta.service.commit(stale),(error:any)=>error.status===409&&error.code==='priority_classification_conflict');
+    assert.equal((await f.betaCounters())?.mutations,1);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,2);
+  }finally{await f.mf.dispose();}
+});
+
+test('classification same-key race replays one winner; other-key race rejects stale revision without audit',async()=>{
+  const f=await fixture();try{
+    const s=f.service();const input=correctClassification(0);
+    const [sameA,sameB]=await Promise.all([
+      s.prepareStaffMutation(input,'classify-race-same'),s.prepareStaffMutation(input,'classify-race-same'),
+    ]);
+    assert.deepEqual((await Promise.all([s.admit(sameA),s.admit(sameB)])).map(result=>result.status).sort(),['idempotent','spent']);
+    const same=await Promise.all([s.commit(sameA),s.commit(sameB)]);
+    assert.deepEqual(same.map(result=>result.replayed).sort(),[false,true]);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,1);
+
+    const left=f.service(),right=f.service();
+    const next=correctClassification(1,{...completeClassification,scope:'isolated'});
+    const [leftPrepared,rightPrepared]=await Promise.all([
+      left.prepareStaffMutation(next,'classify-race-left'),right.prepareStaffMutation(next,'classify-race-right'),
+    ]);
+    assert.equal((await left.admit(leftPrepared)).status,'spent');
+    assert.equal((await right.admit(rightPrepared)).status,'spent');
+    const results=await Promise.allSettled([left.commit(leftPrepared),right.commit(rightPrepared)]);
+    assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
+    assert.equal(results.filter(result=>result.status==='rejected'&&result.reason?.code==='priority_classification_conflict').length,1);
+    assert.equal((await f.db.prepare("SELECT priority_classification_revision FROM tickets WHERE tenant_id='a' AND id='ticket'").first<{priority_classification_revision:number}>())?.priority_classification_revision,2);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,2);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,2);
+  }finally{await f.mf.dispose();}
+});
+
+test('classification receipt failure rolls back correction, audit, clock and receipt together',async()=>{
+  const f=await fixture();try{
+    const beforeClock=await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first();
+    await f.db.prepare(`CREATE TRIGGER fail_classification_receipt BEFORE INSERT ON staff_ticket_mutation_receipts
+      WHEN NEW.operation='dashboard.ticket.update' BEGIN SELECT RAISE(ABORT,'synthetic classification receipt failure'); END`).run();
+    const s=f.service();const prepared=await s.prepareStaffMutation(correctClassification(0),'classify-receipt-failure');
+    assert.equal((await s.admit(prepared)).status,'spent');
+    await assert.rejects(s.commit(prepared));
+    assert.deepEqual(await f.db.prepare("SELECT * FROM ticket_priority_clocks WHERE tenant_id='a' AND ticket_id='ticket'").first(),beforeClock);
+    assert.equal((await f.db.prepare("SELECT priority_classification_revision FROM tickets WHERE tenant_id='a' AND id='ticket'").first<{priority_classification_revision:number}>())?.priority_classification_revision,0);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM ticket_priority_classification_events WHERE tenant_id='a' AND ticket_id='ticket'").first<{n:number}>())?.n,0);
+    assert.equal((await f.db.prepare("SELECT count(*) AS n FROM staff_ticket_mutation_receipts WHERE tenant_id='a' AND operation='dashboard.ticket.update'").first<{n:number}>())?.n,0);
   }finally{await f.mf.dispose();}
 });
 

@@ -31,7 +31,8 @@ export function useTickets(params: Record<string, string> = {}, enabled = true) 
   return { ...ordinary, restartSla: sla.restartSla, restartPriorityMatrix: priorityMatrix.restartPriorityMatrix };
 }
 
-type TicketPage = TicketWithDetails & { pagination?: { next_cursor: string | null; has_more: boolean } };
+export type TicketWithClassificationRevision = Ticket & { priority_classification_revision?: number };
+type TicketPage = TicketWithDetails & TicketWithClassificationRevision & { pagination?: { next_cursor: string | null; has_more: boolean } };
 export function useTicket(id: string) {
   const user = useAuthStore(state => state.user);
   const generation = useAuthStore(state => state.sessionGeneration);
@@ -96,6 +97,29 @@ export type TicketClassification = {
   contractTier: ContractTier;
   criticalityTier: CriticalityTier;
 };
+
+export function useUpdateTicketClassification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    onMutate: () => assignmentIdentity(),
+    mutationFn: ({ id, classification, expectedClassificationRevision, idempotencyKey }: {
+      id: string; classification: TicketClassification; expectedClassificationRevision: number; idempotencyKey: string;
+    }) => dashboardApi.patch<unknown>(`/tickets/${id}`, { classification, expectedClassificationRevision },
+      { headers: { 'Idempotency-Key': idempotencyKey } }),
+    onSuccess: (_, variables, identity) => {
+      if (identity !== assignmentIdentity()) return;
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tickets'],
+          predicate: query => query.queryKey[1] !== 'priority-matrix' && query.queryKey[1] !== 'sla-priority' }),
+        // Cursor views own whole-queue snapshots. Mark old pages stale without
+        // fetching them; Inbox restarts the active view from page one.
+        queryClient.invalidateQueries({ queryKey: ['tickets', 'priority-matrix'], refetchType: 'none' }),
+        queryClient.invalidateQueries({ queryKey: ['tickets', 'sla-priority'], refetchType: 'none' }),
+        queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
+      ]);
+    },
+  });
+}
 
 export function useCreateTicket() {
   const queryClient = useQueryClient();

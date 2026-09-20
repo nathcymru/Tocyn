@@ -313,6 +313,10 @@ const updateTicketSchema = z.object({
   group_id: z.string().uuid().nullable().optional(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
 });
+const classificationUpdateSchema = z.object({
+  classification: priorityClassificationSchema,
+  expectedClassificationRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER - 1),
+}).strict();
 const capacityInputSchema=z.object({expectedRevision:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER-1),
   availability:z.enum(['available','unavailable']),assignmentCeiling:z.number().int().min(0).max(1000)}).strict();
 async function operatorCapacity(c:any,write:boolean):Promise<Response>{
@@ -1571,12 +1575,16 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
       if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload,'assigned_to')) {
         return c.json({ code:'responsible_owner_endpoint_required', error:'Use the responsible-owner endpoint to change assignment' },400);
       }
-      const result = updateTicketSchema.safeParse(payload);
+      const classificationOnly = payload && typeof payload === 'object' &&
+        (Object.prototype.hasOwnProperty.call(payload,'classification') || Object.prototype.hasOwnProperty.call(payload,'expectedClassificationRevision'));
+      const result = (classificationOnly ? classificationUpdateSchema : updateTicketSchema).safeParse(payload);
       if (!result.success) return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
       const updateFields = result.data;
       if (!Object.keys(updateFields).length) return c.json({ error: "No valid fields to update" }, 400);
+      const idempotencyKey = readIdempotencyKey(c);
+      if (classificationOnly && !idempotencyKey) return c.json({code:'idempotency_key_required',error:'Idempotency-Key is required for classification updates'},400);
       const mutation = staffMutationService(c,d,'dashboard.ticket.update');
-      const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId:id,data:updateFields },readIdempotencyKey(c));
+      const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId:id,data:updateFields },idempotencyKey);
       if (prepared.replay) {
         c.header('Idempotency-Replayed', 'true');
         return c.json(prepared.replay.body, prepared.replay.status);
@@ -1600,6 +1608,10 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
     }
   }
   const payload = await c.req.json();
+  if (payload && typeof payload === 'object' &&
+    (Object.prototype.hasOwnProperty.call(payload,'classification') || Object.prototype.hasOwnProperty.call(payload,'expectedClassificationRevision'))) {
+    return c.json({code:'staff_mutation_unavailable',error:'Classification updates require configured staff mutation admission'},503);
+  }
   if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload,'assigned_to')) {
     return c.json({ code:'responsible_owner_endpoint_required', error:'Use the responsible-owner endpoint to change assignment' },400);
   }

@@ -304,6 +304,44 @@ describe("Dashboard Handler Integration Tests", () => {
   });
 
   describe("PATCH /tickets/:id", () => {
+    it('fails closed for classification when canonical staff admission is disabled', async () => {
+      const res=await request('/tickets/t-1',{
+        method:'PATCH',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json','Idempotency-Key':'classification-1'},
+        body:JSON.stringify({classification:completeClassification,expectedClassificationRevision:0}),
+      });
+      expect(res.status).toBe(503);
+      expect((await res.json()).code).toBe('staff_mutation_unavailable');
+      expect(mockDB.batch).not.toHaveBeenCalled();
+    });
+
+    it('rejects mixed or incomplete classification payloads before staff admission',async()=>{
+      const prepare=vi.spyOn(StaffTicketMutationService.prototype,'prepareStaffMutation');
+      for(const body of [
+        {classification:completeClassification,expectedClassificationRevision:0,status:'closed'},
+        {classification:{...completeClassification,hardDeadline:undefined},expectedClassificationRevision:0},
+        {classification:completeClassification,expectedClassificationRevision:-1},
+      ]){
+        const res=await request('/tickets/t-1',{
+          method:'PATCH',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json','Idempotency-Key':'classification-1'},
+          body:JSON.stringify(body),
+        },{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+        expect(res.status).toBe(400);
+      }
+      expect(prepare).not.toHaveBeenCalled();
+      prepare.mockRestore();
+    });
+
+    it('requires an idempotency key for a complete classification before admission',async()=>{
+      const prepare=vi.spyOn(StaffTicketMutationService.prototype,'prepareStaffMutation');
+      const res=await request('/tickets/t-1',{
+        method:'PATCH',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},
+        body:JSON.stringify({classification:completeClassification,expectedClassificationRevision:0}),
+      },{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('idempotency_key_required');
+      expect(prepare).not.toHaveBeenCalled();
+      prepare.mockRestore();
+    });
     for (const policy of ['off','ticket-mutations-v1','invalid']) {
       for (const assigned_to of [null,'123e4567-e89b-12d3-a456-426614174000']) {
         it(`rejects generic assignment atomically with ${policy} admission and owner ${assigned_to}`, async () => {

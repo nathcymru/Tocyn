@@ -2,58 +2,13 @@ import { Field } from '@luminatick/ui/components';
 import { ParkAlert, ParkButton, ParkCheckbox, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useRef, useState } from 'react';
-import type { ContractTier, CriticalityTier, PriorityCategory, PriorityScope } from '@luminatick/shared';
+import type { CriticalityTier } from '@luminatick/shared';
 import { DashboardSelect } from '../components/DashboardSelect';
+import { categoryOptions, scopeOptions, contractOptions, criticalityOptions, emptyClassificationDraft,
+  type ClassificationDraft } from '../components/ticket-classification';
 import { X } from '../components/icons';
 import { useAgents, useGroups } from '../hooks/useGroups';
 import { useCreateTicket } from '../hooks/useTickets';
-
-type ClassificationDraft = {
-  category: PriorityCategory | '';
-  scope: PriorityScope | '';
-  regulatoryOfficerOnSite: boolean;
-  vipBlocked: boolean;
-  hardDeadline: boolean;
-  contractTier: ContractTier | '';
-  criticalityTier: CriticalityTier | null;
-};
-
-type ClassificationOption<Value extends string> = { value: Value | ''; label: string };
-
-const categoryOptions: ClassificationOption<PriorityCategory>[] = [
-  { value: '', label: 'Choose category' },
-  { value: 'incidents-interruptions', label: 'Incidents and interruptions' },
-  { value: 'security-privacy', label: 'Security and privacy' },
-  { value: 'access-authentication', label: 'Access and authentication' },
-  { value: 'technical-problems', label: 'Technical problems' },
-  { value: 'service-requests', label: 'Service requests' },
-  { value: 'transactions-billing', label: 'Transactions and billing' },
-  { value: 'status-follow-up', label: 'Status and follow-up' },
-  { value: 'information-requests', label: 'Information requests' },
-  { value: 'how-to-assistance', label: 'How-to assistance' },
-  { value: 'feedback', label: 'Feedback' },
-  { value: 'other', label: 'Other' },
-];
-const scopeOptions: ClassificationOption<PriorityScope>[] = [
-  { value: '', label: 'Choose scope' },
-  { value: 'systemic', label: 'Systemic' },
-  { value: 'localised', label: 'Localised' },
-  { value: 'isolated', label: 'Isolated' },
-];
-const contractOptions: ClassificationOption<ContractTier>[] = [
-  { value: '', label: 'Choose contract tier' },
-  { value: 'alpha', label: 'Alpha' },
-  { value: 'bravo', label: 'Bravo' },
-  { value: 'charlie', label: 'Charlie' },
-  { value: 'delta', label: 'Delta' },
-];
-const criticalityOptions: ClassificationOption<`${CriticalityTier}`>[] = [
-  { value: '', label: 'Choose criticality level' },
-  { value: '1', label: 'Level 1' },
-  { value: '2', label: 'Level 2' },
-  { value: '3', label: 'Level 3' },
-  { value: '4', label: 'Level 4' },
-];
 
 type NewTicketDraft = {
   subject: string;
@@ -69,10 +24,7 @@ type NewTicketDraft = {
 const emptyDraft = (): NewTicketDraft => ({
   subject: '', customer_email: '', body: '', status: 'open',
   group_id: '', assigned_to: '', custom_fields: {},
-  classification: {
-    category: '', scope: '', regulatoryOfficerOnSite: false, vipBlocked: false,
-    hardDeadline: false, contractTier: '', criticalityTier: null,
-  },
+  classification: emptyClassificationDraft(),
 });
 
 /** The active inbox owns the trigger; this dialog keeps a failed draft in place for retry. */

@@ -68,6 +68,7 @@ function InboxWorkspace(){
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
   const advance = useRef<((id:string)=>void)|null>(null);
+  const classificationRefresh = useRef<(() => void)|null>(null);
   const [advanceNotice,setAdvanceNotice] = useState('');
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
   const resolveScope = JSON.stringify([assignmentIdentity(), viewId, conversationId, workspace.listQuery, workspace.sort, workspace.filters, filters]);
@@ -76,6 +77,9 @@ function InboxWorkspace(){
   useEffect(() => { setAdvanceNotice(''); }, [resolveScope]);
   const onResolved = useCallback((id:string) => {
     if (committedResolveScope.current === resolveScope) advance.current?.(id);
+  }, [resolveScope]);
+  const onClassificationSaved = useCallback(() => {
+    if (committedResolveScope.current === resolveScope) classificationRefresh.current?.();
   }, [resolveScope]);
 
   const lastRouteView=useRef<string|null>(null);
@@ -124,12 +128,12 @@ function InboxWorkspace(){
     {!conversationId&&<DraftNavigationGuard pending={workspace.hasUnsavedChanges} flush={workspace.flushBeforeNavigation}
       failureMessage="Workspace preferences are not saved. Stay in this view, retry saving, then navigate again." />}
     <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx(page.inboxList,conversationId&&page.inboxMobileHidden)}>
-      <ConversationList activeView={activeView} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} onAdvanceNotice={setAdvanceNotice} />
+      <ConversationList activeView={activeView} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} classificationRefreshRef={classificationRefresh} onAdvanceNotice={setAdvanceNotice} />
     </ParkSplitter.Panel>
     <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
     <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx(page.inboxDetail,!conversationId&&page.inboxMobileHidden)}>
       {advanceNotice && <p role="status">{advanceNotice}</p>}
-      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${activeView}`} onResolved={onResolved} />:<EmptyConversation />}
+      {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${activeView}`} onResolved={onResolved} onClassificationSaved={onClassificationSaved} />:<EmptyConversation />}
     </ParkSplitter.Panel>
   </ParkSplitter.Root>;
 }
@@ -140,7 +144,7 @@ function FilterKeyword({ label, name, options, onSelect }: { label: string; name
   return <ParkMenu.Root positioning={{ placement: 'bottom-start' }}><ParkMenu.Trigger asChild><ParkButton type="button" variant="plain" aria-label={`${name}: ${label}`} className={css({ display: 'inline-flex', minH: '10', borderBottomWidth: '2px', borderStyle: 'dashed', borderColor: 'border.default', px: '1', fontWeight: 'semibold' })}>{label}<ChevronDown aria-hidden="true" /></ParkButton></ParkMenu.Trigger><ParkMenu.Positioner><ParkMenu.Content aria-label={`${name} choices`} className={css({ zIndex: 30, minW: '40' })}>{options.map(option => <ParkMenu.Item key={option} value={option} onClick={() => onSelect(option)}>{option}</ParkMenu.Item>)}</ParkMenu.Content></ParkMenu.Positioner></ParkMenu.Root>;
 }
 
-function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onAdvanceNotice}:{activeView:string;selectedTicketId:string|null;routeReady:boolean;advanceRef:React.MutableRefObject<((id:string)=>void)|null>;onAdvanceNotice:(message:string)=>void}){
+function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,classificationRefreshRef,onAdvanceNotice}:{activeView:string;selectedTicketId:string|null;routeReady:boolean;advanceRef:React.MutableRefObject<((id:string)=>void)|null>;classificationRefreshRef:React.MutableRefObject<(() => void)|null>;onAdvanceNotice:(message:string)=>void}){
   const navigate=useNavigate();
   const workspace=useOperatorWorkspaceState();
   const {data:filters}=useFilters();
@@ -255,6 +259,17 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   }, [activeView, priorityMatrixSort, query.data, query.error, query.isPlaceholderData, setGlobalAlert, ticketSla.data, ticketSla.isError, ticketSla.isLoading, tickets]);
   const restartSla=()=>{query.restartSla();workspace.update({listAnchor:'page:1'});setStatus('SLA ordering restarted. The selected conversation stays open.');};
   const restartPriority=()=>{query.restartPriorityMatrix();workspace.update({listAnchor:'page:1'});setStatus('Priority ordering restarted. The selected conversation stays open.');};
+  useLayoutEffect(() => {
+    const refresh = () => {
+      if (!routeReady || !selectedTicketId || assignmentIdentity() !== identity) return;
+      workspace.update({ listAnchor: 'page:1' });
+      if (priorityMatrixSort) query.restartPriorityMatrix();
+      if (slaSort) query.restartSla();
+      setStatus('Classification saved. The list has been refreshed from page one; this conversation stays open.');
+    };
+    classificationRefreshRef.current = refresh;
+    return () => { if (classificationRefreshRef.current === refresh) classificationRefreshRef.current = null; };
+  }, [classificationRefreshRef, identity, priorityMatrixSort, query.restartPriorityMatrix, query.restartSla, routeReady, selectedTicketId, slaSort, workspace]);
   const advanceEnabled = useOptionalOperatorPreferencesContext()?.advanceAfterResolve ?? false;
   const advanceScope = JSON.stringify([identity, activeView, filterId, workspace.listQuery, workspace.sort, workspace.filters, filters, selectedTicketId, advanceEnabled]);
   const committedAdvanceScope = useRef(advanceScope);

@@ -16,6 +16,8 @@ import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
 import { useTicket, useAssignResponsibleOwner, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
+import { EditTicketClassificationDialog } from './EditTicketClassificationDialog';
+import { categoryOptions, contractOptions, criticalityOptions, scopeOptions } from '../components/ticket-classification';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useCollaboration } from '../components/CollaborationContext';
@@ -68,15 +70,15 @@ const attachmentIcons: Record<AttachmentIconKind, typeof IconFile> = {
   pdf: IconFilePdf, image: IconFileImage, archive: IconFileZip, text: IconFileLines, generic: IconFile,
 };
 
-export function TicketDetailPage({id:providedId,workspaceBackHref,onResolved}:{id?:string;workspaceBackHref?:string;onResolved?:(id:string)=>void}={}) {
+export function TicketDetailPage({id:providedId,workspaceBackHref,onResolved,onClassificationSaved}:{id?:string;workspaceBackHref?:string;onResolved?:(id:string)=>void;onClassificationSaved?:()=>void}={}) {
   const { id:routeId } = useParams<{ id: string }>();
   const id=providedId??routeId;
   const generation = useAuthStore(state => state.sessionGeneration);
   const user = useAuthStore(state => state.user);
-  return <TicketDetail key={JSON.stringify([generation, user?.tenant_id, user?.id, user?.role, id])} id={id!} workspaceBackHref={workspaceBackHref} onResolved={onResolved} />;
+  return <TicketDetail key={JSON.stringify([generation, user?.tenant_id, user?.id, user?.role, id])} id={id!} workspaceBackHref={workspaceBackHref} onResolved={onResolved} onClassificationSaved={onClassificationSaved} />;
 }
 
-function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspaceBackHref?:string;onResolved?:(id:string)=>void }) {
+function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }: { id: string;workspaceBackHref?:string;onResolved?:(id:string)=>void;onClassificationSaved?:()=>void }) {
   type TicketSelectControl = 'status' | 'priority' | 'assigned_to' | 'group_id';
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError, isFetchedAfterMount, isFetching } = useTicket(id!);
@@ -87,6 +89,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   const { data: ticketFields } = useTicketFields();
   const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
+  const [classificationOpen, setClassificationOpen] = useState(false);
+  const classificationTrigger = useRef<HTMLButtonElement>(null);
   const assignResponsibleOwner = useAssignResponsibleOwner();
   const [assignmentBlocked, setAssignmentBlocked] = useState(false);
   const ticketMutationPending = updateTicket.isPending || assignResponsibleOwner.isPending || assignmentBlocked;
@@ -1384,13 +1388,37 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             <Info className={detailStyles.attachmentIcon} />
             Ticket Details
           </h3>
+          <section aria-label="A4 triage classification" className={css({ display: 'grid', gap: '2', p: '3', borderWidth: '1px', borderColor: 'border.default', borderRadius: 'l2', bg: 'bg.surface' })}>
+            <div className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '2' })}>
+              <h4 className={css({ m: 0, fontSize: 'sm', fontWeight: 'semibold' })}>A4 triage classification</h4>
+              <ParkButton ref={classificationTrigger} type="button" variant="outline" disabled={!Number.isSafeInteger(ticket.priority_classification_revision)} onClick={() => setClassificationOpen(true)}>Edit classification</ParkButton>
+            </div>
+            <dl className={css({ display: 'grid', gridTemplateColumns: { base: '1fr 1fr', md: 'repeat(4, minmax(0, 1fr))' }, gap: '2', m: 0, fontSize: 'sm' })}>
+              {[
+                ['Category', categoryOptions.find(option => option.value === ticket.priority_category)?.label ?? 'Unavailable'],
+                ['Scope', scopeOptions.find(option => option.value === ticket.priority_scope)?.label ?? 'Unavailable'],
+                ['Contract', contractOptions.find(option => option.value === ticket.contract_sla_tier)?.label ?? 'Unavailable'],
+                ['Criticality', criticalityOptions.find(option => option.value === String(ticket.criticality_tier))?.label ?? 'Unavailable'],
+                ['Priority score', ticket.priority_score == null ? 'Unavailable' : String(ticket.priority_score)],
+              ].map(([label, value]) => <div key={label} className={css({ minW: 0 })}><dt className={css({ color: 'fg.muted' })}>{label}</dt><dd className={css({ m: 0, fontWeight: 'medium', overflowWrap: 'anywhere' })}>{value}</dd></div>)}
+            </dl>
+            <p className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>Urgency: {[
+              ticket.priority_regulatory_officer_on_site === 1 && 'Regulatory officer on site',
+              ticket.priority_vip_blocked === 1 && 'VIP blocked',
+              ticket.priority_hard_deadline === 1 && 'Hard deadline',
+            ].filter(Boolean).join(', ') || 'No additional conditions'}.</p>
+            {!Number.isSafeInteger(ticket.priority_classification_revision) && <p role="status" className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>Reload the ticket to edit its classification.</p>}
+          </section>
+          <EditTicketClassificationDialog ticket={ticket} open={classificationOpen} onOpenChange={setClassificationOpen} trigger={classificationTrigger}
+            onReload={async () => (await refetch({ throwOnError: true })).data?.pages[0] ?? null}
+            onSaved={() => { setNotice('Ticket classification saved.'); onClassificationSaved?.(); }} />
           <div className={detailStyles.contextSettingsFields}>
             <div>
               <div className={detailStyles.contextFieldControl}>
                 <DashboardSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   triggerRef={node => { ticketSelectRefs.current.priority = node; }}
-                  id="ticket-priority" label="Priority" aria-label="Priority" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-priority" label="Legacy priority" aria-label="Legacy priority" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.priority}
                   onValueChange={(value) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) return;
@@ -1399,6 +1427,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   className={detailStyles.contextFieldControl}
                   options={priorityOptions}
                 />
+                <p className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>This legacy label does not change the A4 score or countdown above.</p>
               </div>
             </div>
             <div>

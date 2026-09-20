@@ -10,6 +10,10 @@ export type StaffMutationOperation = 'dashboard.ticket.create' | 'dashboard.tick
 export type AcknowledgedDraftReference = Readonly<{ generation: string; revision: number; baseConversationRevision: number }>;
 /** Stored article formats share the composer contract. */
 export type StaffArticleFormat = ArticleBodyFormat;
+export type StaffClassificationCorrection = Readonly<{
+  classification: PriorityClassificationInput;
+  expectedClassificationRevision: number;
+}>;
 export type StaffMutationInput =
   | { operation: 'dashboard.ticket.create'; data: { subject: string; customer_email: string; body: string;
     bodyFormat?: StaffArticleFormat; status?: Ticket['status']; priority?: Ticket['priority'];
@@ -18,6 +22,8 @@ export type StaffMutationInput =
   | { operation: 'dashboard.ticket.reply'; ticketId: string; data: { body: string; bodyFormat?: StaffArticleFormat;
     is_internal?: boolean; attachments?: RequestedMutationAttachment[]; mentionedUserIds?: readonly string[]; draft?: AcknowledgedDraftReference } }
   | { operation: 'dashboard.ticket.update'; ticketId: string; data: AuditedTicketUpdate & {
+    classification?: PriorityClassificationInput;
+    expectedClassificationRevision?: number;
     /** Internal marker for the narrow #137 responsible-owner transition. */
     responsibleOwnerAssignment?: true;
     /** The owner observed by the dashboard before requesting the transition. */

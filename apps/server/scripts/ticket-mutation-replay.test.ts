@@ -172,6 +172,11 @@ test('retry-safe API PATCH stores one 200 update receipt across concurrent and l
     }, 'update-target');
     await expectStatus(created, 201, 'Create update target');
     const id = ticketId(await created.json<Json>());
+    const createSnapshot=await fixture.db.prepare(`SELECT response_snapshot FROM ticket_mutation_receipts
+      WHERE tenant_id=? AND operation='api.ticket.create' AND result_ticket_id=?`)
+      .bind(fixture.principals.customerA.tenantId,id).first<{response_snapshot:string}>();
+    assert.equal(Object.hasOwn(JSON.parse(createSnapshot!.response_snapshot).ticket,'priority_classification_revision'),false,
+      'Frozen API v1 receipt projection is unchanged by staff classification');
     const countEvents = async () => (await fixture.db.prepare('SELECT count(*) AS n FROM conversation_events WHERE tenant_id=? AND ticket_id=?')
       .bind(fixture.principals.customerA.tenantId,id).first<{ n: number }>())?.n ?? 0;
     const before = { rows: await rows(fixture), events: await countEvents() };
@@ -198,6 +203,8 @@ test('retry-safe API PATCH stores one 200 update receipt across concurrent and l
       .bind(fixture.principals.customerA.tenantId,id).first<{ response_status: number; response_version: number; response_snapshot: string }>();
     assert.deepEqual({ status: stored?.response_status, version: stored?.response_version },{ status:200, version:3 });
     assert.match(stored?.response_snapshot ?? '',/"version":3/);
+    assert.equal(Object.hasOwn(JSON.parse(stored!.response_snapshot).ticket,'priority_classification_revision'),false,
+      'API update receipt projection stays unchanged');
 
     const other = await apiKey(fixture,'operatorB');
     const foreignBefore = await rows(fixture,fixture.principals.customerB.tenantId);

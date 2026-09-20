@@ -18,10 +18,12 @@ const detailNavigation=vi.hoisted(()=>({pending:false,flush:vi.fn<()=>Promise<bo
 vi.mock('../pages/TicketDetailPage',async()=>{
   const {DraftNavigationGuard}=await vi.importActual<typeof import('../components/DraftNavigationGuard')>('../components/DraftNavigationGuard');
   const {useOperatorWorkspaceState}=await vi.importActual<typeof import('../hooks/useOperatorWorkspaceState')>('../hooks/useOperatorWorkspaceState');
-  return {TicketDetailPage:({id,workspaceBackHref,onResolved}:{id:string;workspaceBackHref:string;onResolved?:(id:string)=>void})=>{const state=useOperatorWorkspaceState();return <article>
+  return {TicketDetailPage:({id,workspaceBackHref,onResolved,onClassificationSaved}:{id:string;workspaceBackHref:string;onResolved?:(id:string)=>void;onClassificationSaved?:()=>void})=>{const state=useOperatorWorkspaceState();return <article>
     <DraftNavigationGuard pending={detailNavigation.pending} flush={detailNavigation.flush}/>
     <button tabIndex={-1} onClick={()=>state.update({filters:{...state.filters,status:'pending'}})}>Synthetic change filter</button>
-    <button tabIndex={-1} onClick={()=>onResolved?.(id)}>Synthetic confirmed resolve</button><h1>{`Conversation ${id}`}</h1><Link to={workspaceBackHref}>Back to conversations</Link>
+    <button tabIndex={-1} onClick={()=>onResolved?.(id)}>Synthetic confirmed resolve</button>
+    <button tabIndex={-1} onClick={()=>onClassificationSaved?.()}>Synthetic classification saved</button>
+    <h1>{`Conversation ${id}`}</h1><Link to={workspaceBackHref}>Back to conversations</Link>
   </article>;}};
 });
 
@@ -468,6 +470,34 @@ it('restarts an expired priority snapshot without displaying stale ordinary rows
   expect(priorityReads).toBe(2);
 });
 
+it('restarts the priority snapshot at page one after classification changes and keeps the selected conversation', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      priorityReads++;
+      const sampledAt=new Date().toISOString();
+      return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+        priorityClocks:{[classified.id]:{remainingHours:priorityReads===1?1:0.5,paused:false,asOf:sampledAt}},
+        triageOverdueCount:0,asOf:sampledAt,next:null});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all/ticket-1');
+  await screen.findByRole('heading',{name:'Conversation ticket-1'});
+  await chooseView('Default Focus');
+  await waitFor(()=>expect(priorityReads).toBe(1));
+  fireEvent.click(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/}));
+  await screen.findByRole('heading',{name:'Conversation ticket-1'});
+  fireEvent.click(screen.getByRole('button',{name:'Synthetic classification saved'}));
+  await waitFor(()=>expect(priorityReads).toBe(2));
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
+  expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Classification saved');
+  expect(priorityReads).toBe(2);
+});
+
 it('uses clamped calendar dates for the month and quarter filter choices',async()=>{
   vi.spyOn(Date,'now').mockReturnValue(Date.UTC(2026,2,31,10,15));
   showInbox('/inbox/all');
@@ -903,6 +933,40 @@ it('uses whole-view SLA ordering and same-snapshot projections, then restarts an
   await within(list).findByRole('option',{name:/Fixture conversation 20/});
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
   expect(slaRequests).toHaveLength(3);
+});
+
+it('restarts an SLA-sorted page-two snapshot after classification save without rereading the old cursor', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const requests:string[]=[];
+  const firstAsOf=new Date().toISOString();
+  const nextAsOf=new Date(Date.parse(firstAsOf)+1000).toISOString();
+  let firstPageReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='sla_priority'){
+      const params=new URL(String(url),'http://localhost').searchParams;
+      requests.push(String(url));
+      if(params.has('cursor'))return json({data:[tickets[1]],meta:{page:2,limit:1,total:2,total_pages:2},
+        sla:{[tickets[1].id]:unavailableSla},asOf:firstAsOf,next:null});
+      firstPageReads++;
+      return json({data:[tickets[0]],meta:{page:1,limit:1,total:2,total_pages:2},
+        sla:{[tickets[0].id]:unavailableSla},asOf:firstPageReads===1?firstAsOf:nextAsOf,next:'second-cursor'});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all/ticket-1');
+  await screen.findByRole('heading',{name:'Conversation ticket-1'});
+  await chooseSort('contract SLA');
+  await within(screen.getByRole('listbox',{name:'Conversation list'})).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
+  await within(screen.getByRole('listbox',{name:'Conversation list'})).findByRole('option',{name:/Fixture conversation 2(?:\s|$)/});
+  expect(requests).toHaveLength(2);
+  await client.invalidateQueries({queryKey:['tickets','sla-priority'],refetchType:'none'});
+  fireEvent.click(screen.getByRole('button',{name:'Synthetic classification saved'}));
+  await waitFor(()=>expect(firstPageReads).toBe(2));
+  await within(screen.getByRole('listbox',{name:'Conversation list'})).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(requests).toHaveLength(3);
+  expect(requests.filter(url=>new URL(url,'http://localhost').searchParams.has('cursor'))).toHaveLength(1);
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
 });
 
 

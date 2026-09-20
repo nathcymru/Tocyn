@@ -1632,9 +1632,51 @@
 
     .badge {
       font-variant-numeric: tabular-nums;
+}
+
+    .badge,.button {
       white-space: nowrap;
       -webkit-user-select: none;
       user-select: none;
+}
+
+    .button {
+      border-radius: var(--radii-l2);
+      gap: var(--spacing-2);
+      outline: 0;
+      transition-property: background-color, border-color, color, box-shadow;
+      transition-timing-function: var(--transition-easing, cubic-bezier(0.4, 0, 0.2, 1));
+      transition-duration: var(--transition-duration, 150ms);
+      align-items: center;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+      display: inline-flex;
+      flex-shrink: 0;
+      font-weight: var(--font-weights-semibold);
+      isolation: isolate;
+      justify-content: center;
+      position: relative;
+      --transition-prop: background-color, border-color, color, box-shadow;
+      vertical-align: middle;
+      --focus-ring-color: var(--focus-ring-color-prop, var(--global-color-focus-ring, #005FCC));
+}
+
+    .button:is(:focus-visible, [data-focus-visible]) {
+      outline-width: var(--focus-ring-width, 2px);
+      outline-offset: var(--focus-ring-offset, 2px);
+      outline-style: var(--focus-ring-style, solid);
+      outline-color: var(--focus-ring-color);
+}
+
+    .button :where(svg) {
+      flex-shrink: 0;
+}
+
+    .button:is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
+      cursor: not-allowed;
+      opacity: 0.67;
+      filter: grayscale(100%);
 }
 
     .icon {
@@ -1657,48 +1699,6 @@
 
     .group > *:is(:focus-visible, [data-focus-visible]) {
       z-index: 1;
-}
-
-    .button {
-      border-radius: var(--radii-l2);
-      gap: var(--spacing-2);
-      outline: 0;
-      transition-property: background-color, border-color, color, box-shadow;
-      transition-timing-function: var(--transition-easing, cubic-bezier(0.4, 0, 0.2, 1));
-      transition-duration: var(--transition-duration, 150ms);
-      align-items: center;
-      appearance: none;
-      -webkit-appearance: none;
-      cursor: pointer;
-      display: inline-flex;
-      flex-shrink: 0;
-      font-weight: var(--font-weights-semibold);
-      isolation: isolate;
-      justify-content: center;
-      position: relative;
-      --transition-prop: background-color, border-color, color, box-shadow;
-      -webkit-user-select: none;
-      user-select: none;
-      vertical-align: middle;
-      white-space: nowrap;
-      --focus-ring-color: var(--focus-ring-color-prop, var(--global-color-focus-ring, #005FCC));
-}
-
-    .button:is(:focus-visible, [data-focus-visible]) {
-      outline-width: var(--focus-ring-width, 2px);
-      outline-offset: var(--focus-ring-offset, 2px);
-      outline-style: var(--focus-ring-style, solid);
-      outline-color: var(--focus-ring-color);
-}
-
-    .button :where(svg) {
-      flex-shrink: 0;
-}
-
-    .button:is(:disabled, [disabled], [data-disabled], [aria-disabled=true]) {
-      cursor: not-allowed;
-      opacity: 0.67;
-      filter: grayscale(100%);
 }
 
     .spinner {
@@ -1954,56 +1954,6 @@
     height: var(--sizes-4\.5);
 }
 
-  .icon--size_md {
-    width: var(--sizes-5);
-    height: var(--sizes-5);
-}
-
-  .icon--size_2xs {
-    width: var(--sizes-3);
-    height: var(--sizes-3);
-}
-
-  .icon--size_xs {
-    width: var(--sizes-4);
-    height: var(--sizes-4);
-}
-
-  .icon--size_sm {
-    width: var(--sizes-4\.5);
-    height: var(--sizes-4\.5);
-}
-
-  .icon--size_lg {
-    width: var(--sizes-5\.5);
-    height: var(--sizes-5\.5);
-}
-
-  .icon--size_xl {
-    width: var(--sizes-6);
-    height: var(--sizes-6);
-}
-
-  .group--orientation_horizontal {
-    flex-direction: row;
-}
-
-  .group--orientation_vertical {
-    flex-direction: column;
-}
-
-  .group--attached_true {
-    gap: var(--spacing-0);
-}
-
-  .group--grow_true {
-    display: flex;
-}
-
-  .group--grow_true > * {
-    flex: 1 1 0%;
-}
-
   .button--variant_plain {
     color: var(--colors-color-palette-plain-fg);
 }
@@ -2031,6 +1981,24 @@
   .button--size_md :where(svg) {
     width: var(--sizes-5);
     height: var(--sizes-5);
+}
+
+  .button--variant_outline {
+    border-width: 1px;
+    border-color: var(--colors-color-palette-outline-border);
+    color: var(--colors-color-palette-outline-fg);
+}
+
+  .button--variant_outline:is([data-state=on]) {
+    background: var(--colors-color-palette-outline-bg-active);
+}
+
+  .button--variant_outline:not(:disabled):hover {
+    background: var(--colors-color-palette-outline-bg-hover);
+}
+
+  .button--variant_outline:not(:disabled):active {
+    background: var(--colors-color-palette-outline-bg-active);
 }
 
   .button--variant_solid {
@@ -2089,24 +2057,6 @@
 
   .button--variant_subtle:not(:disabled):active {
     background: var(--colors-color-palette-subtle-bg-active);
-}
-
-  .button--variant_outline {
-    border-width: 1px;
-    border-color: var(--colors-color-palette-outline-border);
-    color: var(--colors-color-palette-outline-fg);
-}
-
-  .button--variant_outline:is([data-state=on]) {
-    background: var(--colors-color-palette-outline-bg-active);
-}
-
-  .button--variant_outline:not(:disabled):hover {
-    background: var(--colors-color-palette-outline-bg-hover);
-}
-
-  .button--variant_outline:not(:disabled):active {
-    background: var(--colors-color-palette-outline-bg-active);
 }
 
   .button--size_2xs {
@@ -2172,6 +2122,56 @@
   .button--size_2xl :where(svg) {
     width: var(--sizes-6);
     height: var(--sizes-6);
+}
+
+  .icon--size_md {
+    width: var(--sizes-5);
+    height: var(--sizes-5);
+}
+
+  .icon--size_2xs {
+    width: var(--sizes-3);
+    height: var(--sizes-3);
+}
+
+  .icon--size_xs {
+    width: var(--sizes-4);
+    height: var(--sizes-4);
+}
+
+  .icon--size_sm {
+    width: var(--sizes-4\.5);
+    height: var(--sizes-4\.5);
+}
+
+  .icon--size_lg {
+    width: var(--sizes-5\.5);
+    height: var(--sizes-5\.5);
+}
+
+  .icon--size_xl {
+    width: var(--sizes-6);
+    height: var(--sizes-6);
+}
+
+  .group--orientation_horizontal {
+    flex-direction: row;
+}
+
+  .group--orientation_vertical {
+    flex-direction: column;
+}
+
+  .group--attached_true {
+    gap: var(--spacing-0);
+}
+
+  .group--grow_true {
+    display: flex;
+}
+
+  .group--grow_true > * {
+    flex: 1 1 0%;
 }
 
   .spinner--size_inherit {
@@ -12163,6 +12163,10 @@
     clip: rect(0,0,0,0);
 }
 
+  .grid-tc_1fr_1fr {
+    grid-template-columns: 1fr 1fr;
+}
+
   .color-palette_green {
     --colors-color-palette-50: var(--colors-green-50);
     --colors-color-palette-100: var(--colors-green-100);
@@ -12874,6 +12878,22 @@
     height: 1px;
 }
 
+  .w_min\(100\%_-_2rem\,_40rem\) {
+    width: min(100% - 2rem, 40rem);
+}
+
+  .max-h_calc\(100dvh_-_2rem\) {
+    max-height: calc(100dvh - 2rem);
+}
+
+  .min-h_0 {
+    min-height: var(--sizes-0);
+}
+
+  .ov-y_auto {
+    overflow-y: auto;
+}
+
   .h_10 {
     height: var(--sizes-10);
 }
@@ -12908,10 +12928,6 @@
 
   .min-w_56 {
     min-width: var(--sizes-56);
-}
-
-  .ov-y_auto {
-    overflow-y: auto;
 }
 
   .ml_auto {
@@ -12954,10 +12970,6 @@
     min-height: var(--sizes-8);
 }
 
-  .min-h_0 {
-    min-height: var(--sizes-0);
-}
-
   .min-h_6 {
     min-height: var(--sizes-6);
 }
@@ -12992,14 +13004,6 @@
 
   .w_32\% {
     width: 32%;
-}
-
-  .w_min\(100\%_-_2rem\,_40rem\) {
-    width: min(100% - 2rem, 40rem);
-}
-
-  .max-h_calc\(100dvh_-_2rem\) {
-    max-height: calc(100dvh - 2rem);
 }
 
   .mt_0\.375rem {
@@ -13391,11 +13395,14 @@
 }
 
   @media screen and (min-width: 40rem) {
-    .sm\:grid-tc_minmax\(0\,_1fr\)_auto {
-      grid-template-columns: minmax(0, 1fr) auto;
+    .sm\:grid-tc_repeat\(4\,_minmax\(0\,_1fr\)\) {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
 }
     .sm\:grid-tc_repeat\(2\,_minmax\(0\,_1fr\)\) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+    .sm\:grid-tc_minmax\(0\,_1fr\)_auto {
+      grid-template-columns: minmax(0, 1fr) auto;
 }
     .sm\:d_inline {
       display: inline;
@@ -13435,6 +13442,9 @@
 }
     .md\:grid-tc_repeat\(2\,minmax\(0\,1fr\)\) {
       grid-template-columns: repeat(2,minmax(0,1fr));
+}
+    .md\:grid-tc_repeat\(4\,_minmax\(0\,_1fr\)\) {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 }
 
