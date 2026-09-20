@@ -24,6 +24,7 @@ export const KnowledgePage: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [hasLoadedData, setHasLoadedData] = useState(false);
   const [isAddingCategory, setIsAddingCategory] = useState<{ parentId: string | null } | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -75,6 +76,7 @@ export const KnowledgePage: React.FC = () => {
 
       setCategories(roots);
       setDocs(articles);
+      setHasLoadedData(true);
       setLoadState('ready');
     } catch (err: any) {
       setError(err.message);
@@ -256,10 +258,17 @@ export const KnowledgePage: React.FC = () => {
         </ParkButton>
       </header>
 
-      {error && <ParkEmptyState role="alert" title="Knowledge could not be loaded" description={error} headingLevel={false}
-        action={<ParkButton onClick={() => void fetchData()}>Retry knowledge</ParkButton>} />}
+      {error && (hasLoadedData ? <ParkAlert.Root role="alert" status="warning" variant="surface">
+        <ParkAlert.Content>
+          <ParkAlert.Title>{loadState === 'error' ? 'Knowledge could not be refreshed' : 'Knowledge change failed'}</ParkAlert.Title>
+          <ParkAlert.Description>{loadState === 'error' ? 'Showing the last loaded categories and articles. ' : ''}{error}</ParkAlert.Description>
+          {loadState === 'error' && <ParkButton type="button" onClick={() => void fetchData()}>Retry knowledge</ParkButton>}
+        </ParkAlert.Content>
+      </ParkAlert.Root> : <ParkEmptyState role="alert" title="Knowledge could not be loaded" description={error} headingLevel={false}
+        action={<ParkButton type="button" onClick={() => void fetchData()}>Retry knowledge</ParkButton>} />)}
+      {hasLoadedData && loadState === 'loading' && <p role="status" className={css({ color: 'fg.muted', fontSize: 'sm' })}>Refreshing knowledge…</p>}
 
-      <div className={pageStyles.knowledgeWorkspace}>
+      {(hasLoadedData || loadState !== 'error') && <div className={pageStyles.knowledgeWorkspace}>
         {/* Sidebar */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeSidebar}>
           <ParkCard.Header>
@@ -310,7 +319,7 @@ export const KnowledgePage: React.FC = () => {
         {/* Main Content */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeContent}>
           <ParkCard.Body>
-            {loadState === 'ready' && filteredDocs.length === 0 ? (
+            {hasLoadedData && filteredDocs.length === 0 ? (
               <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false}
                 action={<ParkButton onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}>Create article</ParkButton>} />
             ) : (
@@ -322,14 +331,14 @@ export const KnowledgePage: React.FC = () => {
                 </ParkTable.Row>
               </ParkTable.Head>
               <ParkTable.Body>
-                {loadState === 'loading' && <ParkTable.Row><ParkTable.Cell colSpan={5}>
+                {loadState === 'loading' && !hasLoadedData && <ParkTable.Row><ParkTable.Cell colSpan={5}>
                   <div role="status" aria-label="Loading knowledge articles">
                     <ParkSkeleton height="8" width="full" />
                     <ParkSkeleton height="8" width="full" />
                     <ParkSkeleton height="8" width="full" />
                   </div>
                 </ParkTable.Cell></ParkTable.Row>}
-                {loadState === 'ready' && filteredDocs.map((doc) => (
+                {hasLoadedData && filteredDocs.map((doc) => (
                   <ParkTable.Row
                     key={doc.id}
                     className={pageStyles.knowledgeRow}
@@ -364,7 +373,7 @@ export const KnowledgePage: React.FC = () => {
             )}
           </ParkCard.Body>
         </ParkCard.Root>
-      </div>
+      </div>}
 
       {deleteStatus && <p role="status">{deleteStatus}</p>}
       <ParkDialog.Root open={deleteConfirm.isOpen} onOpenChange={({ open }) => { if (!open && !deleting) closeDelete(); }}

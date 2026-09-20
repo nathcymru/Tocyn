@@ -5322,6 +5322,7 @@
 
     .shell__personaTrigger {
       padding: 0.125rem;
+      border-radius: var(--radii-full);
       position: relative;
       display: inline-flex;
       flex-shrink: 0;
@@ -5339,15 +5340,7 @@
       min-width: var(--sizes-0);
 }
 
-    .shell__personaAvatarWrap {
-      position: relative;
-      display: inline-flex;
-      flex-shrink: 0;
-      align-items: center;
-      justify-content: center;
-}
-
-    .shell__personaAvatarWrap,.shell__personaAvatar {
+    .shell__personaAvatar {
       width: 2.5rem;
       height: 2.5rem;
 }
@@ -11822,6 +11815,10 @@
 
   .bdr_xl {
     border-radius: var(--radii-xl);
+}
+
+  .grid-c_1_\/_-1 {
+    grid-column: 1 / -1;
 }
 
   .bdr_l3 {

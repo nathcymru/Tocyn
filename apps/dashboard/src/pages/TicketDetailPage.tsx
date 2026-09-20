@@ -96,6 +96,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
     loadMore: loadMoreSupportStates,
     hasMore: hasMoreSupportStates,
     isLoading: isLoadingSupportStates,
+    error: supportStatesReadError,
+    dataUpdatedAt: supportStatesUpdatedAt,
+    refetch: refetchSupportStates,
     isLoadingMore: isLoadingMoreSupportStates,
     isLoadMoreError: isLoadMoreSupportStatesError,
   } = useSupportStates();
@@ -201,6 +204,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   const supportStateFlight = useRef(false);
   const [isSupportStateSubmitting, setIsSupportStateSubmitting] = useState(false);
   const selectedSupportStateDefinition = supportStates.find(candidate => candidate.id === supportStateDraft.definitionId);
+  const supportStateReadFailed = supportState.isError;
+  const supportStatesReadFailed = Boolean(supportStatesReadError) && !isLoadMoreSupportStatesError;
+  const supportStateReadsUnconfirmed = supportStateReadFailed || supportStatesReadFailed;
   const supportStateOptions = React.useMemo(() => [
     ...(!selectedSupportStateDefinition && supportState.data?.definition_id === supportStateDraft.definitionId
       ? [{ value: supportStateDraft.definitionId, label: `${supportState.data.internal_label} (${supportState.data.lifecycle}) — state details loading` }]
@@ -511,7 +517,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   
   const submitSupportState = async (event?: React.FormEvent, snoozedUntilOverride?: string | null) => {
     event?.preventDefault();
-    if (supportStateFlight.current || assignmentBlocked) return;
+    if (supportStateFlight.current || assignmentBlocked || supportStateReadsUnconfirmed) return;
     const current = supportState.data;
     const definition = selectedSupportStateDefinition;
     if (!current) return;
@@ -879,9 +885,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           <ParkCollapsible.Trigger asChild><ParkButton type="button" variant="plain" className={css({ minH: '9' })}>Manage support state</ParkButton></ParkCollapsible.Trigger>
           <ParkCollapsible.Content>
             {showSupportState && supportState.isLoading && <div role="status" aria-label="Loading current support state" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading current support state…</span><ParkSkeleton aria-hidden="true" height="4" width="70%" /><ParkSkeleton aria-hidden="true" height="4" width="90%" /></div>}
+            {showSupportState && supportStateReadFailed && !supportState.data && <ParkEmptyState role="alert" headingLevel={3} title="Current support state could not be loaded" description="Retry before managing this ticket's support state." action={<ParkButton type="button" onClick={() => void supportState.refetch()}>Retry current support state</ParkButton>} />}
+            {showSupportState && supportStateReadFailed && supportState.data && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Title>Current support state could not be refreshed</ParkAlert.Title><ParkAlert.Description>The last confirmed state and your local input are retained. Retry before saving.</ParkAlert.Description><ParkButton type="button" onClick={() => void supportState.refetch()}>Retry current support state</ParkButton></ParkAlert.Content></ParkAlert.Root>}
+            {showSupportState && supportStatesReadFailed && supportStatesUpdatedAt === 0 && <ParkEmptyState role="alert" headingLevel={3} title="Support-state definitions could not be loaded" description="The current ticket state remains visible. Retry to load its available transitions." action={<ParkButton type="button" onClick={() => void refetchSupportStates()}>Retry support-state definitions</ParkButton>} />}
+            {showSupportState && supportStatesReadFailed && supportStatesUpdatedAt > 0 && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Title>Support-state definitions could not be refreshed</ParkAlert.Title><ParkAlert.Description>The last loaded definitions and your local input are retained. Retry before saving.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetchSupportStates()}>Retry support-state definitions</ParkButton></ParkAlert.Content></ParkAlert.Root>}
             {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className={detailStyles.supportStateForm} aria-label="Support state">
           <div className={detailStyles.supportStateHeader}><h2 className={detailStyles.contextFieldLabel}>Support state</h2><p className={detailStyles.supportStateHelp}>Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
-          <DashboardSelect triggerRef={supportStateSelect} label="Support state" aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} onValueChange={definitionId => updateSupportStateDraft({ definitionId })} className={css({ w: 'full' })}
+          <DashboardSelect triggerRef={supportStateSelect} label="Support state" aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates || supportStateReadsUnconfirmed} onValueChange={definitionId => updateSupportStateDraft({ definitionId })} className={css({ w: 'full' })}
             options={supportStateOptions} />
           {isLoadingSupportStates && <div role="status" aria-label="Loading support-state definitions" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading support-state definitions…</span><ParkSkeleton aria-hidden="true" height="4" width="75%" /></div>}
           <div className={detailStyles.supportStateFields}>
@@ -894,13 +904,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </Field.Root>
             <p className={css({ color: 'text.muted', fontSize: 'sm' })}>The shared queue will resurface this ticket at the selected local time.</p>
             <div className={detailStyles.supportStateActions}>
-              <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className={css({ minH: '10' })}>Snooze ticket</ParkButton>
-              {supportState.data.snoozed_until && <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className={css({ minH: '10' })}>Unsnooze ticket</ParkButton>}
+              <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || supportStateReadsUnconfirmed || !selectedSupportStateDefinition || !supportStateDraft.snoozedUntil} onClick={() => void submitSupportState(undefined, browserDateTimeLocalToInstant(supportStateDraft.snoozedUntil))} className={css({ minH: '10' })}>Snooze ticket</ParkButton>
+              {supportState.data.snoozed_until && <ParkButton type="button" disabled={isSupportStateSubmitting || assignmentBlocked || supportStateReadsUnconfirmed || !selectedSupportStateDefinition} onClick={() => void submitSupportState(undefined, null)} className={css({ minH: '10' })}>Unsnooze ticket</ParkButton>}
             </div>
             {supportState.data.snoozed_until && <p role="status" className={css({ color: 'text.muted', fontSize: 'sm' })}>Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
           </div>
           {selectedSupportStateNeedsDetails && <p role="status" className={css({ color: 'text.muted', fontSize: 'sm' })}>Load the current support-state definition before saving.</p>}
-          <div className={detailStyles.supportStateActions}><ParkButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className={detailStyles.modeButton}>Save support state</ParkButton><ParkButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} variant="plain">Refresh current state</ParkButton>{supportStateDraftDirty.current && <ParkButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} variant="plain">Discard local changes</ParkButton>}</div>
+          <div className={detailStyles.supportStateActions}><ParkButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || supportStateReadsUnconfirmed || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || supportStateReadsUnconfirmed || !selectedSupportStateDefinition} className={detailStyles.modeButton}>Save support state</ParkButton><ParkButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} variant="plain">Refresh current state</ParkButton>{supportStateDraftDirty.current && <ParkButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} variant="plain">Discard local changes</ParkButton>}</div>
           {hasMoreSupportStates && <ParkButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} variant="plain">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</ParkButton>}
           {isLoadMoreSupportStatesError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>Could not load more support states. Try again.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             </form>}
