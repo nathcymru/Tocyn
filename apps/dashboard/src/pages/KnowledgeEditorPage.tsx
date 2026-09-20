@@ -242,7 +242,7 @@ export const KnowledgeEditorPage: React.FC = () => {
 
             <Field.Root className={styles.field}>
               <Field.Label id={`${contentId}-label`} htmlFor={contentId}>Content (Markdown)</Field.Label>
-              <div aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
+              <div className={styles.tiptap} aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
                 <TiptapMarkdownField key={`${routeKey}-${editorReady ? 'ready' : 'loading'}`} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaLabelledBy={`${contentId}-label`} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />
               </div>
             </Field.Root>

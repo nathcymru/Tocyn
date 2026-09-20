@@ -18,6 +18,7 @@ export function MfaPage() {
   const [loading, setLoading] = useState(false);
   const [setupAttempt, setSetupAttempt] = useState(0);
   const [setupStatus, setSetupStatus] = useState('');
+  const [pinSize, setPinSize] = useState<'xs' | 'md'>(() => window.matchMedia?.('(min-width: 640px)').matches ? 'md' : 'xs');
   const setupPromise = React.useRef<Promise<SetupResponse> | null>(null);
   const retryingSetup = React.useRef(false);
   const codeInput = React.useRef<HTMLDivElement>(null);
@@ -26,6 +27,15 @@ export function MfaPage() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setAuth);
   const user = useAuthStore((state) => state.user);
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(min-width: 640px)');
+    if (!media) return;
+    const update = () => setPinSize(media.matches ? 'md' : 'xs');
+    media.addEventListener('change', update);
+    update();
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     if (!user || user.mfa_enabled) return;
@@ -154,6 +164,7 @@ export function MfaPage() {
           <div className={authStyles.pinWrap}>
             <ParkPinInput
               id="mfa-code"
+              size={pinSize}
               ref={codeInput}
               defaultValue={Array.from({ length: 6 }, () => '')}
               onValueChange={(details) => { const value = details?.value ?? []; if (!loading) setCode(value.join('').replace(/\D/g, '').slice(0, 6)); }}

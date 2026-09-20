@@ -10,7 +10,10 @@ export const w = {
   panelTitle: css({ m: '0', minW: '0', overflowWrap: 'anywhere', fontSize: 'lg', fontWeight: 'semibold' }),
   close: css({ display: 'grid', minW: '11', minH: '11', placeItems: 'center' }),
   closeIcon: css({ w: '6', h: '6' }),
-  launcher: css({ display: 'grid', minW: '14', minH: '14', placeItems: 'center', rounded: 'full', boxShadow: 'lg' }),
+  // A host page may be dark while this ShadowRoot keeps Park's light palette.
+  // Keep Park's 2px/2px outline. A light backing reaches its inner edge,
+  // leaving one 2px light band on dark hosts and Park's dark band on light hosts.
+  launcher: css({ display: 'grid', minW: '14', minH: '14', placeItems: 'center', rounded: 'full', boxShadow: 'lg', _focusVisible: { boxShadow: '0 0 0 4px var(--colors-bg\\.surface), var(--shadows-lg)' } }),
   launcherIcon: css({ w: '8', h: '8' }),
   tabRoot: css({ display: 'flex', minH: '0', flex: '1', flexDirection: 'column' }),
   tabs: css({ display: 'flex', flexShrink: '0', borderBottomWidth: '1px', borderColor: 'border.default' }),

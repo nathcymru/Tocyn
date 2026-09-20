@@ -189,6 +189,7 @@ it('places one Park account menu in the desktop sidebar footer, separate from Se
   expect(within(sidebar).getByRole('navigation', { name: 'Settings navigation' })).not.toContainElement(account);
   expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Account options' })).not.toBeInTheDocument();
   expect(account).toHaveClass('menu__trigger');
+  expect(account).toHaveClass('button--size_2xs');
   account.focus();
   await userEvent.keyboard('{Enter}');
   await screen.findByRole('menuitem', { name: 'Account' });
@@ -202,6 +203,7 @@ it('keeps the sole account menu in the mobile header when navigation dialog open
   await renderReady();
   const account = within(screen.getByRole('banner')).getByRole('button', { name: 'Account options' });
   expect(screen.getAllByRole('button', { name: 'Account options' })).toHaveLength(1);
+  expect(account).toHaveClass('button--size_2xs');
   await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   const dialog = await screen.findByRole('dialog', { name: 'Navigation' });
   expect(within(dialog).queryByRole('button', { name: 'Account options' })).not.toBeInTheDocument();

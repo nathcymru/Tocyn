@@ -1939,30 +1939,6 @@ const tokens = {
     "value": "var(--colors-gray-solid-bg)",
     "variable": "var(--colors-accent\\.primary)"
   },
-  "colors.icon.primary": {
-    "value": "var(--colors-gray-12)",
-    "variable": "var(--colors-icon\\.primary)"
-  },
-  "colors.icon.muted": {
-    "value": "var(--colors-gray-11)",
-    "variable": "var(--colors-icon\\.muted)"
-  },
-  "colors.icon.disabled": {
-    "value": "var(--colors-gray-9)",
-    "variable": "var(--colors-icon\\.disabled)"
-  },
-  "colors.icon.selected": {
-    "value": "var(--colors-blue-11)",
-    "variable": "var(--colors-icon\\.selected)"
-  },
-  "colors.icon.critical": {
-    "value": "var(--colors-red-11)",
-    "variable": "var(--colors-icon\\.critical)"
-  },
-  "colors.icon.inverse": {
-    "value": "var(--colors-gray-solid-fg)",
-    "variable": "var(--colors-icon\\.inverse)"
-  },
   "colors.canvas": {
     "value": "var(--colors-canvas)",
     "variable": "var(--colors-canvas)"
@@ -2190,6 +2166,30 @@ const tokens = {
   "spacing.-5.5": {
     "value": "calc(var(--spacing-5\\.5) * -1)",
     "variable": "var(--spacing-5\\.5)"
+  },
+  "colors.icon.primary": {
+    "value": "var(--colors-icon\\.primary)",
+    "variable": "var(--colors-icon\\.primary)"
+  },
+  "colors.icon.muted": {
+    "value": "var(--colors-icon\\.muted)",
+    "variable": "var(--colors-icon\\.muted)"
+  },
+  "colors.icon.disabled": {
+    "value": "var(--colors-icon\\.disabled)",
+    "variable": "var(--colors-icon\\.disabled)"
+  },
+  "colors.icon.selected": {
+    "value": "var(--colors-icon\\.selected)",
+    "variable": "var(--colors-icon\\.selected)"
+  },
+  "colors.icon.critical": {
+    "value": "var(--colors-icon\\.critical)",
+    "variable": "var(--colors-icon\\.critical)"
+  },
+  "colors.icon.inverse": {
+    "value": "var(--colors-icon\\.inverse)",
+    "variable": "var(--colors-icon\\.inverse)"
   },
   "colors.gray.1": {
     "value": "var(--colors-gray-1)",

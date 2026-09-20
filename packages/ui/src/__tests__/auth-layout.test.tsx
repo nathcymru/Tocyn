@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useEffect } from 'react';
+import { existsSync, readFileSync } from 'node:fs';
 import { cleanup, render, screen } from '@testing-library/react';
 import { AuthLayout } from '../auth-layout';
 
@@ -51,4 +52,15 @@ it('preserves the visual across the MFA enrolment navigation state', () => {
   const view = render(<AuthLayout>Enrolment</AuthLayout>);
   expect(Math.random).not.toHaveBeenCalled();
   expect(view.container.querySelector('aside[aria-hidden="true"] img')).toBeTruthy();
+});
+
+it('rebinds Park gray palette and icon tokens inside the nested dark auth shell', () => {
+  const cssPath = ['src/styles/panda.css', 'packages/ui/src/styles/panda.css'].find(existsSync);
+  expect(cssPath).toBeDefined();
+  const css = readFileSync(cssPath!, 'utf8');
+  const authRoot = css.match(/\.authShell__root\s*\{([^}]+)\}/)?.[1];
+  const darkTokens = css.match(/\.dark\s*\{([^}]+)\}/)?.[1];
+  expect(authRoot).toContain('--colors-color-palette-plain-fg: var(--colors-gray-plain-fg)');
+  expect(darkTokens).toContain('--colors-icon\\.primary: var(--colors-gray-12)');
+  expect(darkTokens).toContain('--colors-icon\\.muted: var(--colors-gray-11)');
 });

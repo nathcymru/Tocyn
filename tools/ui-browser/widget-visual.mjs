@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const bundle = readFileSync('apps/widget/dist/lumina-widget.js');
-const sourcePaths = ['tools/ui-browser/widget-visual.mjs', 'apps/widget/src/main.tsx', 'packages/ui/src/styles/panda.css', 'apps/widget/src/App.tsx', 'apps/widget/src/components/TicketForm.tsx', 'apps/widget/dist/lumina-widget.js'];
+const sourcePaths = ['tools/ui-browser/widget-visual.mjs', 'apps/widget/src/main.tsx', 'packages/ui/src/styles/panda.css', 'apps/widget/src/App.tsx', 'apps/widget/src/widgetStyles.ts', 'apps/widget/src/components/TicketForm.tsx', 'apps/widget/dist/lumina-widget.js'];
 const server = createServer((request, response) => {
   response.setHeader('Cache-Control', 'no-store');
   if (request.url === '/widget.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(bundle); return; }
@@ -160,6 +160,49 @@ try {
       scenarios.push({ viewport, aiChat, selectedTab: aiChat ? 'ticket after keyboard activation' : 'ticket', controls, text, panel, clipping, defects, screenshotPath, externalRequests, blockedApiWrites: apiWrites });
     } finally { await context.close(); }
   }
-  const receipt = { version: 1, kind: 'tocyn-local-built-widget-visual-keyboard', recordedAt: new Date().toISOString(), revision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), workingTreeDirty: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0, environment: { node: process.version, browser: browser.version(), headless: true, reducedMotion: 'reduce', localLoopback: true }, sourceHashes: Object.fromEntries(sourcePaths.map(path => [path, createHash('sha256').update(readFileSync(path)).digest('hex')])), bundleSha256: createHash('sha256').update(bundle).digest('hex'), scenarios, limitations: ['Built widget loaded through a disposable local loopback server with synthetic intercepted config/session responses; no backend, provider, authentication, tenant, theme66, or wrapper67 claim.', 'Contrast uses computed opaque/alpha colors composited through ancestors. Unsupported color forms are recorded rather than treated as passing.', 'Visual checks cover default widget controls only, not full screen-reader or cross-browser acceptance.'] };
+  // The ShadowRoot keeps a light Park palette even when the embedding page is
+  // dark. Check the launcher against that host background after focus settles.
+  const darkHost = await browser.newContext({ viewport: { width: 320, height: 812 }, colorScheme: 'dark', reducedMotion: 'reduce', serviceWorkers: 'block' });
+  let hostFocus;
+  try {
+    let externalRequests = 0;
+    await darkHost.route('**/*', route => {
+      const url = new URL(route.request().url());
+      if (url.origin !== origin) { externalRequests++; return route.abort(); }
+      if (url.pathname.endsWith('/config')) return route.fulfill({ json: { title: 'Synthetic support', primaryColor: '#2457d6', features: { aiChat: false, ticketForm: true } } });
+      if (url.pathname.endsWith('/session')) return route.fulfill({ json: { user: { email: 'ui-only@example.invalid' } } });
+      if (route.request().method() !== 'GET') return route.abort();
+      return route.continue();
+    });
+    const page = await darkHost.newPage();
+    await page.goto(origin);
+    await page.evaluate(() => { document.body.style.backgroundColor = '#0f1115'; });
+    const launcher = page.getByRole('button', { name: 'Open support', exact: true });
+    await launcher.waitFor();
+    await page.keyboard.press('Tab');
+    await launcher.focus();
+    await page.waitForFunction(element => {
+      const shadow = getComputedStyle(element).boxShadow;
+      return element.matches(':focus-visible') && /^rgb\([^)]+\) 0px 0px 0px 4px/.test(shadow);
+    }, await launcher.elementHandle());
+    hostFocus = await launcher.evaluate(element => {
+      const css = getComputedStyle(element);
+      const shadow = css.boxShadow.match(/^(rgb\([^)]+\)) 0px 0px 0px ([\d.]+)px/);
+      const channels = value => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+      const luminance = value => channels(value).map(channel => { const normal = channel / 255; return normal <= .04045 ? normal / 12.92 : ((normal + .055) / 1.055) ** 2.4; }).reduce((total, channel, index) => total + channel * [.2126, .7152, .0722][index], 0);
+      const backing = shadow?.[1] ?? '';
+      const background = getComputedStyle(document.body).backgroundColor;
+      const light = backing ? luminance(backing) : 0;
+      const dark = luminance(background);
+      return { outlineWidth: css.outlineWidth, outlineOffset: css.outlineOffset, backing, backingSpread: Number(shadow?.[2] ?? 0), background, contrast: (Math.max(light, dark) + .05) / (Math.min(light, dark) + .05) };
+    });
+    assert.equal(hostFocus.outlineWidth, '2px');
+    assert.equal(hostFocus.outlineOffset, '2px');
+    assert.ok(hostFocus.backingSpread >= 4 && hostFocus.contrast >= 3, `Widget launcher focus is not visible on a dark host: ${JSON.stringify(hostFocus)}`);
+    assert.equal(externalRequests, 0);
+    hostFocus.screenshotPath = '/tmp/tocyn-widget-visual-dark-host-focus.png';
+    await page.screenshot({ path: hostFocus.screenshotPath });
+  } finally { await darkHost.close(); }
+  const receipt = { version: 1, kind: 'tocyn-local-built-widget-visual-keyboard', recordedAt: new Date().toISOString(), revision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), workingTreeDirty: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0, environment: { node: process.version, browser: browser.version(), headless: true, reducedMotion: 'reduce', localLoopback: true }, sourceHashes: Object.fromEntries(sourcePaths.map(path => [path, createHash('sha256').update(readFileSync(path)).digest('hex')])), bundleSha256: createHash('sha256').update(bundle).digest('hex'), scenarios, darkHostFocus: hostFocus, limitations: ['Built widget loaded through a disposable local loopback server with synthetic intercepted config/session responses; no backend, provider, authentication, tenant, theme66, or wrapper67 claim.', 'Contrast uses computed opaque/alpha colors composited through ancestors. Unsupported color forms are recorded rather than treated as passing.', 'Visual checks cover default widget controls only, not full screen-reader or cross-browser acceptance.'] };
   writeFileSync('/tmp/tocyn-widget-visual.json', `${JSON.stringify(receipt, null, 2)}\n`); process.stdout.write(`${JSON.stringify(receipt)}\n`);
 } finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }

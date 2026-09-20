@@ -844,12 +844,6 @@
     --colors-border\.input: var(--tocyn-color-divider, #d9d9e0);
     --colors-border\.focus: var(--colors-focus);
     --colors-accent\.primary: var(--colors-gray-solid-bg);
-    --colors-icon\.primary: var(--colors-gray-12);
-    --colors-icon\.muted: var(--colors-gray-11);
-    --colors-icon\.disabled: var(--colors-gray-9);
-    --colors-icon\.selected: var(--colors-blue-11);
-    --colors-icon\.critical: var(--colors-red-11);
-    --colors-icon\.inverse: var(--colors-gray-solid-fg);
     --colors-canvas: var(--tocyn-color-surface, #ffffff);
     --colors-panel: var(--tocyn-color-surface-panel, #fcfcfd);
     --colors-muted: var(--tocyn-color-surface-muted, #f0f0f3);
@@ -881,6 +875,12 @@
     --colors-text\.primary: var(--tocyn-color-text, #edeef0);
     --colors-text\.muted: var(--tocyn-color-text-muted, #b0b4ba);
     --colors-border\.input: var(--tocyn-color-divider, #363a3f);
+    --colors-icon\.primary: var(--colors-gray-12);
+    --colors-icon\.muted: var(--colors-gray-11);
+    --colors-icon\.disabled: var(--colors-gray-9);
+    --colors-icon\.selected: var(--colors-blue-11);
+    --colors-icon\.critical: var(--colors-red-11);
+    --colors-icon\.inverse: var(--colors-gray-solid-fg);
     --colors-canvas: var(--tocyn-color-surface, #111113);
     --colors-panel: var(--tocyn-color-surface-panel, #111113);
     --colors-muted: var(--tocyn-color-surface-muted, #212225);
@@ -1079,6 +1079,12 @@
 }
 
   :where(:root, .light) {
+    --colors-icon\.primary: var(--colors-gray-12);
+    --colors-icon\.muted: var(--colors-gray-11);
+    --colors-icon\.disabled: var(--colors-gray-9);
+    --colors-icon\.selected: var(--colors-blue-11);
+    --colors-icon\.critical: var(--colors-red-11);
+    --colors-icon\.inverse: var(--colors-gray-solid-fg);
     --colors-gray-1: #fcfcfd;
     --colors-gray-2: #f9f9fb;
     --colors-gray-3: #f0f0f3;
@@ -4913,6 +4919,61 @@
       background: var(--colors-bg\.canvas);
       display: flex;
       color: var(--colors-text\.primary);
+      --colors-color-palette-50: var(--colors-gray-50);
+      --colors-color-palette-100: var(--colors-gray-100);
+      --colors-color-palette-200: var(--colors-gray-200);
+      --colors-color-palette-300: var(--colors-gray-300);
+      --colors-color-palette-400: var(--colors-gray-400);
+      --colors-color-palette-500: var(--colors-gray-500);
+      --colors-color-palette-600: var(--colors-gray-600);
+      --colors-color-palette-700: var(--colors-gray-700);
+      --colors-color-palette-800: var(--colors-gray-800);
+      --colors-color-palette-900: var(--colors-gray-900);
+      --colors-color-palette-950: var(--colors-gray-950);
+      --colors-color-palette-1: var(--colors-gray-1);
+      --colors-color-palette-2: var(--colors-gray-2);
+      --colors-color-palette-3: var(--colors-gray-3);
+      --colors-color-palette-4: var(--colors-gray-4);
+      --colors-color-palette-5: var(--colors-gray-5);
+      --colors-color-palette-6: var(--colors-gray-6);
+      --colors-color-palette-7: var(--colors-gray-7);
+      --colors-color-palette-8: var(--colors-gray-8);
+      --colors-color-palette-9: var(--colors-gray-9);
+      --colors-color-palette-10: var(--colors-gray-10);
+      --colors-color-palette-11: var(--colors-gray-11);
+      --colors-color-palette-12: var(--colors-gray-12);
+      --colors-color-palette-a1: var(--colors-gray-a1);
+      --colors-color-palette-a2: var(--colors-gray-a2);
+      --colors-color-palette-a3: var(--colors-gray-a3);
+      --colors-color-palette-a4: var(--colors-gray-a4);
+      --colors-color-palette-a5: var(--colors-gray-a5);
+      --colors-color-palette-a6: var(--colors-gray-a6);
+      --colors-color-palette-a7: var(--colors-gray-a7);
+      --colors-color-palette-a8: var(--colors-gray-a8);
+      --colors-color-palette-a9: var(--colors-gray-a9);
+      --colors-color-palette-a10: var(--colors-gray-a10);
+      --colors-color-palette-a11: var(--colors-gray-a11);
+      --colors-color-palette-a12: var(--colors-gray-a12);
+      --colors-color-palette-solid-bg: var(--colors-gray-solid-bg);
+      --colors-color-palette-solid-bg-hover: var(--colors-gray-solid-bg-hover);
+      --colors-color-palette-solid-fg: var(--colors-gray-solid-fg);
+      --colors-color-palette-subtle-bg: var(--colors-gray-subtle-bg);
+      --colors-color-palette-subtle-bg-hover: var(--colors-gray-subtle-bg-hover);
+      --colors-color-palette-subtle-bg-active: var(--colors-gray-subtle-bg-active);
+      --colors-color-palette-subtle-fg: var(--colors-gray-subtle-fg);
+      --colors-color-palette-surface-bg: var(--colors-gray-surface-bg);
+      --colors-color-palette-surface-bg-hover: var(--colors-gray-surface-bg-hover);
+      --colors-color-palette-surface-bg-active: var(--colors-gray-surface-bg-active);
+      --colors-color-palette-surface-border: var(--colors-gray-surface-border);
+      --colors-color-palette-surface-border-hover: var(--colors-gray-surface-border-hover);
+      --colors-color-palette-surface-fg: var(--colors-gray-surface-fg);
+      --colors-color-palette-outline-bg-hover: var(--colors-gray-outline-bg-hover);
+      --colors-color-palette-outline-bg-active: var(--colors-gray-outline-bg-active);
+      --colors-color-palette-outline-border: var(--colors-gray-outline-border);
+      --colors-color-palette-outline-fg: var(--colors-gray-outline-fg);
+      --colors-color-palette-plain-bg-hover: var(--colors-gray-plain-bg-hover);
+      --colors-color-palette-plain-bg-active: var(--colors-gray-plain-bg-active);
+      --colors-color-palette-plain-fg: var(--colors-gray-plain-fg);
       font-family: var(--fonts-primary);
       min-height: 100dvh;
 }
@@ -13005,8 +13066,8 @@
     max-width: calc(100vw - 2rem);
 }
 
-  .max-h_min\(28rem\,_70vh\) {
-    max-height: min(28rem, 70vh);
+  .max-h_min\(28rem\,_calc\(var\(--available-height\,_70vh\)_-_0\.5rem\)\) {
+    max-height: min(28rem, calc(var(--available-height, 70vh) - 0.5rem));
 }
 
   .max-w_xl {
@@ -13247,6 +13308,10 @@
 
   .focusVisible\:ring-o_2px:is(:focus-visible, [data-focus-visible]) {
     outline-offset: 2px;
+}
+
+  .focusVisible\:bx-sh_0_0_0_4px_var\(--colors-bg\\\.surface\)\,_var\(--shadows-lg\):is(:focus-visible, [data-focus-visible]) {
+    box-shadow: 0 0 0 4px var(--colors-bg\.surface), var(--shadows-lg);
 }
 
   .hover\:bg_bg\.subtle:not(:disabled):hover {

@@ -37,7 +37,7 @@ const styles = {
   title: css({ m: '0', color: 'fg.default', fontSize: 'xl', fontWeight: 'semibold' }),
   trigger: css({ display: 'inline-flex', minW: '11rem', justifyContent: 'space-between', alignItems: 'center', gap: '3' }),
   triggerIcon: css({ w: '4', h: '4', flexShrink: '0' }),
-  menu: css({ zIndex: '50', minW: '15rem', maxW: 'calc(100vw - 2rem)', maxH: 'min(28rem, 70vh)', overflowY: 'auto' }),
+  menu: css({ zIndex: '50', minW: '15rem', maxW: 'calc(100vw - 2rem)', maxH: 'min(28rem, calc(var(--available-height, 70vh) - 0.5rem))', overflowY: 'auto' }),
   item: css({ display: 'flex', minW: '0', alignItems: 'center', gap: '3', textDecoration: 'none', '&[aria-current="page"]': { fontWeight: 'semibold' }, '&[data-current="true"]': { fontWeight: 'semibold' } }),
   itemIcon: css({ w: '4', h: '4', flexShrink: '0' }),
   content: css({ minW: '0' }),

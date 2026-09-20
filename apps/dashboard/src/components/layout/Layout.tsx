@@ -71,7 +71,7 @@ function UserMenu({ onNavigate, desktop, labelled, open, onOpenChange }: { onNav
   return <>
   <ParkMenu.Root open={open} onOpenChange={({ open: nextOpen }) => onOpenChange(nextOpen)} positioning={{ placement: desktop ? 'top-start' : 'bottom-end', strategy: 'fixed' }}>
     <ParkMenu.Trigger asChild>
-      <ParkButton ref={accountTrigger} type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={cn(shellStyles.personaTrigger, desktop && labelled && shellStyles.personaTriggerLabelled)}>
+      <ParkButton ref={accountTrigger} type="button" variant="plain" size={desktop && labelled ? 'md' : '2xs'} aria-label="Account options" title={user?.full_name || 'User'} className={cn(shellStyles.personaTrigger, desktop && labelled && shellStyles.personaTriggerLabelled)}>
         <span className={shellStyles.personaAvatarWrap}>
           <ParkAvatar className={shellStyles.personaAvatar}>
             <ParkAvatarFallback name={user?.full_name || 'Operator'} />

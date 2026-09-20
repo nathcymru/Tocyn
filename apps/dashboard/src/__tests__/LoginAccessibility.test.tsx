@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/authStore';
 
 vi.mock('../api/client', () => ({ dashboardApi: { post: vi.fn() } }));
 const staff = { id: 'synthetic-staff', email: 'staff@example.invalid', full_name: 'Synthetic staff', role: 'agent', mfa_enabled: true };
-afterEach(() => { cleanup(); useAuthStore.getState().logout(); vi.resetAllMocks(); });
+afterEach(() => { cleanup(); useAuthStore.getState().logout(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 function mount(Page: typeof LoginPage) {
   render(<MemoryRouter><Routes><Route path="/" element={<Page />} /><Route path="/mfa" element={<p>MFA destination</p>} /></Routes></MemoryRouter>);
 }
@@ -74,6 +74,7 @@ describe('staff login accessibility', () => {
     const code = screen.getByLabelText('Authentication Code');
     const cells = screen.getAllByRole('textbox', { name: /Authentication Code/ });
     expect(cells).toHaveLength(6);
+    expect(cells[0]).toHaveClass('pin-input__input--size_xs');
     expect(code.getAttribute('inputmode')).toBe('numeric');
     expect(code.getAttribute('autocomplete')).toBe('one-time-code');
     const button = screen.getByRole('button', { name: 'Verify Code' });
@@ -88,6 +89,20 @@ describe('staff login accessibility', () => {
     expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
     expect(document.activeElement).toBe(button);
     expect(dashboardApi.post).toHaveBeenCalledWith('/auth/mfa/verify', { code: '123456' });
+  });
+
+  it('uses official Park Pin Input sizes across the mobile breakpoint without losing focus', () => {
+    const listeners = new Set<() => void>();
+    const media = { matches: true, addEventListener: (_event: string, callback: () => void) => listeners.add(callback), removeEventListener: (_event: string, callback: () => void) => listeners.delete(callback) };
+    vi.stubGlobal('matchMedia', () => media);
+    useAuthStore.getState().setAuth('synthetic-pre-mfa', staff);
+    mount(MfaPage);
+    const first = screen.getByRole('textbox', { name: 'Authentication Code' });
+    expect(first).toHaveClass('pin-input__input--size_md');
+    first.focus();
+    act(() => { media.matches = false; listeners.forEach(update => update()); });
+    expect(first).toHaveClass('pin-input__input--size_xs');
+    expect(first).toHaveFocus();
   });
 
   it('provides a named setup image and readable alternative to scanning it', async () => {
