@@ -14,5 +14,19 @@ export const globalCss = {
       background: 'canvas',
       color: 'fg.default',
     },
+    'html[data-tocyn-motion="reduced"] *, html[data-tocyn-motion="reduced"] *::before, html[data-tocyn-motion="reduced"] *::after': {
+      animationDuration: '0.01ms !important',
+      animationIterationCount: '1 !important',
+      scrollBehavior: 'auto !important',
+      transitionDuration: '0.01ms !important',
+    },
+    '@media (prefers-reduced-motion: reduce)': {
+      'html:not([data-tocyn-motion="full"]) *, html:not([data-tocyn-motion="full"]) *::before, html:not([data-tocyn-motion="full"]) *::after, :host *, :host *::before, :host *::after': {
+        animationDuration: '0.01ms !important',
+        animationIterationCount: '1 !important',
+        scrollBehavior: 'auto !important',
+        transitionDuration: '0.01ms !important',
+      },
+    },
   },
 }

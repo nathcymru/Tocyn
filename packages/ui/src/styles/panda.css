@@ -76,6 +76,14 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
+  html[data-tocyn-motion="reduced"] *,html[data-tocyn-motion="reduced"] *::before,html[data-tocyn-motion="reduced"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    --transition-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+}
+
   html,body,#root {
     margin: var(--spacing-0);
     background: var(--colors-bg\.canvas);
@@ -190,6 +198,16 @@
     --skew-y: 0;
     --scale-x: 1;
     --scale-y: 1;
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    html:not([data-tocyn-motion="full"]) *,html:not([data-tocyn-motion="full"]) *::before,html:not([data-tocyn-motion="full"]) *::after,:host *,:host *::before,:host *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      --transition-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+}
 }
 }
 

@@ -38,7 +38,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "panda:codegen": "panda codegen --config ./panda.config.ts",
+    "panda:codegen": "panda codegen --config ./panda.config.ts && node ./scripts/normalize-generated.mjs",
     "panda:cssgen": "panda cssgen --config ./panda.config.ts --outfile ./src/styles/panda.css",
     "panda:generate": "npm run panda:codegen && npm run panda:cssgen"
   },

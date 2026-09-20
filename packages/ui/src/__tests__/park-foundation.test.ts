@@ -39,6 +39,15 @@ describe('Park UI foundation', () => {
     }
   });
 
+  it('emits reduced-motion styles for the operator choice and OS preference', () => {
+    const css = read('src/styles/panda.css');
+    expect(css).toContain('html[data-tocyn-motion="reduced"] *');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(css).toContain('html:not([data-tocyn-motion="full"]) *');
+    expect(css).toContain('transition-duration: 0.01ms !important');
+    expect(css).toContain('animation-duration: 0.01ms !important');
+  });
+
   it('uses installed Park sources and Phosphor icons without pseudo markers', () => {
     const shared = read('src/park.tsx');
     const select = read('src/components/ui/select.tsx');
