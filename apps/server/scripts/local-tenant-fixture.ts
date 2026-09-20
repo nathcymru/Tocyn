@@ -284,6 +284,29 @@ export function beta2ReviewAttachmentObjects(): readonly Readonly<{
 
 const beta2MinutesAgo = (now: number, minutes: number) => new Date(now - minutes * 60_000).toISOString();
 const beta2ReviewSnoozeUntil = (now: number) => beta2MinutesAgo(now, -24 * 60);
+/** One synthetic staff action, using the same audit shape as a real support-state transition. */
+function appendBeta2SnoozeFixtureSql(rows: string[], now: number): void {
+  const at = sqlLiteral(beta2MinutesAgo(now, 45));
+  const until = sqlLiteral(beta2ReviewSnoozeUntil(now));
+  const facts = `json_object('before',json_object('definitionId',s.definition_id,'waitingReason',s.waiting_reason,
+    'nextAction',s.next_action,'snoozedUntil',s.snoozed_until,'resurfaceReason',s.resurface_reason),
+    'after',json_object('definitionId',s.definition_id,'lifecycle','open','waitingReason',s.waiting_reason,
+    'nextAction',s.next_action,'snoozedUntil',${until},'resurfaceReason',NULL))`;
+  rows.push(`INSERT INTO support_state_events
+    (tenant_id,id,ticket_id,definition_id,kind,recorded_at,actor_kind,actor_id,facts)
+    SELECT s.tenant_id,'beta2-snooze-support-event',s.ticket_id,s.definition_id,'ticket.transition',${at},
+      'staff','fixture-operator',${facts}
+    FROM ticket_support_state s WHERE s.tenant_id='fixture-tenant-a' AND s.ticket_id='beta2-snoozed-assigned';`);
+  rows.push(`INSERT INTO conversation_events
+    (tenant_id,id,ticket_id,article_id,sequence,kind,recorded_at,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+    SELECT s.tenant_id,'beta2-snooze-conversation-event',s.ticket_id,NULL,
+      (SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=s.tenant_id AND e.ticket_id=s.ticket_id),
+      'ticket.state_changed',${at},'staff','fixture-operator','mfa-staff','dashboard','internal',${facts}
+    FROM ticket_support_state s WHERE s.tenant_id='fixture-tenant-a' AND s.ticket_id='beta2-snoozed-assigned';`);
+  rows.push(`UPDATE ticket_support_state SET snoozed_until=${until},resurface_reason=NULL,
+    changed_at=${at},revision=revision+1
+    WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned';`);
+}
 const beta2ReviewTickets = [
   { id: 'beta2-breach-billing', subject: 'Regional invoices block today’s statutory filing', status: 'open', priority: 'urgent', source: 'email', assigned: false, createdMinutesAgo: 720, articleMinutesAgo: 50, body: 'Our three regional offices received invoices with the same incorrect tax line. The regulatory officer is on site, and our statutory filing is due this afternoon. Please confirm who can correct the batch.' },
   { id: 'beta2-breach-delivery', subject: 'Three clinic deliveries missed the handover window', status: 'open', priority: 'high', source: 'web', assigned: false, createdMinutesAgo: 660, articleMinutesAgo: 42, body: 'The scheduled parcels for three clinics have not arrived. We need the delivery status before today’s handover deadline so each team can arrange cover.' },
@@ -553,7 +576,7 @@ function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName,
   const [pdf, image] = beta2ReviewAttachmentObjects();
   rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-a','beta2-attachment-pdf','beta2-article-internal','order-summary.pdf',pdf.bytes.byteLength,pdf.contentType,pdf.key,beta2MinutesAgo(now, beta2ArticleAgeMinutes('beta2-internal-attachment'))].map(literal).join(',')});`);
   rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-b','beta2-attachment-image','beta2-article-b-email','invoice.png',image.bytes.byteLength,image.contentType,image.key,beta2MinutesAgo(now, beta2ArticleAgeMinutes('beta2-b-email'))].map(literal).join(',')});`);
-  rows.push(`UPDATE ticket_support_state SET snoozed_until=${literal(beta2ReviewSnoozeUntil(now))},resurface_reason='manual' WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned';`);
+  appendBeta2SnoozeFixtureSql(rows, now);
   appendBeta2ReviewFixtureSql(rows, now);
   appendBeta2SlaFixtureSql(rows, now);
   appendBeta2PriorityFixtureSql(rows);
@@ -655,10 +678,9 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
     .bind('fixture-tenant-b', 'beta2-attachment-image', 'beta2-article-b-email', 'invoice.png', image.bytes.byteLength,
       image.contentType, image.key, beta2MinutesAgo(now, beta2ArticleAgeMinutes('beta2-b-email'))).run();
 
-  await db.prepare(`UPDATE ticket_support_state
-    SET snoozed_until = ?, resurface_reason = ?
-    WHERE tenant_id = ? AND ticket_id = ?`)
-    .bind(beta2ReviewSnoozeUntil(now), 'manual', 'fixture-tenant-a', 'beta2-snoozed-assigned').run();
+  const snoozeStatements: string[] = [];
+  appendBeta2SnoozeFixtureSql(snoozeStatements, now);
+  await db.batch(snoozeStatements.map(statement => db.prepare(statement)));
   if (reviewBeta2) {
     // The review fixture has exactly 20 classified tenant-A tickets. The
     // general-purpose fixture ticket belongs only to non-review test runs.

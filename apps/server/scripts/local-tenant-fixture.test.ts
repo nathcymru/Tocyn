@@ -137,9 +137,14 @@ test('general Miniflare helper retains the eight-ticket base matrix without revi
       { tenant_id: 'fixture-tenant-a', article_id: 'beta2-article-internal', file_name: 'order-summary.pdf', file_size: pdf.bytes.byteLength, content_type: 'application/pdf', r2_key: pdf.key },
     ]);
 
-    const snooze = await fixture.db.prepare(`SELECT snoozed_until, resurface_reason FROM ticket_support_state
-      WHERE tenant_id = 'fixture-tenant-a' AND ticket_id = 'beta2-snoozed-assigned'`).first<{ snoozed_until: string; resurface_reason: string }>();
-    assert.equal(snooze?.resurface_reason, 'manual');
+    const snooze = await fixture.db.prepare(`SELECT snoozed_until,resurface_reason,changed_at,revision FROM ticket_support_state
+      WHERE tenant_id = 'fixture-tenant-a' AND ticket_id = 'beta2-snoozed-assigned'`).first<{
+        snoozed_until: string; resurface_reason: string | null; changed_at: string; revision: number;
+      }>();
+    assert.equal(snooze?.resurface_reason, null, 'a snooze has not yet resurfaced');
+    assert.equal(snooze?.revision, 2, 'the synthetic operator action advances support-state revision');
+    assert.ok(snooze && Date.now() - Date.parse(snooze.changed_at) > 44 * 60_000);
+    assert.ok(snooze && Date.now() - Date.parse(snooze.changed_at) < 46 * 60_000);
     assert.ok(snooze && Date.parse(snooze.snoozed_until) - Date.now() > 23 * 60 * 60_000);
     assert.ok(snooze && Date.parse(snooze.snoozed_until) - Date.now() < 25 * 60 * 60_000);
   });
@@ -235,6 +240,18 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
       assert.ok(projection,`Missing authoritative priority clock for ${ticketId}`);
       return projection.timeRemainingHours;
     };
+    const snoozedClock = tenantAClocks.find(clock => clock.ticket_id === 'beta2-snoozed-assigned');
+    const snoozeReview = await fixture.db.prepare(`SELECT snoozed_until,changed_at,revision FROM ticket_support_state
+      WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned'`).first<{
+        snoozed_until:string;changed_at:string;revision:number;
+      }>();
+    assert.equal(snoozeReview?.revision,2);
+    assert.equal(snoozedClock?.stop_reason,'snoozed','the future snooze pauses the fixed-hour clock');
+    assert.equal(snoozedClock?.active_since,null);
+    assert.ok((snoozedClock?.accrued_active_ms??0)>0,'snoozing preserves elapsed active debt');
+    assert.equal(projected.get('beta2-snoozed-assigned')?.paused,true);
+    assert.equal(projectPriorityClock(snoozedClock!,asOf+60*60_000)?.timeRemainingHours,
+      remainingHours('beta2-snoozed-assigned'),'the snoozed countdown remains frozen');
     for (const id of ['beta2-breach-billing','beta2-breach-delivery']) {
       const ticket = tenantAClassified.find(candidate => candidate.id === id);
       assert.equal(ticket?.contract_sla_tier,'alpha');
@@ -287,6 +304,32 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     assert.equal(waitingProviderClock?.stop_reason,'waiting');
     assert.equal(waitingProviderClock?.active_since,null);
     assert.equal(projected.get('beta2-waiting-provider')?.paused,true);
+    const snoozeEvents = await fixture.db.prepare(`SELECT tenant_id,ticket_id,kind,actor_kind,actor_id,recorded_at,
+      json_extract(facts,'$.before.snoozedUntil') AS before_until,
+      json_extract(facts,'$.after.snoozedUntil') AS after_until
+      FROM support_state_events WHERE id='beta2-snooze-support-event'`).all<{
+        tenant_id:string;ticket_id:string;kind:string;actor_kind:string;actor_id:string;recorded_at:string;
+        before_until:string|null;after_until:string;
+      }>();
+    assert.equal(snoozeEvents.results.length,1,'the audit event belongs only to tenant A');
+    const event = snoozeEvents.results[0];
+    assert.deepEqual([event.tenant_id,event.ticket_id,event.kind,event.actor_kind,event.actor_id,event.before_until],
+      ['fixture-tenant-a','beta2-snoozed-assigned','ticket.transition','staff','fixture-operator',null]);
+    assert.equal(event.after_until,snoozeReview?.snoozed_until);
+    assert.equal(event.recorded_at,snoozeReview?.changed_at);
+    const history = await fixture.db.prepare(`SELECT tenant_id,ticket_id,kind,actor_kind,actor_id,actor_provenance,source,
+      visibility,recorded_at,json_extract(facts,'$.after.snoozedUntil') AS after_until
+      FROM conversation_events WHERE id='beta2-snooze-conversation-event'`).all<{
+        tenant_id:string;ticket_id:string;kind:string;actor_kind:string;actor_id:string;
+        actor_provenance:string;source:string;visibility:string;recorded_at:string;after_until:string;
+      }>();
+    assert.equal(history.results.length,1,'the ticket history event belongs only to tenant A');
+    assert.deepEqual([history.results[0].tenant_id,history.results[0].ticket_id,history.results[0].kind,
+      history.results[0].actor_kind,history.results[0].actor_id,history.results[0].actor_provenance,
+      history.results[0].source,history.results[0].visibility],
+      ['fixture-tenant-a','beta2-snoozed-assigned','ticket.state_changed','staff','fixture-operator','mfa-staff','dashboard','internal']);
+    assert.equal(history.results[0].after_until,snoozeReview?.snoozed_until);
+    assert.equal(history.results[0].recorded_at,snoozeReview?.changed_at);
 
     const policies = await fixture.db.prepare('SELECT tenant_id,response_target_ms,resolution_target_ms FROM sla_policies ORDER BY tenant_id')
       .all<{ tenant_id: string; response_target_ms: number; resolution_target_ms: number }>();
