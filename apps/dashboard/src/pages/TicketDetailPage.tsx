@@ -862,10 +862,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </div>
         </div>
 
-        <TicketActionBar reference={reference} actions={utilityActions.data?.actions ?? []} loading={utilityActions.isLoading}
-          error={utilityActions.isError} retry={() => void utilityActions.refetch()} />
         <TicketSlaActionBar ticketId={ticket.id} />
-        <TicketSlaPanel ticketId={ticket.id} />
         <ParkCollapsible.Root open={showSupportState} onOpenChange={({ open }) => setShowSupportState(open)} className={css({ mb: '2' })}>
           <ParkCollapsible.Trigger asChild><ParkButton type="button" variant="plain" className={css({ minH: '9' })}>Manage support state</ParkButton></ParkCollapsible.Trigger>
           <ParkCollapsible.Content>
@@ -900,7 +897,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </ParkCollapsible.Content>
         </ParkCollapsible.Root>
 
-        <div className={`${detailStyles.card} ${css({ minH: '42rem', flexShrink: 0 })}`}>
+        <div className={css({ display: 'flex', minW: 0, minH: '42rem', flex: '1 1 auto', flexShrink: 0, flexDirection: 'column', overflow: 'hidden', bg: 'bg.surface' })}>
           <div className={detailStyles.header}>
             <div className={detailStyles.heading}>
               <div className={detailStyles.titleStack}>
@@ -956,8 +953,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </div>
           </div>
 
-          <ParkScrollArea.Root id="conversation-messages" className={css({ minW: 0, minH: '12rem', flex: '1 1 12rem', bg: 'bg.canvas' })}>
-            <ParkScrollArea.Viewport className={css({ minH: 0, flex: '1', h: 'full' })}>
+          <ParkScrollArea.Root className={css({ minW: 0, minH: '12rem', flex: '1 1 12rem', bg: 'bg.canvas' })}>
+            <ParkScrollArea.Viewport id="conversation-messages" className={css({ minH: 0, flex: '1', h: 'full' })}>
               <ParkScrollArea.Content className={css({ display: 'flex', minW: 0, flexDirection: 'column', gap: '4', p: { base: '4', md: '5' } })}>
             {ticket.articles.map((article) => (
               <div
@@ -1312,6 +1309,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </form>
           </div>
         </div>
+        <TicketActionBar reference={reference} actions={utilityActions.data?.actions ?? []} loading={utilityActions.isLoading}
+          error={utilityActions.isError} retry={() => void utilityActions.refetch()} />
+        <TicketSlaPanel ticketId={ticket.id} />
       </div>
 
       <aside id="ticket-context-panel" aria-label="Context" hidden={workspace.panel !== 'details'} className={detailStyles.contextPanel}>

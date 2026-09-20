@@ -49,10 +49,15 @@ it('labels the add form, guards pending creation and retains failed entries with
  fireEvent.change(screen.getByLabelText('Display Name'),{target:{value:'Synthetic support'}});
  await userEvent.click(screen.getByRole('combobox',{name:'Assign to Group'}));
  await userEvent.click(await screen.findByRole('option',{name:'Synthetic group'}));
+ // Ark Select returns focus to its trigger on the next animation frame.
+ // Let the selection close before submitting the separate email form.
+ await act(async()=>{await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));});
+ expect(screen.getByRole('combobox',{name:'Assign to Group'})).toHaveAttribute('aria-expanded','false');
+ expect(screen.getByRole('combobox',{name:'Assign to Group'})).toHaveTextContent('Synthetic group');
  const form=screen.getByRole('form',{name:'Add support email'});fireEvent.submit(form);fireEvent.submit(form);
  await waitFor(()=>expect(api.post).toHaveBeenCalledTimes(1));expect(email).toBeDisabled();expect(screen.getByRole('button',{name:'Cancel'})).toBeDisabled();
  await act(async()=>reject(new Error('private error')));
- const alert=await screen.findByRole('alert');expect(alert).toHaveFocus();expect(alert).toHaveTextContent('check the channel list before retrying');expect(email).toHaveValue('new@example.invalid');
+ const alert=await screen.findByRole('alert');await waitFor(()=>expect(alert).toHaveFocus());expect(alert).toHaveTextContent('check the channel list before retrying');expect(email).toHaveValue('new@example.invalid');
  expect(api.post).toHaveBeenCalledWith('/channels/emails',{email_address:'new@example.invalid',name:'Synthetic support',group_id:'group-a',is_default:false});
  fireEvent.click(screen.getByRole('button',{name:'Cancel'}));await waitFor(()=>expect(screen.getByRole('button',{name:'Add Email'})).toHaveFocus());
  fireEvent.click(screen.getByRole('button',{name:'Add Email'}));expect(screen.getByLabelText('Email Address *')).toHaveValue('new@example.invalid');

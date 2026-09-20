@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkButton, ParkEmptyState, ParkField, ParkInput, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkField, ParkInput, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -335,11 +335,15 @@ function TicketDetail({ id }: { id: string | undefined }) {
         </div>
       </div>
 
-      {refreshError && <div className={p.chatReplyError}>
-        <p role="alert">Could not refresh messages: {refreshError}</p>
-        <ParkButton type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket('interactive') === 'updated') messagesRegion.current?.focus(); }} className={p.chatRefresh}>Refresh messages</ParkButton>
-      </div>}
-      {downloadError && <p role="alert" className={p.chatError}>{downloadError}</p>}
+      {refreshError && <ParkAlert.Root role="alert" status="error" variant="surface">
+        <ParkAlert.Content>
+          <ParkAlert.Description>Could not refresh messages: {refreshError}</ParkAlert.Description>
+          <div><ParkButton type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket('interactive') === 'updated') messagesRegion.current?.focus(); }}>Refresh messages</ParkButton></div>
+        </ParkAlert.Content>
+      </ParkAlert.Root>}
+      {downloadError && <ParkAlert.Root role="alert" status="error" variant="surface">
+        <ParkAlert.Content><ParkAlert.Description>{downloadError}</ParkAlert.Description></ParkAlert.Content>
+      </ParkAlert.Root>}
       <p role="status" aria-label="Attachment download status" className={p.chatStatus}>{downloadStatus}</p>
       <TicketSlaStatus ticketId={ticket.id} />
       <div className={[p.surface, p.chatSurface].join(' ')}>
@@ -405,7 +409,9 @@ function TicketDetail({ id }: { id: string | undefined }) {
           <div className={p.chatComposer}>
             <form aria-busy={sending} onSubmit={handleReply} className={p.chatComposerForm}>
               <ParkField label="Reply" className={p.chatReplyInput}>
-                {replyError && <p id="reply-error" role="alert" className={p.chatReplyError}>{replyError}</p>}
+                {replyError && <ParkAlert.Root id="reply-error" role="alert" status="error" variant="surface">
+                  <ParkAlert.Content><ParkAlert.Description>{replyError}</ParkAlert.Description></ParkAlert.Content>
+                </ParkAlert.Root>}
                 <p role="status" aria-label="Reply status" className={p.chatReplyStatus}>{replyStatus}</p>
                 <p id="reply-requirement" className={p.chatReplyRequirement}>Reply text is required, including when attaching files.</p>
                 <ParkTextarea

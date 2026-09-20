@@ -22,7 +22,7 @@ it('preserves generated and overridden names, options and active state in the su
  const key=within(dialog).getByRole('textbox',{name:'Key Name'});expect(key).toHaveValue('device_model');
  fireEvent.change(key,{target:{value:'custom_key'}});fireEvent.change(label,{target:{value:'Model Name'}});expect(key).toHaveValue('custom_key');
  await userEvent.click(within(dialog).getByRole('combobox',{name:'Field Type'}));
- await userEvent.click(await screen.findByRole('option',{name:'Dropdown (Select)'}));
+ await userEvent.click(await within(dialog).findByRole('option',{name:'Dropdown (Select)'}));
  fireEvent.change(within(dialog).getByRole('textbox',{name:'Options'}),{target:{value:'One, Two'}});
  await userEvent.click(within(dialog).getByText('Active'));
  expect(within(dialog).getByRole('checkbox',{name:'Active'})).not.toBeChecked();
@@ -30,6 +30,15 @@ it('preserves generated and overridden names, options and active state in the su
  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(dashboardApi.post).toHaveBeenCalledWith('/ticket-fields',{name:'custom_key',label:'Model Name',field_type:'select',options:'One, Two',is_active:false});
  expect(invalidate).toHaveBeenCalledWith({queryKey:['ticket-fields']});await waitFor(()=>expect(opener).toHaveFocus());
+});
+it('keeps the Park Select menu inside its dialog for pointer and keyboard access',async()=>{
+ const {dialog}=await openEditor();
+ const trigger=within(dialog).getByRole('combobox',{name:'Field Type'});
+ await userEvent.click(trigger);
+ const option=await within(dialog).findByRole('option',{name:'Dropdown (Select)'});
+ expect(option.closest('[data-scope="select"][data-part="positioner"]')?.closest('[data-scope="dialog"][data-part="content"]')).toBe(dialog);
+ await userEvent.keyboard('{End}{Enter}');
+ expect(trigger).toHaveTextContent('Checkbox');
 });
 it('blocks duplicate saves and pending dismissal, then retains a failed draft for retry',async()=>{
  let reject!:(error:Error)=>void;vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { dashboardApi } from '../api/client';
@@ -38,6 +38,25 @@ it('uses Park cards and controls after loading saved settings', async () => {
   expect(screen.getByRole('combobox', { name: 'System Timezone' })).toHaveAttribute('data-scope', 'select');
 });
 
+it('portals the timezone menu outside the clipped card while retaining selection', async () => {
+  vi.mocked(dashboardApi.get).mockResolvedValue({ COMPANY_NAME: 'Synthetic Co', SYSTEM_TIMEZONE: 'UTC' });
+  renderPage();
+  const timezone = await screen.findByRole('combobox', { name: 'System Timezone' });
+  expect(timezone).toHaveAttribute('id', 'SYSTEM_TIMEZONE');
+  await userEvent.click(timezone);
+  const london = await screen.findByRole('option', { name: 'London (GMT)' });
+  const positioner = london.closest('[data-scope="select"][data-part="positioner"]');
+  expect(positioner).toBeInTheDocument();
+  expect(positioner?.closest('.card__root')).toBeNull();
+  expect(document.body).toContainElement(positioner as HTMLElement);
+  await waitFor(() => {
+    expect((positioner as HTMLElement).style.getPropertyValue('--x')).toMatch(/px$/);
+    expect((positioner as HTMLElement).style.getPropertyValue('--y')).toMatch(/px$/);
+  });
+  await userEvent.click(london);
+  expect(timezone).toHaveTextContent('London (GMT)');
+});
+
 it('keeps writes unavailable after a failed restore and retries before showing the form', async () => {
   vi.mocked(dashboardApi.get).mockRejectedValueOnce(new Error('Network unavailable'))
     .mockResolvedValueOnce({ COMPANY_NAME: 'Recovered Co', SYSTEM_TIMEZONE: 'UTC' });
@@ -48,4 +67,23 @@ it('keeps writes unavailable after a failed restore and retries before showing t
   expect(dashboardApi.put).not.toHaveBeenCalled();
   await userEvent.click(within(empty).getByRole('button', { name: 'Retry settings' }));
   expect(await screen.findByDisplayValue('Recovered Co')).toBeInTheDocument();
+});
+
+it('keeps edited values and an actionable error after a failed save', async () => {
+  vi.mocked(dashboardApi.get).mockResolvedValue({ COMPANY_NAME: 'Synthetic Co', SYSTEM_TIMEZONE: 'UTC' });
+  vi.mocked(dashboardApi.put).mockRejectedValueOnce(new Error('Synthetic save failure')).mockResolvedValueOnce({});
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    renderPage();
+    const company = await screen.findByRole('textbox', { name: 'Company Name' });
+    await userEvent.clear(company);
+    await userEvent.type(company, 'Updated Co');
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your changes are still in the form; try again.');
+    expect(company).toHaveValue('Updated Co');
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(dashboardApi.put).toHaveBeenCalledTimes(2);
+  } finally {
+    consoleError.mockRestore();
+  }
 });

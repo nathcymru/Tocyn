@@ -16,6 +16,15 @@ const show = (extra: Partial<typeof props> = {}, refresh = vi.fn().mockResolvedV
 async function selectOperator() {
   await userEvent.click(screen.getByRole('combobox', { name: 'Assign to operator' }));
   await userEvent.click(screen.getByRole('option', { name: 'Synthetic operator' }));
+  // Ark Select restores trigger focus on the next frame; finish that close
+  // before typing into the separate reason field.
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  const selection = screen.getByRole('combobox', { name: 'Assign to operator' });
+  expect(selection).toHaveAttribute('aria-expanded', 'false');
+  expect(selection).toHaveTextContent('Synthetic operator');
+  const reason = screen.getByLabelText('Override reason');
+  await userEvent.click(reason);
+  expect(reason).toHaveFocus();
 }
 beforeEach(() => {
   vi.resetAllMocks(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -61,6 +70,7 @@ it('retains entered override values after conflict and submits a fresh explicit 
   await userEvent.click(screen.getByRole('button', { name: 'Override assignment capacity' }));
   await selectOperator();
   await userEvent.type(screen.getByLabelText('Override reason'), 'Urgent approved exception');
+  expect(screen.getByLabelText('Override reason')).toHaveValue('Urgent approved exception');
   await userEvent.click(screen.getByRole('button', { name: 'Assign with audited override' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/entered values are retained/));
   expect(screen.getByLabelText('Override reason')).toHaveValue('Urgent approved exception');
@@ -76,6 +86,7 @@ it('rejects an oversized multibyte reason and never exposes override controls to
   show(); await userEvent.click(screen.getByRole('button', { name: 'Override assignment capacity' }));
   await selectOperator();
   await userEvent.type(screen.getByLabelText('Override reason'), 'é'.repeat(257));
+  expect(screen.getByLabelText('Override reason')).toHaveValue('é'.repeat(257));
   expect(screen.getByRole('button', { name: 'Assign with audited override' })).toBeDisabled();
   expect(screen.getByRole('alert')).toHaveTextContent('reason is too long');
   expect(dashboardApi.patch).not.toHaveBeenCalled();

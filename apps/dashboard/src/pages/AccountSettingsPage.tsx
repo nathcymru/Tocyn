@@ -12,17 +12,17 @@ export function AccountSettingsPage() {
   return <div className={[page.root, page.content].join(' ')}>
     <header className={page.header}>
       <div>
-        <p className={css({ color: 'text.muted', fontSize: 'sm', fontWeight: 'medium', textTransform: 'uppercase', letterSpacing: 'wide' })}>Account</p>
+        <p className={css({ color: 'fg.muted', fontSize: 'sm', fontWeight: 'medium', textTransform: 'uppercase', letterSpacing: 'wide' })}>Account</p>
         <h1 className={css({ m: '0', color: 'fg.default', textStyle: '2xl', fontWeight: 'semibold' })}>Account settings</h1>
-        <p>Manage your operator identity, appearance, workspace preferences and current work.</p>
+        <p className={css({ color: 'fg.muted' })}>Manage your operator identity, appearance, workspace preferences and current work.</p>
       </div>
       <ParkButton type="button" onClick={() => navigate('/profile/security')}>Security profile</ParkButton>
     </header>
     <ParkCard.Root variant="outline" aria-labelledby="account-identity-title">
-      <ParkCard.Header><ParkCard.Title id="account-identity-title">Your identity</ParkCard.Title></ParkCard.Header>
+      <ParkCard.Header><ParkCard.Title asChild><h2 id="account-identity-title">Your identity</h2></ParkCard.Title></ParkCard.Header>
       <ParkCard.Body>
         <p className={page.accountIdentityName}>{user?.full_name || 'Operator'}</p>
-        <ParkCard.Description className={page.accountIdentityEmail}>{user?.email || 'No email available'}</ParkCard.Description>
+        <p className={css({ mt: '1', mb: '0', color: 'fg.muted', overflowWrap: 'anywhere' })}>{user?.email || 'No email available'}</p>
       </ParkCard.Body>
     </ParkCard.Root>
     <div className={page.accountGrid}>
@@ -33,7 +33,7 @@ export function AccountSettingsPage() {
       })}><OperatorPreferencesControl /></ParkCard.Body></ParkCard.Root>
     </div>
     <ParkCard.Root variant="outline" aria-labelledby="account-capacity-title">
-      <ParkCard.Header><ParkCard.Title id="account-capacity-title">Current work</ParkCard.Title><ParkCard.Description>Set your availability and workload limits for assignments.</ParkCard.Description></ParkCard.Header>
+      <ParkCard.Header><ParkCard.Title asChild><h2 id="account-capacity-title">Current work</h2></ParkCard.Title><ParkCard.Description>Set your availability and workload limits for assignments.</ParkCard.Description></ParkCard.Header>
       <ParkCard.Body>{user?.id && <OperatorCapacityPanel userId={user.id} />}</ParkCard.Body>
     </ParkCard.Root>
   </div>;

@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testi
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import pandaConfigSource from '../../../../packages/ui/panda.config.ts?raw';
 import { Layout } from '../components/layout/Layout';
 import { CollaborationProvider } from '../components/CollaborationContext';
 import { useRealtime } from '../hooks/useRealtime';
@@ -91,6 +92,27 @@ it('constrains the inbox shell to the viewport while keeping the shared header v
   expect(main).toHaveClass('shell__content', 'shell__contentInbox');
   expect(main).not.toHaveClass('h-[calc(100dvh-4rem)]');
   expect(main.previousElementSibling).toHaveClass('shell__header');
+});
+
+it('keeps header controls reachable in the generated 320 CSS px reflow contract', async () => {
+  await renderReady();
+  const header = screen.getByRole('banner');
+  expect(header).toHaveClass('shell__header');
+  expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Search all tickets (global shell)' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Activity' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Account options' })).toBeInTheDocument();
+
+  // At 320 CSS px, search receives a full-width row after navigation. At
+  // 420px, navigation and search fit together, while later actions wrap.
+  // The 18rem floor leaves room for the scope, icon and optional clear slot.
+  expect(44 + 18 * 16 + 16 + 2 * 16).toBeGreaterThan(320);
+  expect(18 * 16 + 2 * 16).toBeLessThanOrEqual(320);
+  expect(44 + 18 * 16 + 16 + 2 * 16).toBeLessThanOrEqual(420);
+  expect(18 * 16 - (84 + 16 + 12 + 17 + 12 + 1 + 40)).toBeGreaterThanOrEqual(100);
+  expect(pandaConfigSource).toMatch(/header: \{[^\n]*flexWrap: 'wrap'/);
+  expect(pandaConfigSource).toMatch(/pageTitle: \{[^\n]*display: \{ base: 'none', md: 'block' \}/);
+  expect(pandaConfigSource).toMatch(/root: \{[^\n]*minWidth: 'min\(18rem, 100%\)'/);
 });
 
 it('names account/connection disclosures and restores focus when their child actions close', async () => {

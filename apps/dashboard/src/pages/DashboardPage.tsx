@@ -1,24 +1,44 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ParkButton, ParkCard, ParkEmptyState, ParkPage, ParkProgress } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkPage, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useStats } from '../hooks/useStats';
 import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { data: stats, isLoading } = useStats();
+  const { data: stats, isLoading, isError, isFetching, refetch } = useStats();
+  const page = ParkPage('dashboard');
+  const header = <header className={page.header}>
+    <div className={page.dashboardHeading}>
+      <h1>Dashboard</h1>
+      <p>A quick overview of the support workload.</p>
+    </div>
+    <ParkButton type="button" variant="solid" className={page.dashboardAction} onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>
+  </header>;
 
-  if (isLoading) {
-    return (
-      <ParkEmptyState title="Loading dashboard metrics…" headingLevel={false} aria-busy="true" />
-    );
-  }
+  if (isLoading && !stats) return <div className={[page.root, page.content].join(' ')}>
+    {header}
+    <div role="status" aria-label="Loading dashboard metrics" aria-busy="true">
+      <div className={page.metricStrip}>{Array.from({ length: 4 }, (_, index) => <ParkCard.Root key={index} variant="outline" className={page.metricCard}>
+        <ParkCard.Body><ParkSkeleton height="4" width="60%" /><ParkSkeleton height="8" width="35%" /></ParkCard.Body>
+      </ParkCard.Root>)}</div>
+      <div className={page.panels}>{Array.from({ length: 2 }, (_, index) => <ParkCard.Root key={index} variant="outline">
+        <ParkCard.Body><ParkSkeleton height="4" width="45%" /><ParkSkeleton height="8" width="full" /><ParkSkeleton height="8" width="full" /></ParkCard.Body>
+      </ParkCard.Root>)}</div>
+    </div>
+  </div>;
+
+  if (!stats) return <div className={[page.root, page.content].join(' ')}>
+    {header}
+    <ParkEmptyState role="alert" title="Dashboard metrics unavailable" description="The support workload could not be loaded."
+      action={<ParkButton type="button" disabled={isFetching} onClick={() => void refetch()}>Retry dashboard metrics</ParkButton>} />
+  </div>;
 
   const getStatusCount = (status: string) =>
-    stats?.ticketsByStatus.find(s => s.status === status)?.count || 0;
+    stats.ticketsByStatus.find(s => s.status === status)?.count || 0;
 
-  const totalTickets = stats?.ticketsByStatus.reduce((acc, curr) => acc + curr.count, 0) || 0;
+  const totalTickets = stats.ticketsByStatus.reduce((acc, curr) => acc + curr.count, 0);
 
   const cards = [
     {
@@ -47,16 +67,13 @@ export const DashboardPage: React.FC = () => {
     },
   ];
 
-  const page = ParkPage('dashboard');
   return (
     <div className={[page.root, page.content].join(' ')}>
-      <header className={page.header}>
-        <div className={page.dashboardHeading}>
-          <h1>Dashboard</h1>
-          <p>A quick overview of the support workload.</p>
-        </div>
-        <ParkButton type="button" variant="solid" className={page.dashboardAction} onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>
-      </header>
+      {header}
+      {isError && <div role="alert" className={css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2', borderWidth: '1px', borderColor: 'warning.border', borderRadius: 'l2', bg: 'warning.surface', color: 'text.primary', p: '3' })}>
+        <span>Dashboard metrics could not be refreshed. Showing the last loaded values.</span>
+        <ParkButton type="button" variant="plain" disabled={isFetching} onClick={() => void refetch()}>Retry dashboard metrics</ParkButton>
+      </div>}
 
       <div className={page.metricStrip}>
         {cards.map(card => (
@@ -81,8 +98,9 @@ export const DashboardPage: React.FC = () => {
             <ParkCard.Title className={page.panelTitle}>Tickets by Priority</ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body className={page.priorityList}>
-            {['urgent', 'high', 'normal', 'low'].map((priority) => {
-              const count = stats?.ticketsByPriority.find(p => p.priority === priority)?.count || 0;
+            {totalTickets === 0 ? <ParkEmptyState title="No ticket activity yet" description="Tickets will appear here when the first conversation arrives." headingLevel={false}
+              action={<ParkButton type="button" onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>} /> : ['urgent', 'high', 'normal', 'low'].map((priority) => {
+              const count = stats.ticketsByPriority.find(p => p.priority === priority)?.count || 0;
               const percentage = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
               return (
                 <div key={priority} className={page.priorityRow}>
@@ -118,7 +136,7 @@ export const DashboardPage: React.FC = () => {
                     <IconUsers aria-hidden="true" />
                     <span>Total Users</span>
                   </div>
-                  <p className={page.overviewCardValue} data-tabular>{stats?.totalUsers || 0}</p>
+                  <p className={page.overviewCardValue} data-tabular>{stats.totalUsers}</p>
                 </ParkCard.Body>
               </ParkCard.Root>
               <ParkCard.Root variant="subtle" className={page.overviewCard}>
@@ -127,7 +145,7 @@ export const DashboardPage: React.FC = () => {
                     <IconUsers aria-hidden="true" />
                     <span>Active Groups</span>
                   </div>
-                  <p className={page.overviewCardValue} data-tabular>{stats?.totalGroups || 0}</p>
+                  <p className={page.overviewCardValue} data-tabular>{stats.totalGroups}</p>
                 </ParkCard.Body>
               </ParkCard.Root>
             </div>

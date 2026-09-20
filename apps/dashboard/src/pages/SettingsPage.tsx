@@ -1,11 +1,11 @@
 import { DashboardSelect } from '../components/DashboardSelect';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTextarea } from '@luminatick/ui/park';
+import { Field } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import {
   IconFloppyDisk,
-  IconCircleExclamation,
 } from '@luminatick/ui/icons';
 import { ApiError } from '../api/client';
 
@@ -26,6 +26,7 @@ export const SettingsPage: React.FC = () => {
   });
 
   const [masterKeyError, setMasterKeyError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (fetchError && fetchError instanceof ApiError) {
@@ -62,6 +63,7 @@ export const SettingsPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMasterKeyError(null);
+    setSaveError(null);
     try {
       // Clean and validate data before sending
       const payload: Record<string, string> = {};
@@ -100,6 +102,8 @@ export const SettingsPage: React.FC = () => {
       console.error('Failed to update settings:', error);
       if (error?.message?.includes('APP_MASTER_KEY')) {
         setMasterKeyError(error.message);
+      } else {
+        setSaveError('Settings could not be saved. Your changes are still in the form; try again.');
       }
     }
   };
@@ -130,7 +134,7 @@ export const SettingsPage: React.FC = () => {
       <header className={page.header}>
         <div>
           <h1 className={css({ m: '0', color: 'fg.default', textStyle: '2xl', fontWeight: 'semibold' })}>General Settings</h1>
-          <p>Manage your organization and system defaults.</p>
+          <p className={css({ color: 'fg.muted' })}>Manage your organization and system defaults.</p>
         </div>
         <ParkButton
           type="button"
@@ -145,23 +149,23 @@ export const SettingsPage: React.FC = () => {
       </header>
 
       {masterKeyError && (
-        <div className={page.settingsError}>
-          <IconCircleExclamation aria-hidden="true" />
-          <div>
-            <h3>Critical: Missing Encryption Key</h3>
-            <p>
+        <ParkAlert.Root role="alert" status="error">
+          <ParkAlert.Content>
+            <ParkAlert.Title>Critical: Missing Encryption Key</ParkAlert.Title>
+            <ParkAlert.Description>
               Your server is missing the <code>APP_MASTER_KEY</code> environment variable.
               This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
-            </p>
-            <p>
+            </ParkAlert.Description>
+            <ParkAlert.Description>
               Please ask your system administrator to add it to your server's environment configuration, then restart the application.
-            </p>
-            <p>
+            </ParkAlert.Description>
+            <ParkAlert.Description>
               Details: {masterKeyError}
-            </p>
-          </div>
-        </div>
+            </ParkAlert.Description>
+          </ParkAlert.Content>
+        </ParkAlert.Root>
       )}
+      {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
 
       <div className={page.settingsSections}>
         {/* Organization Profile */}
@@ -170,10 +174,10 @@ export const SettingsPage: React.FC = () => {
             <ParkCard.Title asChild><h2>Organization Profile</h2></ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
-            <div className={page.settingsField}>
-              <label htmlFor="COMPANY_NAME">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="COMPANY_NAME">
                 Company Name
-              </label>
+              </Field.Label>
               <ParkInput
                 type="text"
                 id="COMPANY_NAME"
@@ -184,11 +188,11 @@ export const SettingsPage: React.FC = () => {
                
                 placeholder="e.g. Acme Corp"
               />
-            </div>
-            <div className={page.settingsField}>
-              <label htmlFor="PORTAL_URL">
+            </Field.Root>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="PORTAL_URL">
                 Portal URL
-              </label>
+              </Field.Label>
               <ParkInput
                 type="url"
                 id="PORTAL_URL"
@@ -199,7 +203,7 @@ export const SettingsPage: React.FC = () => {
                
                 placeholder="e.g. https://support.acme.com"
               />
-            </div>
+            </Field.Root>
           </ParkCard.Body>
         </ParkCard.Root>
 
@@ -210,10 +214,7 @@ export const SettingsPage: React.FC = () => {
           </ParkCard.Header>
           <ParkCard.Body>
             <div className={page.settingsField}>
-              <label htmlFor="SYSTEM_TIMEZONE">
-                System Timezone
-              </label>
-              <DashboardSelect id="SYSTEM_TIMEZONE" aria-label="System Timezone" name="SYSTEM_TIMEZONE" value={formData.SYSTEM_TIMEZONE}
+              <DashboardSelect id="SYSTEM_TIMEZONE" label="System Timezone" name="SYSTEM_TIMEZONE" value={formData.SYSTEM_TIMEZONE}
                 onValueChange={value => setFormData(prev => ({ ...prev, SYSTEM_TIMEZONE: value }))}
                 options={[{ value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'Eastern Time (ET)' },
                   { value: 'America/Chicago', label: 'Central Time (CT)' }, { value: 'America/Denver', label: 'Mountain Time (MT)' },
@@ -222,10 +223,10 @@ export const SettingsPage: React.FC = () => {
                   { value: 'Australia/Sydney', label: 'Sydney (AEST)' }]} />
             </div>
 
-            <div className={page.settingsField}>
-              <label htmlFor="TICKET_PREFIX">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="TICKET_PREFIX">
                 Ticket Prefix
-              </label>
+              </Field.Label>
               <ParkInput
                 type="text"
                 id="TICKET_PREFIX"
@@ -236,10 +237,10 @@ export const SettingsPage: React.FC = () => {
                 placeholder="e.g. TKT"
                 maxLength={10}
               />
-              <p className={page.settingsHelp}>
+              <Field.HelperText className={page.settingsHelp}>
                 Tickets will be numbered as {formData.TICKET_PREFIX || 'TKT'}-1001.
-              </p>
-            </div>
+              </Field.HelperText>
+            </Field.Root>
           </ParkCard.Body>
         </ParkCard.Root>
 
@@ -249,10 +250,10 @@ export const SettingsPage: React.FC = () => {
             <ParkCard.Title asChild><h2>Agent Communication</h2></ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
-            <div>
-              <label htmlFor="DEFAULT_EMAIL_SIGNATURE">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="DEFAULT_EMAIL_SIGNATURE">
                 Default Email Signature
-              </label>
+              </Field.Label>
               <ParkTextarea
                 id="DEFAULT_EMAIL_SIGNATURE"
                 name="DEFAULT_EMAIL_SIGNATURE"
@@ -263,10 +264,10 @@ export const SettingsPage: React.FC = () => {
                
                 placeholder="e.g. --&#10;Thank you,&#10;The Support Team"
               />
-              <p className={page.settingsHelp}>
+              <Field.HelperText className={page.settingsHelp}>
                 This signature will be appended to agent replies if they haven't set a personal one.
-              </p>
-            </div>
+              </Field.HelperText>
+            </Field.Root>
           </ParkCard.Body>
         </ParkCard.Root>
 
@@ -279,10 +280,10 @@ export const SettingsPage: React.FC = () => {
             <p>
               Configure your Cloudflare credentials to monitor usage and costs directly from the dashboard.
             </p>
-            <div>
-              <label htmlFor="CLOUDFLARE_ACCOUNT_ID">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="CLOUDFLARE_ACCOUNT_ID">
                 Cloudflare Account ID
-              </label>
+              </Field.Label>
               <ParkInput
                 type="text"
                 id="CLOUDFLARE_ACCOUNT_ID"
@@ -292,11 +293,11 @@ export const SettingsPage: React.FC = () => {
                
                 placeholder="e.g. 1234567890abcdef1234567890abcdef"
               />
-            </div>
-            <div>
-              <label htmlFor="CLOUDFLARE_API_TOKEN">
+            </Field.Root>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="CLOUDFLARE_API_TOKEN">
                 Cloudflare API Token
-              </label>
+              </Field.Label>
               <ParkInput
                 type="password"
                 id="CLOUDFLARE_API_TOKEN"
@@ -306,10 +307,10 @@ export const SettingsPage: React.FC = () => {
                
                 placeholder="Enter your API token"
               />
-              <p className={page.settingsHelp}>
+              <Field.HelperText className={page.settingsHelp}>
                 Requires <strong>Account Analytics: Read</strong> permissions. For security, this value is masked. Provide a new token only if you wish to overwrite the existing one.
-              </p>
-            </div>
+              </Field.HelperText>
+            </Field.Root>
           </ParkCard.Body>
         </ParkCard.Root>
 
@@ -322,10 +323,10 @@ export const SettingsPage: React.FC = () => {
             <p>
               Configure Cloudflare Turnstile to protect your Customer Portal from spam and bots.
             </p>
-            <div>
-              <label htmlFor="TURNSTILE_SITE_KEY">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="TURNSTILE_SITE_KEY">
                 Turnstile Site Key
-              </label>
+              </Field.Label>
               <ParkInput
                 type="text"
                 id="TURNSTILE_SITE_KEY"
@@ -335,11 +336,11 @@ export const SettingsPage: React.FC = () => {
                
                 placeholder="e.g. 1x00000000000000000000AA"
               />
-            </div>
-            <div>
-              <label htmlFor="TURNSTILE_SECRET_KEY">
+            </Field.Root>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="TURNSTILE_SECRET_KEY">
                 Turnstile Secret Key
-              </label>
+              </Field.Label>
               <ParkInput
                 type="password"
                 id="TURNSTILE_SECRET_KEY"
@@ -349,10 +350,10 @@ export const SettingsPage: React.FC = () => {
                
                 placeholder="Enter your Turnstile secret key"
               />
-              <p className={page.settingsHelp}>
+              <Field.HelperText className={page.settingsHelp}>
                 For security, this value is masked. Provide a new key only if you wish to overwrite the existing one.
-              </p>
-            </div>
+              </Field.HelperText>
+            </Field.Root>
           </ParkCard.Body>
         </ParkCard.Root>
 

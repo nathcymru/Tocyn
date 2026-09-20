@@ -158,6 +158,8 @@ describe('portal conversation accessibility and recovery', () => {
     expect(message.readOnly).toBe(true);
     reject(new Error('Attachment transfer unavailable'));
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Attachment transfer unavailable');
     expect(message.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
     expect(message.value).toBe('Preserved reply');
     expect(screen.getByRole('button', { name: 'Remove chosen.txt' })).toBeTruthy();
@@ -172,7 +174,9 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.post).mockResolvedValue({});
     vi.mocked(portalApi.get).mockRejectedValueOnce(new Error('Refresh unavailable'));
     const submit = screen.getByRole('button', { name: 'Send Reply' }); submit.focus(); fireEvent.click(submit);
-    await screen.findByRole('alert');
+    const refreshAlert = await screen.findByRole('alert');
+    expect(refreshAlert).toHaveClass('alert__root');
+    expect(refreshAlert.querySelector('.alert__description')).toHaveTextContent('Refresh unavailable');
     expect(screen.getByText(/Reply sent. Refresh messages/)).toBeTruthy();
     expect(screen.getByText('Accepted message')).toBeTruthy();
     expect(message.value).toBe(''); expect(document.activeElement).toBe(submit);
@@ -252,7 +256,10 @@ describe('portal conversation accessibility and recovery', () => {
     const button = await screen.findByRole('button', { name: 'Download readable.txt' });
     vi.mocked(portalApi.download).mockRejectedValueOnce(new Error('Download unavailable'));
     button.focus(); fireEvent.click(button);
-    await screen.findByRole('alert'); expect(document.activeElement).toBe(button);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Download unavailable');
+    expect(document.activeElement).toBe(button);
     vi.mocked(portalApi.download).mockResolvedValueOnce(); fireEvent.click(button);
     await screen.findByText('Attachment download started.');
     expect(screen.queryByRole('alert')).toBeNull();

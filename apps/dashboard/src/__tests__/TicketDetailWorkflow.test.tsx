@@ -95,6 +95,18 @@ it('lets an untouched conversation navigate after its selection preference is ac
   expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/drafts/workflow-ticket'&&options?.method==='PUT')).toBe(false);
 });
 
+it('puts the conversation before secondary ticket tools in the detail reading order', async () => {
+  transport(() => json(ticket));
+  showDetail();
+  expect(await screen.findByText('Customer question')).toBeInTheDocument();
+  const messages = screen.getByText('Customer question').closest('.scroll-area__root');
+  const actions = screen.getByRole('region', { name: 'Ticket actions' });
+  expect(messages).not.toBeNull();
+  expect(document.getElementById('conversation-messages')).toBeInTheDocument();
+  expect(messages!.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Copy ticket reference' })).toBeInTheDocument();
+});
+
 it.each([
   [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
 ])('displays canonical attachment size %s in truthful units', async (size, expected) => {
@@ -244,8 +256,12 @@ it('does not steal focus after a confirmed select update when the operator moves
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const priority = screen.getByRole('combobox', { name: 'Priority' });
   priority.focus(); await chooseSelect('Priority', 'High');
+  // Ark returns focus to the trigger on the next animation frame after closing
+  // the list. Move elsewhere after that close step, while PATCH is still pending.
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
   const alternate = screen.getByRole('button', { name: 'Hide ticket context' });
   alternate.focus();
+  expect(alternate).toHaveFocus();
   Object.assign(ticket, { priority: 'high' });
   await act(async () => { pending.resolve(json({ success: true })); });
   await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));

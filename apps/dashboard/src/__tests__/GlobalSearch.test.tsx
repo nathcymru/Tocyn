@@ -10,8 +10,16 @@ const row = (id: string) => ({ id, title: `Guide ${id}`, status: 'ready', catego
 const response = (rows: unknown) => ({ blob: new Blob([JSON.stringify(rows)]), contentType: 'application/json' });
 function Location() { const location = useLocation(); return <output aria-label="Current route">{location.pathname}{location.search}</output>; }
 function mount(path='/inbox/mine?priority=urgent') { render(<MemoryRouter initialEntries={[path]}><GlobalSearch shortcutsEnabled /><Location /></MemoryRouter>); }
-async function selectScope(value: 'all' | 'tickets' | 'customers' | 'knowledge') { const label = value === 'knowledge' ? 'Wiki' : value[0].toUpperCase() + value.slice(1); await userEvent.click(screen.getByRole('combobox', { name: 'Search scope filter' })); await userEvent.click(await screen.findByRole('option', { name: label })); await userEvent.click(screen.getByRole('textbox')); }
-async function knowledge(query='Guide') { await selectScope('knowledge'); const input=screen.getByRole('textbox'); await userEvent.type(input,query); await userEvent.keyboard('{Enter}'); }
+async function selectScope(value: 'all' | 'tickets' | 'customers' | 'knowledge') { const label = value === 'knowledge' ? 'Wiki' : value[0].toUpperCase() + value.slice(1); await userEvent.click(screen.getByRole('combobox', { name: 'Search scope filter' })); await userEvent.click(await screen.findByRole('option', { name: label }));
+  // Ark Select returns focus to its trigger on the next frame after selection.
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  const scope = screen.getByRole('combobox', { name: 'Search scope filter' });
+  expect(scope).toHaveAttribute('aria-expanded', 'false');
+  expect(scope).toHaveTextContent(label);
+  const input = screen.getByRole('textbox');
+  await userEvent.click(input);
+  expect(input).toHaveFocus(); }
+async function knowledge(query='Guide') { await selectScope('knowledge'); const input=screen.getByRole('textbox'); await userEvent.type(input,query); expect(input).toHaveValue(query); await userEvent.keyboard('{Enter}'); }
 beforeEach(()=>{ vi.clearAllMocks(); useAuthStore.setState({token:'synthetic-a',sessionGeneration:1,user:{id:'actor-a',tenant_id:'tenant-a',role:'admin',email:'synthetic@example.test',full_name:'Synthetic',mfa_enabled:true}}); });
 afterEach(cleanup);
 it('searches complete metadata, shows first20 with exact total, and previews without editor navigation',async()=>{
