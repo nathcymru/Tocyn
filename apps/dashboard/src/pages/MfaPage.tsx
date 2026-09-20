@@ -183,7 +183,7 @@ export function MfaPage() {
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </ParkButton>
         </form>
-        {!isSetupMode && <ParkButton type="button" variant="ghost" disabled={loading} className={authStyles.secondary} onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</ParkButton>}
+        {!isSetupMode && <ParkButton type="button" variant="plain" disabled={loading} className={authStyles.secondary} onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</ParkButton>}
         <p role="status" aria-live="polite" className={authStyles.status}>{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>
     </div>

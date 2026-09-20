@@ -5,11 +5,18 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = path.join(root, 'packages/ui');
+const parkSource = fs.readFileSync(path.join(ui, 'src/park.tsx'), 'utf8');
 const source = fs.readFileSync(path.join(ui, 'panda.config.ts'), 'utf8');
 const css = fs.readFileSync(path.join(ui, 'src/styles/panda.css'), 'utf8');
 const failures = [];
 const parkRecipeKeys = new Set(['button', 'input', 'textarea']);
 const parkSlotKeys = new Set(['avatar', 'card', 'checkbox', 'dialog', 'field', 'menu', 'pinInput', 'popover', 'scrollArea', 'select', 'splitter', 'switchRecipe', 'table', 'tabs']);
+
+// ParkButton must stay an alias of the installed recipe, not a translating
+// compatibility wrapper for retired variant names.
+if (!/export\s+const\s+ParkButton\s*=\s*OfficialButton\s*;/.test(parkSource)) {
+  failures.push('ParkButton must directly alias the installed Park Button');
+}
 
 function prop(object, name) {
   if (!object || !ts.isObjectLiteralExpression(object)) return undefined;
@@ -78,6 +85,12 @@ function visit(relative) {
     const jsx = ts.createSourceFile(relative, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const classes = new Set();
     function inspect(node) {
+      if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(jsx) === 'ParkButton') {
+        const variant = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.text === 'variant');
+        if (variant?.initializer && ts.isStringLiteral(variant.initializer) && ['ghost', 'destructive'].includes(variant.initializer.text)) {
+          failures.push(`Retired ParkButton variant ${variant.initializer.text} in active source: ${relative}`);
+        }
+      }
       if (ts.isJsxAttribute(node) && node.name.text === 'className' && node.initializer) {
         const literals = current => {
           if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {

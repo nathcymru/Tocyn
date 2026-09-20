@@ -28,7 +28,7 @@ const priorities = createListCollection({ items: [{ label: 'Normal', value: 'nor
 
 describe('installed Park UI components', () => {
   it('uses official button variants and loading behavior', () => {
-    render(<><ParkButton variant="solid">Save</ParkButton><ParkButton variant="ghost">More</ParkButton><ParkButton variant="destructive">Delete</ParkButton><ParkButton loading loadingText="Saving">Submit</ParkButton></>);
+    render(<><ParkButton variant="solid">Save</ParkButton><ParkButton variant="plain">More</ParkButton><ParkButton variant="solid" colorPalette="red">Delete</ParkButton><ParkButton loading loadingText="Saving">Submit</ParkButton></>);
     expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('button--variant_solid');
     expect(screen.getByRole('button', { name: 'More' })).toHaveClass('button--variant_plain');
     expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('button--variant_solid');

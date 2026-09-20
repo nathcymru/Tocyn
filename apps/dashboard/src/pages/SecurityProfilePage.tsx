@@ -175,7 +175,8 @@ export function SecurityProfilePage() {
                     ref={disableButton}
                     onClick={() => { setError(null); setDisableOpen(true); }}
                     disabled={isLoading}
-                    variant="destructive"
+                    variant="solid"
+                    colorPalette="red"
                   >
                     <IconShield className={securityStyles.statusIcon} aria-hidden="true" />
                     Disable 2FA

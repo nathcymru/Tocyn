@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { PinInput as ArkPinInput } from '@ark-ui/react/pin-input';
 import { visuallyHidden } from './styles/generated/patterns';
 import { emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, settingsLayout as settingsLayoutRecipe, knowledgeEditor as knowledgeEditorRecipe, composer as composerRecipe, ticketFields as ticketFieldsRecipe, shell as shellRecipe, page as pageRecipe, ticketDetail as ticketDetailRecipe } from './styles/generated/recipes';
 import { Button as OfficialButton, type ButtonProps as OfficialButtonProps } from './components/ui/button';
@@ -24,17 +23,8 @@ import * as OfficialTable from './components/ui/table';
 import * as OfficialRadioGroup from './components/ui/radio-group';
 import * as OfficialAlert from './components/ui/alert';
 
-/** Official Park component source, with a narrow compatibility alias for existing routes. */
-export type ParkButtonVariant = 'solid' | 'subtle' | 'surface' | 'outline' | 'plain' | 'ghost' | 'destructive';
-export type ParkButtonSize = '2xs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
-export interface ParkButtonProps extends Omit<OfficialButtonProps, 'variant' | 'size'> {
-  variant?: ParkButtonVariant;
-  size?: ParkButtonSize;
-}
-export const ParkButton = React.forwardRef<HTMLButtonElement, ParkButtonProps>(function ParkButton({ variant, colorPalette, ...props }, ref) {
-  const parkVariant = variant === 'ghost' ? 'plain' : variant === 'destructive' ? 'solid' : variant;
-  return <OfficialButton {...props} ref={ref} variant={parkVariant} colorPalette={variant === 'destructive' ? 'red' : colorPalette} />;
-});
+export type ParkButtonProps = OfficialButtonProps;
+export const ParkButton = OfficialButton;
 
 export const ParkInput = OfficialInput;
 export const ParkTextarea = OfficialTextarea;
@@ -47,41 +37,13 @@ export function ParkProgress({ value = null, label, className }: { value?: numbe
   </OfficialProgress.Root>;
 }
 
-// The compound API retains the old names while every part is the installed Park source.
 export const ParkSelect = OfficialSelect;
-export const ParkSelectRoot = OfficialSelect.Root;
-export const ParkSelectLabel = OfficialSelect.Label;
-export const ParkSelectControl = OfficialSelect.Control;
-export const ParkSelectTrigger = OfficialSelect.Trigger;
-export const ParkSelectValueText = OfficialSelect.ValueText;
-export const ParkSelectIndicatorGroup = OfficialSelect.IndicatorGroup;
-export const ParkSelectIndicator = OfficialSelect.Indicator;
-export const ParkSelectPositioner = OfficialSelect.Positioner;
-export const ParkSelectContent = OfficialSelect.Content;
-export const ParkSelectList = OfficialSelect.List;
-export const ParkSelectItem = OfficialSelect.Item;
-export const ParkSelectItemText = OfficialSelect.ItemText;
-export const ParkSelectItemIndicator = OfficialSelect.ItemIndicator;
-export const ParkSelectHiddenSelect = OfficialSelect.HiddenSelect;
 
 export const ParkTabs = OfficialTabs;
-export const ParkTabsRoot = OfficialTabs.Root;
-export const ParkTabsList = OfficialTabs.List;
-export const ParkTabsTrigger = OfficialTabs.Trigger;
-export const ParkTabsContent = OfficialTabs.Content;
-export const ParkTabsIndicator = OfficialTabs.Indicator;
 
 export const ParkScrollArea = OfficialScrollArea;
-export const ParkScrollAreaRoot = OfficialScrollArea.Root;
-export const ParkScrollAreaViewport = OfficialScrollArea.Viewport;
-export const ParkScrollAreaContent = OfficialScrollArea.Content;
-export const ParkScrollAreaScrollbar = OfficialScrollArea.Scrollbar;
-export const ParkScrollAreaThumb = OfficialScrollArea.Thumb;
 
 export const ParkSplitter = OfficialSplitter;
-export const ParkSplitterRoot = OfficialSplitter.Root;
-export const ParkSplitterPanel = OfficialSplitter.Panel;
-export const ParkSplitterResizeTrigger = OfficialSplitter.ResizeTrigger;
 
 export interface ParkFieldProps extends React.HTMLAttributes<HTMLDivElement> {
   label?: React.ReactNode;
@@ -100,16 +62,9 @@ export function ParkField({ label, description, error, required, children, class
 
 export type ParkAvatarProps = React.ComponentProps<typeof OfficialAvatar.Root>;
 export const ParkAvatar = OfficialAvatar.Root;
-export const ParkAvatarImage = OfficialAvatar.Image;
 export const ParkAvatarFallback = OfficialAvatar.Fallback;
 
 export const ParkMenu = OfficialMenu;
-export const ParkMenuRoot = OfficialMenu.Root;
-export const ParkMenuTrigger = OfficialMenu.Trigger;
-export const ParkMenuPositioner = OfficialMenu.Positioner;
-export const ParkMenuContent = OfficialMenu.Content;
-export const ParkMenuItem = OfficialMenu.Item;
-export const ParkMenuSeparator = OfficialMenu.Separator;
 
 export const ParkPopover = OfficialPopover;
 export const ParkDialog = OfficialDialog;
@@ -143,7 +98,6 @@ export const ParkPinInput = React.forwardRef<HTMLDivElement, ParkPinInputProps>(
   </OfficialPinInput.Root>;
 });
 export const ParkPinInputSlot = OfficialPinInput.Input;
-export const ParkPinInputParts = OfficialPinInput;
 
 /** Tocyn-specific empty state layout composed with a Panda app recipe. */
 export interface ParkEmptyStateProps extends Omit<React.HTMLAttributes<HTMLElement>, 'title'> {
@@ -174,6 +128,3 @@ export const ParkPage = (kind: 'dashboard' | 'knowledge' | 'inbox' | 'settings' 
 export const ParkVisuallyHidden = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(function ParkVisuallyHidden({ className, ...props }, ref) {
   return <span {...props} ref={ref} className={[visuallyHidden(), className].filter(Boolean).join(' ')} />;
 });
-
-// Keep the direct Ark namespace available to type consumers without bundling a second implementation.
-export { ArkPinInput };
