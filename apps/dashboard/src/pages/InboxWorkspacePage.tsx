@@ -223,7 +223,13 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
   const createdAfter = useMemo(() => createdAfterFor(semanticFilters.created), [semanticFilters.created]);
   const identity = assignmentIdentity();
   const listScope = JSON.stringify([identity,activeView,queue,filterId,workspace.listQuery,workspace.sort,semanticFilters.customer,createdAfter]);
-  const query=useTickets({page:String(currentPage),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{}),...(semanticFilters.customer==='anyone'||filterId?{}:{customer_email:semanticFilters.customer}),...(createdAfter?{created_after:createdAfter}:{})},routeReady&&workspace.status!=='loading');
+  const query=useTickets({page:String(currentPage),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{}),...(semanticFilters.customer==='anyone'||filterId?{}:{customer_email:semanticFilters.customer}),...(createdAfter?{created_after:createdAfter}:{})},routeReady&&workspace.status!=='loading',()=>{
+    if(!routeReady||assignmentIdentity()!==identity)return;
+    if(currentPage>1){
+      workspace.update({listAnchor:'page:1'});
+      setStatus('Priority list refreshed at page one. The selected conversation stays open.');
+    }
+  });
   // A failed page read must not turn a confirmed list into an apparent empty queue.
   // Scope the fallback by authenticated operator and every list filter so a change
   // of tenant or view can never display rows from the previous identity/view.

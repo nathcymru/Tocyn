@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Ticket } from '@luminatick/shared';
 import { ApiError, dashboardApi } from '../api/client';
@@ -89,12 +89,14 @@ export function parsePriorityMatrixPage(value: unknown, expectedPage: number): P
 }
 
 /** Three mathematical views share one scoped cursor ledger, never a page-local sort. */
-export function usePriorityMatrixTickets(params: Record<string, string>, enabled: boolean) {
+export function usePriorityMatrixTickets(params: Record<string, string>, enabled: boolean, onPeriodicRestart?: () => void) {
   const user = useAuthStore(state => state.user);
   const generation = useAuthStore(state => state.sessionGeneration);
   const identity = JSON.stringify([generation, user?.tenant_id, user?.id, user?.role]);
   const sort = isPriorityMatrixSort(params.sort) ? params.sort : 'priority_focus';
   const [revision, setRevision] = useState(0);
+  const periodicRestartRef = useRef(onPeriodicRestart);
+  useLayoutEffect(() => { periodicRestartRef.current = onPeriodicRestart; }, [onPeriodicRestart]);
   const selection = JSON.stringify(Object.entries(params).filter(([key]) => !['page', 'sort', 'cursor'].includes(key)).sort(([a], [b]) => a.localeCompare(b)));
   const ledger = useMemo(() => ({ active: false, cursors: new Map<number, string | undefined>([[1, undefined]]), asOf: '' }), [identity, selection, sort, revision]);
   useLayoutEffect(() => { ledger.active = true; return () => { ledger.active = false; }; }, [ledger]);
@@ -123,6 +125,23 @@ export function usePriorityMatrixTickets(params: Record<string, string>, enabled
       return result;
     },
   });
+  useLayoutEffect(() => {
+    if (!enabled || !user?.tenant_id || !user.id || !query.data?.asOf || query.error) return;
+    const restart = () => {
+      if (!ledger.active || assignmentIdentity() !== identity || document.visibilityState !== 'visible') return;
+      // A later page's signed cursor is tied to the old whole-queue snapshot.
+      // Move the list to page one before changing the ledger; leave detail/draft alone.
+      if (page > 1 && !periodicRestartRef.current) return;
+      periodicRestartRef.current?.();
+      setRevision(value => value + 1);
+    };
+    const interval = window.setInterval(restart, 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - Date.parse(ledger.asOf) >= 30_000) restart();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+  }, [enabled, identity, ledger, page, query.data?.asOf, query.error, user?.id, user?.tenant_id]);
   const error = missingCursor ? restartError() : query.error;
   return { ...query, error, isError: Boolean(error), isLoading: missingCursor ? false : query.isLoading,
     data: error ? undefined : query.data, restartPriorityMatrix: () => setRevision(value => value + 1) };

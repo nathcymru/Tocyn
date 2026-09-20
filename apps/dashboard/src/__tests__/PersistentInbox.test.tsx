@@ -498,6 +498,100 @@ it('restarts the priority snapshot at page one after classification changes and 
   expect(priorityReads).toBe(2);
 });
 
+it('removes a due ticket from the visible Snoozed priority view on the next bounded poll without closing its conversation', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified=[
+    {...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+    {...tickets[1],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+  ];
+  let due=false;
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(url==='/api/workspace/state'&&options?.method!=='PUT')return json({...workspace('ticket-1'),view:'snoozed',sort:'priority_focus'});
+    if(String(url).startsWith('/api/tickets?')){
+      const search=new URL(String(url),'http://localhost').searchParams;
+      if(search.get('queue')==='snoozed'&&search.get('sort')==='priority_focus'){
+        priorityReads++;
+        const rows=due?[classified[1]]:classified;
+        const asOf=new Date().toISOString();
+        return json({data:rows,meta:{page:1,limit:20,total:rows.length,total_pages:1},
+          sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
+          priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:24,paused:false,asOf}])),
+          triageOverdueCount:0,asOf,next:null});
+      }
+    }
+    return base(url,options);
+  });
+  vi.useFakeTimers({toFake:['setInterval','clearInterval']});
+  try{
+    showInbox('/inbox/snoozed/ticket-1');
+    const list=screen.getByRole('listbox',{name:'Conversation list'});
+    await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    expect(priorityReads).toBe(1);
+    expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
+
+    due=true;
+    await act(async()=>{vi.advanceTimersByTime(30_000);});
+    await waitFor(()=>expect(priorityReads).toBe(2));
+    expect(within(list).queryByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).not.toBeInTheDocument();
+    expect(within(list).getByRole('option',{name:/Fixture conversation 2(?:\s|$)/})).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/inbox/snoozed/ticket-1');
+    expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
+    expect(screen.queryByText(/Priority list refreshed/)).not.toBeInTheDocument();
+    expect(priorityReads).toBe(2);
+  }finally{vi.useRealTimers();}
+});
+
+it('restarts a later Snoozed cursor page at page one when its snapshot ages, preserving the open conversation', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified=[
+    {...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+    {...tickets[1],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+  ];
+  const firstAsOf=new Date().toISOString();
+  let due=false;
+  const priorityRequests:string[]=[];
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(url==='/api/workspace/state'&&options?.method!=='PUT')return json({...workspace('ticket-2'),view:'snoozed',sort:'priority_focus'});
+    if(String(url).startsWith('/api/tickets?')){
+      const search=new URL(String(url),'http://localhost').searchParams;
+      if(search.get('queue')==='snoozed'&&search.get('sort')==='priority_focus'){
+        priorityRequests.push(String(url));
+        const cursor=search.get('cursor');
+        const rows=cursor?[classified[1]]:[classified[0]];
+        const asOf=cursor?firstAsOf:due?new Date().toISOString():firstAsOf;
+        return json({data:rows,meta:{page:cursor?2:1,limit:1,total:due?1:2,total_pages:due?1:2},
+          sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
+          priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:24,paused:false,asOf}])),
+          triageOverdueCount:0,asOf,next:cursor||due?null:'signed-next-page'});
+      }
+    }
+    return base(url,options);
+  });
+  vi.useFakeTimers({toFake:['setInterval','clearInterval']});
+  try{
+    showInbox('/inbox/snoozed/ticket-2');
+    const list=screen.getByRole('listbox',{name:'Conversation list'});
+    await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
+    await within(list).findByRole('option',{name:/Fixture conversation 2(?:\s|$)/});
+    expect(priorityRequests).toHaveLength(2);
+    expect(screen.getByRole('heading',{name:'Conversation ticket-2'})).toBeInTheDocument();
+
+    detailNavigation.pending=true;
+    due=true;
+    await act(async()=>{vi.advanceTimersByTime(30_000);});
+    await waitFor(()=>expect(priorityRequests).toHaveLength(3));
+    expect(priorityRequests[2]).not.toContain('cursor=');
+    expect(within(list).queryByRole('option',{name:/Fixture conversation 2(?:\s|$)/})).not.toBeInTheDocument();
+    expect(within(list).getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
+    expect(screen.getByRole('heading',{name:'Conversation ticket-2'})).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/inbox/snoozed/ticket-2');
+    expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Priority list refreshed');
+    expect(detailNavigation.flush).not.toHaveBeenCalled();
+  }finally{vi.useRealTimers();}
+});
+
 it('uses clamped calendar dates for the month and quarter filter choices',async()=>{
   vi.spyOn(Date,'now').mockReturnValue(Date.UTC(2026,2,31,10,15));
   showInbox('/inbox/all');

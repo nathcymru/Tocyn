@@ -6,14 +6,14 @@ import { Ticket, TicketWithDetails, type ContractTier, type CriticalityTier, typ
 import { isPriorityMatrixSort, usePriorityMatrixTickets } from './usePriorityMatrixTickets';
 import { useSlaPriorityTickets, type TicketQueryPage } from './useSlaPriorityTickets';
 
-export function useTickets(params: Record<string, string> = {}, enabled = true) {
+export function useTickets(params: Record<string, string> = {}, enabled = true, onPriorityPeriodicRestart?: () => void) {
   const user = useAuthStore(state => state.user);
   const generation = useAuthStore(state => state.sessionGeneration);
   const identity = JSON.stringify([generation, user?.tenant_id, user?.id, user?.role]);
   const queryParams = new URLSearchParams(params).toString();
   const sla = useSlaPriorityTickets(params, enabled && params.sort === 'sla_priority');
   const priorityMatrixSort = isPriorityMatrixSort(params.sort);
-  const priorityMatrix = usePriorityMatrixTickets(params, enabled && priorityMatrixSort);
+  const priorityMatrix = usePriorityMatrixTickets(params, enabled && priorityMatrixSort, onPriorityPeriodicRestart);
   const ordinary = useQuery({
     enabled: enabled && params.sort !== 'sla_priority' && !priorityMatrixSort && Boolean(user?.id),
     queryKey: ['tickets', params, identity],
