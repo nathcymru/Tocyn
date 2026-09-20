@@ -115,7 +115,10 @@ describe('portal conversation accessibility and recovery', () => {
     expect(dialog.getAttribute('data-state')).toBe('open');
     reject(new Error('The operator has stopped intake.'));
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('stopped intake');
     expect(subject.getAttribute('aria-describedby')).toBe(alert.id);
+    expect(message.getAttribute('aria-describedby')).toBe(alert.id);
     expect(subject.value).toBe('Draft subject'); expect(message.value).toBe('Draft message');
     expect(document.activeElement).toBe(submit);
     vi.mocked(portalApi.post).mockResolvedValueOnce({ ticket: { ...ticket, id: 'new-ticket', subject: 'Draft subject' } });
@@ -148,6 +151,16 @@ describe('portal conversation accessibility and recovery', () => {
     await waitFor(() => expect(document.activeElement).toBe(heading));
     expect(portalApi.post).not.toHaveBeenCalled();
     expect(portalApi.postForm).not.toHaveBeenCalled();
+  });
+
+  it('shows a Park status notice when a closed conversation cannot receive replies', async () => {
+    vi.mocked(portalApi.get).mockImplementation(async path => (path === '/config' ? { TICKET_PREFIX: '#' }
+      : { ...detail, ticket: { ...ticket, status: 'closed' } }) as never);
+    mountDetail();
+    const notice = await screen.findByText('This ticket is closed. You cannot reply to it.');
+    expect(notice.closest('.alert__root')).toBeInTheDocument();
+    expect(notice.closest('[role="status"]')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Reply' })).not.toBeInTheDocument();
   });
 
   it('names history, reply and attachment controls and restores focus when a selected file is removed', async () => {

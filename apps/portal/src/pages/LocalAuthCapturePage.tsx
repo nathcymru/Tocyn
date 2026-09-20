@@ -50,8 +50,8 @@ export function LocalAuthCapturePage() {
     <h1 className={p.localCaptureTitle}>Local authentication capture</h1>
     <p className={p.localCaptureIntro}>Synthetic messages stay in this local Worker for at most 15 minutes.</p>
     <div className={p.localCaptureActions}>
-      <ParkButton type="button" onClick={() => void refresh()} className={p.localCaptureRefresh}>Refresh messages</ParkButton>
-      <ParkButton type="button" onClick={() => void reset()} className={p.localCaptureClear}>Clear captured messages</ParkButton>
+      <ParkButton type="button" onClick={() => void refresh()}>Refresh messages</ParkButton>
+      <ParkButton type="button" onClick={() => void reset()}>Clear captured messages</ParkButton>
     </div>
     <p className={p.localCaptureStatus} role="status" aria-live="polite">{status}</p>
     <section className={p.localCaptureSection} aria-labelledby="captured-messages">

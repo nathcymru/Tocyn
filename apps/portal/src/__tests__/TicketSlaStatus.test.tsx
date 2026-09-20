@@ -51,6 +51,22 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); });
 
 describe('customer SLA status', () => {
+  it('announces a Park skeleton while initial service status loads, then shows the result', async () => {
+    const pending = Deferred<ReturnType<typeof projection>>();
+    vi.mocked(portalApi.getTicketSla).mockReturnValue(pending.promise as never);
+
+    render(<TicketSlaStatus ticketId="owned-ticket" />);
+
+    const loading = screen.getByRole('status', { name: 'Loading service status' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(2);
+    expect(portalApi.getTicketSla).toHaveBeenCalledExactlyOnceWith('owned-ticket');
+
+    await act(async () => { pending.resolve(projection('Current handler')); });
+    expect(await screen.findByText('Responsible handler: Current handler')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading service status' })).not.toBeInTheDocument();
+  });
+
   it('renders only the safe handler name and both target states', async () => {
     vi.mocked(portalApi.getTicketSla).mockResolvedValueOnce({
       ...projection('Avery Morgan', running, { ...running, state: 'breached', phase: 'paused', dueAt: null }),

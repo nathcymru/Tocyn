@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createTocynThemeScope } from '@luminatick/ui';
-import { ParkButton, ParkCheckbox, ParkProgress, ParkRadioGroup, ParkSkeleton } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCheckbox, ParkProgress, ParkRadioGroup, ParkSkeleton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useOperatorTheme, type OperatorThemeMode } from '../../hooks/useOperatorTheme';
 import { useOperatorPreferences, type OperatorDensity, type OperatorFontScale, type OperatorMotion } from '../../hooks/useOperatorPreferences';
@@ -29,19 +29,23 @@ export function OperatorThemeProvider({ children }: { children: React.ReactNode 
   const loadingMessage = useAppearanceLoadingMessage(loading);
   const startupTimeout = theme.status === 'error' && !hasStableAppearance.current && theme.error?.includes('took too long');
   return <ThemeContext.Provider value={theme}>
-    {startupTimeout ? <section role="alert" aria-labelledby="appearance-load-error-title" className={css({ display: 'grid', gap: '3', maxW: 'xl', mx: 'auto', my: '8', p: '6', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'lg' })}>
-      <h1 id="appearance-load-error-title" tabIndex={-1}>Appearance settings could not be loaded</h1>
-      <p>{theme.error}</p>
-      <ParkButton type="button" onClick={theme.retry}>Retry appearance</ParkButton>
-    </section> : <>
+    {startupTimeout && <ParkAlert.Root role="alert" aria-labelledby="appearance-load-error-title" status="error" className={css({ maxW: 'xl', mx: 'auto', my: '8' })}>
+      <ParkAlert.Content>
+        <ParkAlert.Title asChild><h1 id="appearance-load-error-title" tabIndex={-1}>Appearance settings could not be loaded</h1></ParkAlert.Title>
+        <ParkAlert.Description>{theme.error}</ParkAlert.Description>
+        <ParkButton type="button" variant="outline" onClick={theme.retry}>Retry appearance</ParkButton>
+      </ParkAlert.Content>
+    </ParkAlert.Root>}
     {loading && <section role="status" aria-live="polite" aria-label="Restoring appearance" className={css({ display: 'grid', gap: '3', maxW: 'xl', mx: 'auto', my: '4', p: '4', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'lg' })}>
       <div className={css({ display: 'grid', gap: '2', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' })} aria-hidden="true"><ParkSkeleton /><ParkSkeleton /><ParkSkeleton /></div>
       <ParkProgress value={null} label={loadingMessage} />
       <p>Workspace controls remain available while appearance settings load.</p>
     </section>}
-    {(theme.status === 'error' || theme.status === 'conflict') && <div role="alert" className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3', flexWrap: 'wrap', p: '3', bg: 'bg.subtle', borderWidth: '1px', borderColor: 'border.default', rounded: 'md' })}><span>{theme.error || 'Appearance could not be restored.'}</span><ParkButton type="button" onClick={theme.retry}>Retry appearance</ParkButton></div>}
+    {(theme.status === 'error' || theme.status === 'conflict') && !startupTimeout && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Description>{theme.error || 'Appearance could not be restored.'}</ParkAlert.Description>
+      <ParkButton type="button" variant="outline" onClick={theme.retry}>Retry appearance</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
     <PreferencesContext.Provider value={preferences}>{children}</PreferencesContext.Provider>
-    </>}
   </ThemeContext.Provider>;
 }
 

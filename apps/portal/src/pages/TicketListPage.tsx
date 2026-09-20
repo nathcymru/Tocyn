@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkButton, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
@@ -119,7 +119,7 @@ export function TicketListPage() {
   }
 
   if (error) {
-    return <ParkEmptyState role="alert" title="Tickets could not be loaded." description={error} headingLevel={false} className={p.ticketError} action={<ParkButton type="button" onClick={retryTickets} className={p.ticketRetry}>Retry loading tickets</ParkButton>} />;
+    return <ParkEmptyState role="alert" title="Tickets could not be loaded." description={error} headingLevel={false} className={p.ticketError} action={<ParkButton type="button" onClick={retryTickets}>Retry loading tickets</ParkButton>} />;
   }
 
   return (
@@ -149,7 +149,9 @@ export function TicketListPage() {
             </ParkDialog.Header>
             <ParkDialog.Body>
               <form aria-busy={creatingTicket} onSubmit={handleCreate} className={[p.ticketForm, p.ticketFieldInput].join(' ')}>
-                {createError && <p id="create-ticket-error" role="alert" className={p.ticketDialogError}>{createError}</p>}
+                {createError && <ParkAlert.Root id="create-ticket-error" role="alert" status="error">
+                  <ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content>
+                </ParkAlert.Root>}
                 <p role="status" aria-live="polite" className={p.ticketDialogStatus}>{creatingTicket ? 'Creating ticket…' : ''}</p>
                 <ParkField label="Subject" className={p.ticketField}>
                   <ParkInput
@@ -191,7 +193,7 @@ export function TicketListPage() {
                     />
                   )}
                   <ParkButton type="button" variant="outline" aria-disabled={creatingTicket}
-                    onClick={() => { if (!creatingTicket) setIsCreating(false); }} className={p.ticketCancel}>Cancel</ParkButton>
+                    onClick={() => { if (!creatingTicket) setIsCreating(false); }}>Cancel</ParkButton>
                   <ParkButton type="submit" aria-disabled={creatingTicket} variant="solid" className={p.ticketSubmit}>
                     {creatingTicket && <IconSpinner className={p.ticketSpinner} aria-hidden="true" />}
                     Create Ticket

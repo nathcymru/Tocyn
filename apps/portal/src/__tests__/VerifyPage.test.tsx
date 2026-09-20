@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { BrowserRouter, Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { VerifyPage } from '../pages/VerifyPage';
 import { portalApi } from '../api/client';
@@ -31,6 +31,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('verification flows', () => {
+  it('announces indeterminate Park progress while a single magic-link request is pending', async () => {
+    let resolve!: (value: { user: { id: string; name: string; email: string }; token: string }) => void;
+    vi.mocked(portalApi.post).mockReturnValue(new Promise(done => { resolve = done; }));
+
+    mount('/verify?token=synthetic-pending');
+
+    expect(screen.getByRole('status')).toHaveTextContent('Verifying your login...');
+    expect(screen.getByText('Verification in progress')).toBeInTheDocument();
+    const progress = screen.getByRole('progressbar', { name: 'Verification in progress' });
+    expect(progress).toBeInTheDocument();
+    expect(progress).not.toHaveAttribute('aria-valuenow');
+    expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/auth/verify', { token: 'synthetic-pending' });
+
+    await act(async () => {
+      resolve({ user: { id: 'synthetic-user', name: 'Test', email: 'test@example.com' }, token: 'synthetic-session' });
+    });
+    expect(await screen.findByText('Ticket destination')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
   it('uses a magic-link token only once during StrictMode replay', async () => {
     vi.mocked(portalApi.post).mockResolvedValue({
       user: { id: 'synthetic-user', name: 'Test', email: 'test@example.com' },

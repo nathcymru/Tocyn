@@ -1,5 +1,5 @@
 import { w } from '../widgetStyles';
-import { ParkAlert, ParkButton, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkField, ParkInput, ParkProgress, ParkTextarea } from '@luminatick/ui/park';
 import { IconCircleCheck } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
@@ -114,7 +114,7 @@ const TicketForm: React.FC<Props> = ({ userEmail }) => {
         />
       </ParkField>
       </fieldset>
-      {status === 'submitting' && <p role="status">Submitting your ticket...</p>}
+      {status === 'submitting' && <div role="status"><ParkProgress value={null} label="Submitting your ticket…" /></div>}
       {status === 'error' && (
         <ParkAlert.Root ref={errorMessage} tabIndex={-1} role="alert" status="error" variant="surface">
           <ParkAlert.Content><ParkAlert.Description>Submission could not be confirmed. Your message has been kept; try again.</ParkAlert.Description></ParkAlert.Content>

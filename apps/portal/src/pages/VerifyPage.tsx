@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput, ParkProgress } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
@@ -81,8 +81,8 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
     return (
       <div className={p.authShell}>
         <div role="status" aria-live="polite" className={[p.authHeading, p.verifyLoading].join(' ')}>
-          <IconSpinner className={p.verifySpinner} aria-hidden="true" />
           <h2 className={p.verifyLoadingTitle}>Verifying your login...</h2>
+          <ParkProgress value={null} label="Verification in progress" />
         </div>
       </div>
     );

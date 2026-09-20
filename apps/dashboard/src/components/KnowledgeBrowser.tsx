@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../api/client';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
@@ -61,8 +61,16 @@ export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: 
     </li>)}</ul>
     {preview && <section aria-label="Knowledge preview" className={styles.preview}>
       <h4 ref={heading} tabIndex={-1} className={styles.previewTitle}>Preview: {preview.article.title}</h4>
-      {preview.status === 'loading' && <p role="status">Loading knowledge preview…</p>}
-      {preview.status === 'error' && <><p role="alert">Knowledge preview could not be loaded. Your draft is unchanged.</p><ParkButton type="button" onClick={() => void load(preview.article)}>Retry preview</ParkButton></>}
+      {preview.status === 'loading' && <div role="status" aria-busy="true" aria-label="Loading knowledge preview" className={css({ display: 'grid', gap: '2' })}>
+        <span className={css({ srOnly: true })}>Loading knowledge preview…</span>
+        <ParkSkeleton aria-hidden="true" className={css({ h: '4', w: 'full' })} />
+        <ParkSkeleton aria-hidden="true" className={css({ h: '4', w: '4/5' })} />
+        <ParkSkeleton aria-hidden="true" className={css({ h: '4', w: '3/5' })} />
+      </div>}
+      {preview.status === 'error' && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+        <ParkAlert.Description>Knowledge preview could not be loaded. Your draft is unchanged.</ParkAlert.Description>
+        <ParkButton type="button" variant="outline" onClick={() => void load(preview.article)}>Retry preview</ParkButton>
+      </ParkAlert.Content></ParkAlert.Root>}
       {preview.status === 'ready' && <><p className={styles.previewBody}>{preview.text || 'This article has no preview content.'}</p>{preview.truncated && <p>Preview shows the first 4,000 characters. Insertion requests the article again.</p>}</>}
       <ParkButton type="button" onClick={close}>Close preview</ParkButton>
     </section>}

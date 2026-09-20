@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import type { SlaTargetProjection, TicketSlaProjection } from '../types';
-import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 
 type ReadState = Readonly<{
   status: 'loading' | 'ready' | 'failed';
@@ -88,14 +89,18 @@ export function TicketSlaStatus({ ticketId }: { ticketId: string }) {
   if (read.status === 'loading' && !read.projection) {
     return <section aria-labelledby="ticket-sla-heading" className={p.slaCard}>
       <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
-      <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading service status…" className={p.slaState} />
+      <div role="status" aria-label="Loading service status" aria-busy="true" className={[p.slaState, css({ display: 'grid', gap: '2' })].join(' ')}>
+        <ParkVisuallyHidden>Loading service status…</ParkVisuallyHidden>
+        <ParkSkeleton aria-hidden="true" height="4" width="70%" />
+        <ParkSkeleton aria-hidden="true" height="4" width="90%" />
+      </div>
     </section>;
   }
 
   if (read.status === 'failed' || !read.projection) {
     return <section aria-labelledby="ticket-sla-heading" className={p.slaCard}>
       <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
-      <ParkEmptyState role="status" aria-live="polite" headingLevel={false} title="Service status is unavailable. Try again." className={p.slaState} action={<ParkButton type="button" onClick={retry} className={p.slaRetry}>Retry service status</ParkButton>} />
+      <ParkEmptyState role="status" aria-live="polite" headingLevel={false} title="Service status is unavailable. Try again." className={p.slaState} action={<ParkButton type="button" onClick={retry}>Retry service status</ParkButton>} />
     </section>;
   }
 

@@ -314,7 +314,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
   }
 
   if (error || !ticket) {
-    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className={p.emptyError} action={<div className={p.emptyActions}><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }} className={p.emptyRetry}>Retry loading conversation</ParkButton><Link to="/tickets" className={p.emptyBack}>Back to Tickets</Link></div>} />;
+    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className={p.emptyError} action={<div className={p.emptyActions}><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }}>Retry loading conversation</ParkButton><Link to="/tickets" className={p.emptyBack}>Back to Tickets</Link></div>} />;
   }
 
   return (
@@ -398,8 +398,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
         </ParkScrollArea.Root>
         {paginationVisible && <div className={p.chatPagination}>
           <ParkButton type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore || refreshing}
-            aria-controls="conversation-messages" aria-busy={loadingMore}
-            className={p.chatPaginationButton}>
+            aria-controls="conversation-messages" aria-busy={loadingMore}>
             {loadingMore ? 'Loading messages…' : nextCursor ? 'Load more messages' : 'All messages loaded'}
           </ParkButton>
           <p role="status" aria-label="Message pagination" aria-live="polite" className={p.chatPaginationStatus}>{pageStatus}</p>
@@ -467,7 +466,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                       aria-disabled={sending}
                     >
                       <IconPaperclip className={p.chatAttachIcon} aria-hidden="true" />
-                      <span className={p.chatAttachLabel}>Attach Files</span>
+                      <span>Attach Files</span>
                     </ParkButton>
                   </ParkFileUpload.Trigger>
                 </ParkFileUpload.Root>
@@ -486,9 +485,9 @@ function TicketDetail({ id }: { id: string | undefined }) {
         )}
 
         {ticket.status === 'resolved' || ticket.status === 'closed' ? (
-           <div className={p.chatClosed}>
-             This ticket is {ticket.status}. You cannot reply to it.
-           </div>
+          <ParkAlert.Root role="status" status="info">
+            <ParkAlert.Content><ParkAlert.Description>This ticket is {ticket.status}. You cannot reply to it.</ParkAlert.Description></ParkAlert.Content>
+          </ParkAlert.Root>
         ) : null}
       </div>
     </div>

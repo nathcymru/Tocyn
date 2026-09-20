@@ -34,7 +34,7 @@ export const ParkSkeleton = OfficialSkeleton;
 export function ParkProgress({ value = null, label, className }: { value?: number | null; label: React.ReactNode; className?: string }) {
   return <OfficialProgress.Root value={value} size="sm" shape="full" variant="subtle" className={className}>
     <OfficialProgress.Label>{label}</OfficialProgress.Label>
-    <OfficialProgress.Track><OfficialProgress.Range /></OfficialProgress.Track>
+    <OfficialProgress.Track aria-label={typeof label === 'string' ? label : undefined}><OfficialProgress.Range /></OfficialProgress.Track>
   </OfficialProgress.Root>;
 }
 
