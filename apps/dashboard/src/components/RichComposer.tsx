@@ -102,7 +102,18 @@ export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescrib
     onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); if (ariaLabelledBy) dom.setAttribute('aria-labelledby', ariaLabelledBy); else dom.removeAttribute('aria-labelledby'); if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy); else dom.removeAttribute('aria-describedby'); } }, [editor, id, ariaDescribedBy, ariaLabelledBy]);
+  useLayoutEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    dom.id = id;
+    dom.setAttribute('aria-label', 'Content (Markdown)');
+    if (ariaLabelledBy) dom.setAttribute('aria-labelledby', ariaLabelledBy);
+    else dom.removeAttribute('aria-labelledby');
+    if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy);
+    else dom.removeAttribute('aria-describedby');
+    if (readOnly) dom.setAttribute('aria-readonly', 'true');
+    else dom.removeAttribute('aria-readonly');
+  }, [editor, id, ariaDescribedBy, ariaLabelledBy, readOnly]);
   useEffect(() => { if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value || '', { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
   if (!editor) return <div id={id} className={composerStyles.editor} aria-busy="true" aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} />;
   return <div className={composerStyles.editor} aria-disabled={readOnly}>

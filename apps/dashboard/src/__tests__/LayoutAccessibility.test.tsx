@@ -34,6 +34,22 @@ async function renderReady() {
   await screen.findByRole('main', { name: 'Workspace' });
   return result;
 }
+function stubPersonaBreakpoint(initialDesktop: boolean) {
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const media = {
+    matches: initialDesktop,
+    media: '(min-width: 64rem)',
+    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => { listeners.add(listener); },
+    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => { listeners.delete(listener); },
+  };
+  vi.stubGlobal('matchMedia', vi.fn(() => media));
+  return {
+    setDesktop(nextDesktop: boolean) {
+      media.matches = nextDesktop;
+      act(() => listeners.forEach(listener => listener({ matches: nextDesktop } as MediaQueryListEvent)));
+    },
+  };
+}
 beforeEach(() => {
   // JSDOM lacks resize observation; browser positioning remains separately verified.
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
@@ -87,11 +103,19 @@ it('provides discoverable command navigation to global search and restores its c
 it('constrains the inbox shell to the viewport while keeping the shared header visible', async () => {
   render(tree('/inbox/all/synthetic-ticket'));
   const main = await screen.findByRole('main', { name: 'Workspace' });
-  const shell = main.parentElement?.parentElement;
+  const shell = main.closest('.shell__root');
+  const header = shell?.querySelector(':scope > .shell__header');
+  const body = shell?.querySelector(':scope > .shell__body');
   expect(shell).toHaveClass('shell__root', 'shell__rootInbox');
+  expect(header).toBe(screen.getByRole('banner'));
+  expect(body).toBe(header?.nextElementSibling);
+  expect(body).toHaveClass('shell__body');
+  expect(body?.querySelector(':scope > aside')).toHaveClass('shell__sidebarDesktop');
+  expect(main.parentElement).toHaveClass('shell__main');
   expect(main).toHaveClass('shell__content', 'shell__contentInbox');
   expect(main).not.toHaveClass('h-[calc(100dvh-4rem)]');
-  expect(main.previousElementSibling).toHaveClass('shell__header');
+  expect(pandaConfigSource).toMatch(/root: \{[^\n]*flexDirection: 'column', overflow: 'hidden'/);
+  expect(pandaConfigSource).toMatch(/body: \{[^\n]*minWidth: '0', minHeight: '0', overflow: 'hidden'/);
 });
 
 it('keeps header controls reachable in the generated 320 CSS px reflow contract', async () => {
@@ -116,6 +140,24 @@ it('keeps header controls reachable in the generated 320 CSS px reflow contract'
   expect(pandaConfigSource).toMatch(/scope: \{[^\n]*width: \{ base: '100%', md: '9rem' \}/);
 });
 
+it('uses one compact mobile control row above the full-width search without hiding connection status', async () => {
+  vi.mocked(useRealtime).mockReturnValue({ ...realtime, isConnected: false } as ReturnType<typeof useRealtime>);
+  await renderReady();
+  const header = screen.getByRole('banner');
+  const searchSlot = header.querySelector('.shell__headerSearch');
+  expect(searchSlot).toContainElement(screen.getByRole('textbox', { name: 'Search all tickets (global shell)' }));
+  expect(header).toContainElement(screen.getByRole('button', { name: 'Open navigation' }));
+  expect(header).toContainElement(screen.getByRole('button', { name: 'Activity' }));
+  expect(header).toContainElement(screen.getByRole('button', { name: 'Account options' }));
+  const connection = screen.getByRole('button', { name: 'Disconnected' });
+  expect(header).toContainElement(connection);
+  expect(connection).toHaveAttribute('aria-label', 'Disconnected');
+  expect(connection.querySelector('.shell__connectionLabel')).toHaveTextContent('Disconnected');
+  expect(pandaConfigSource).toMatch(/headerSearch: \{[^\n]*order: \{ base: '1', md: '0' \}[^\n]*flex: \{ base: '0 0 100%', md: '1' \}/);
+  expect(pandaConfigSource).toMatch(/connectionLabel: \{ display: \{ base: 'none', sm: 'inline' \} \}/);
+  expect(pandaConfigSource).toMatch(/connectionButton: \{[^\n]*minWidth: '2\.75rem', minHeight: '2\.75rem'/);
+});
+
 it('keeps compact navigation icons inside the focus target', async () => {
   await renderReady();
   const sidebar = document.querySelector('aside.shell__sidebarDesktop');
@@ -126,11 +168,71 @@ it('keeps compact navigation icons inside the focus target', async () => {
   expect(inbox).toHaveClass('link', 'link--variant_plain', 'shell__navigationLink', 'shell__navigationLinkIcon');
   expect(inbox).toHaveAttribute('aria-current', 'page');
   expect(inbox.querySelector('svg')).toHaveClass('shell__navigationIcon');
+  const settings = within(sidebar as HTMLElement).getByRole('link', { name: 'Settings' });
+  expect(settings.closest('.shell__sidebarFooter')).toBeInTheDocument();
+  expect(within(sidebar as HTMLElement).getByRole('navigation', { name: 'Settings navigation' })).toContainElement(settings);
+  expect(within(sidebar?.querySelector('nav') as HTMLElement).queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
   inbox.focus();expect(inbox).toHaveFocus();
   // 4rem sidebar minus its 1rem total padding leaves a 3rem link. Its
   // 0.5rem padding on either side leaves 2rem for the icon.
   expect(4 * 16 - 2 * 0.5 * 16 - 2 * 0.5 * 16).toBeGreaterThanOrEqual(1.5 * 16);
   expect(pandaConfigSource).toMatch(/navigationIcon: \{[^\n]*width: '1\.5rem', height: '1\.5rem'/);
+});
+
+it('places one Park account menu in the desktop sidebar footer, separate from Settings navigation', async () => {
+  stubPersonaBreakpoint(true);
+  await renderReady();
+  const sidebar = document.querySelector('aside.shell__sidebarDesktop') as HTMLElement;
+  const footer = sidebar.querySelector('.shell__sidebarFooter') as HTMLElement;
+  const account = await within(footer).findByRole('button', { name: 'Account options' });
+  expect(screen.getAllByRole('button', { name: 'Account options' })).toHaveLength(1);
+  expect(within(sidebar).getByRole('navigation', { name: 'Settings navigation' })).not.toContainElement(account);
+  expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Account options' })).not.toBeInTheDocument();
+  expect(account).toHaveClass('menu__trigger');
+  account.focus();
+  await userEvent.keyboard('{Enter}');
+  await screen.findByRole('menuitem', { name: 'Account' });
+  await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true));
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(account).toHaveFocus());
+});
+
+it('keeps the sole account menu in the mobile header when navigation dialog opens', async () => {
+  stubPersonaBreakpoint(false);
+  await renderReady();
+  const account = within(screen.getByRole('banner')).getByRole('button', { name: 'Account options' });
+  expect(screen.getAllByRole('button', { name: 'Account options' })).toHaveLength(1);
+  await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Navigation' });
+  expect(within(dialog).queryByRole('button', { name: 'Account options' })).not.toBeInTheDocument();
+  // Ark correctly makes the background header inert while the modal dialog is open.
+  expect(document.querySelector('header.shell__header')).toContainElement(account);
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(dialog).not.toBeInTheDocument());
+  account.focus();
+  await userEvent.keyboard('{Enter}');
+  await screen.findByRole('menuitem', { name: 'Account' });
+  await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true));
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(account).toHaveFocus());
+});
+
+it('closes the account menu and restores trigger focus as its single instance crosses the breakpoint', async () => {
+  const viewport = stubPersonaBreakpoint(false);
+  await renderReady();
+  const account = screen.getByRole('button', { name: 'Account options' });
+  await userEvent.click(account);
+  await screen.findByRole('menuitem', { name: 'Account' });
+  await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true));
+  viewport.setDesktop(true);
+  await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  await waitFor(() => expect(account).toHaveFocus());
+  expect(within(document.querySelector('aside.shell__sidebarDesktop') as HTMLElement).getByRole('button', { name: 'Account options' })).toBe(account);
+  expect(screen.getAllByRole('button', { name: 'Account options' })).toHaveLength(1);
+  viewport.setDesktop(false);
+  await waitFor(() => expect(account).toHaveFocus());
+  expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Account options' })).toBe(account);
+  expect(screen.getAllByRole('button', { name: 'Account options' })).toHaveLength(1);
 });
 
 it('names account/connection disclosures and restores focus when their child actions close', async () => {

@@ -1,12 +1,16 @@
+// @vitest-environment jsdom
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { widgetBrandColor } from '../widgetStyles';
+import { appendLegacyWidgetCss } from '../compatibility-styles';
 
 const source = (relativePath: string) => readFile(
   fileURLToPath(new URL(relativePath, import.meta.url)),
   'utf8',
 );
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('shared stylesheet entry boundaries', () => {
   it('accepts a tenant hex colour and falls back for untrusted CSS values', () => {
@@ -38,6 +42,32 @@ describe('shared stylesheet entry boundaries', () => {
     expect(widgetMain).not.toContain('legacyWidgetStyles');
     expect(widgetMain.toLowerCase()).not.toContain('tailwind');
     expect(widgetMain).not.toContain('document.head.appendChild');
+    expect(widgetMain.indexOf('appendLegacyWidgetCss(shadow)')).toBeGreaterThan(widgetMain.indexOf('shadow.appendChild(primitiveStyleElement)'));
+  });
+
+  it('keeps the optional host CSS absent by default and accepts only a primitive string inside the ShadowRoot', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const generated = document.createElement('style');
+    generated.textContent = '.button { color: black; }';
+    shadow.appendChild(generated);
+
+    appendLegacyWidgetCss(shadow);
+    vi.stubGlobal('LUMINA_WIDGET_CSS', new String('.button { color: red; }'));
+    appendLegacyWidgetCss(shadow);
+    vi.stubGlobal('LUMINA_WIDGET_CSS', { toString: () => '.button { color: red; }' });
+    appendLegacyWidgetCss(shadow);
+    expect(shadow.querySelectorAll('style')).toHaveLength(1);
+
+    vi.stubGlobal('LUMINA_WIDGET_CSS', '.button { color: red; }');
+    appendLegacyWidgetCss(shadow);
+    const styles = shadow.querySelectorAll('style');
+    expect(styles).toHaveLength(2);
+    expect(styles[0]).toBe(generated);
+    expect(styles[1]?.textContent).toBe('.button { color: red; }');
+    expect(document.head.querySelectorAll('style')).toHaveLength(0);
+    host.remove();
   });
 
   it('injects bundled Atkinson and Inter font faces with the ShadowRoot sheet', async () => {

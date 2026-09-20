@@ -175,7 +175,7 @@ export function SecurityProfilePage() {
                     ref={disableButton}
                     onClick={() => { setError(null); setDisableOpen(true); }}
                     disabled={isLoading}
-                    variant="solid"
+                    variant="outline"
                     colorPalette="red"
                   >
                     <IconShield className={securityStyles.statusIcon} aria-hidden="true" />

@@ -1,6 +1,5 @@
-import { ParkAlert, ParkButton, ParkTicketDetail } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkDialog, ParkTicketDetail } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
-import { TocynDialog } from '@luminatick/ui/dialog';
 import type { TicketUtilityAction } from '@luminatick/shared';
 import React from 'react';
 import { css } from '@luminatick/ui/styled-system/css';
@@ -78,13 +77,18 @@ export function TicketActionBar({ reference, actions, loading, error, retry }: T
       <ParkCollapsible.Content><div className={detailStyles.actionMore}>{more.map(renderAction)}</div></ParkCollapsible.Content>
     </ParkCollapsible.Root>}
     {notice && <p role="status" className={detailStyles.actionNotice}>{notice}</p>}
-    <TocynDialog open={dialogAction?.kind === 'internal-dialog'} onOpenChange={open => { if (!open) setDialogAction(null); }}
-      labelledBy={titleId} describedBy={descriptionId} initialFocusEl={() => close.current} finalFocusEl={() => opener.current}
-      >
-      <h2 id={titleId} className={css({ fontSize: 'lg', fontWeight: 'semibold' })}>Ticket reference</h2>
-      <p id={descriptionId} className={css({ color: 'text.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>Use this reference when you need to identify this ticket in a governed support workflow.</p>
-      <p className={css({ fontFamily: 'tabular', fontSize: 'xl', fontWeight: 'bold' })}>{reference}</p>
-      <ParkButton type="button" ref={close} onClick={() => setDialogAction(null)}>Close ticket reference</ParkButton>
-    </TocynDialog>
+    <ParkDialog.Root open={dialogAction?.kind === 'internal-dialog'} onOpenChange={({ open }) => { if (!open) setDialogAction(null); }}
+      initialFocusEl={() => close.current} finalFocusEl={() => opener.current}
+      closeOnEscape closeOnInteractOutside={false} lazyMount unmountOnExit>
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={titleId} aria-describedby={descriptionId}>
+          <ParkDialog.Title id={titleId} className={css({ fontSize: 'lg', fontWeight: 'semibold' })}>Ticket reference</ParkDialog.Title>
+          <ParkDialog.Description id={descriptionId} className={css({ color: 'text.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>Use this reference when you need to identify this ticket in a governed support workflow.</ParkDialog.Description>
+          <p className={css({ fontFamily: 'tabular', fontSize: 'xl', fontWeight: 'bold' })}>{reference}</p>
+          <ParkButton type="button" ref={close} onClick={() => setDialogAction(null)}>Close ticket reference</ParkButton>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>
   </section>;
 }

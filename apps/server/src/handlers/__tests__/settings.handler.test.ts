@@ -175,6 +175,13 @@ describe("Settings Handler Integration Tests", () => {
       expect(invalidDark.status).toBe(400);
       expect(mockDB.run).not.toHaveBeenCalled();
 
+      const insufficientTextContrast = await settings.request('/theme', {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: '1', light: { colorTextMuted: '#6e6e6e' } }),
+      }, { DB: mockDB as any, JWT_SECRET, APP_MASTER_KEY });
+      expect(insufficientTextContrast.status).toBe(400);
+      expect(mockDB.run).not.toHaveBeenCalled();
+
       const valid = await settings.request('/theme', {
         method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ version: '1', light: { colorSurface: '#ffffff', colorText: '#0f172a' } }),

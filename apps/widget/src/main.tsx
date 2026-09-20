@@ -9,6 +9,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { w } from './widgetStyles';
+import { appendLegacyWidgetCss } from './compatibility-styles';
 
 // The widget is intended to be self-initializing when the script is included.
 (function () {
@@ -37,6 +38,9 @@ import { w } from './widgetStyles';
     primitiveStyles,
   ].join('\n');
   shadow.appendChild(primitiveStyleElement);
+  // Keep the historical host opt-in inside this ShadowRoot and after the
+  // generated sheet; without a primitive string, default rendering is unchanged.
+  appendLegacyWidgetCss(shadow);
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <EnvironmentProvider value={() => shadow}>

@@ -7,6 +7,7 @@ import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
   HouseIcon,
@@ -35,10 +36,11 @@ type ActivityItem = Readonly<{ id: string; ticketId: string; ticketSubject: stri
 type ActivityResponse = Readonly<{ page: Readonly<{ items: readonly ActivityItem[]; next: string | null }>; unread: Readonly<{ status: 'available'; count: number } | { status: 'unavailable'; count: null; reason: string }> }>;
 const ACTIVITY_PAGE_SIZE = 20;
 const MAX_RENDERED_ACTIVITY_ITEMS = 100;
+const DESKTOP_PERSONA_QUERY = '(min-width: 64rem)';
 
-interface SidebarProps { onNavigate?: () => void; navigationFocus: () => HTMLElement | null; }
+interface SidebarProps { onNavigate?: () => void; personaHost?: React.Ref<HTMLDivElement>; }
 
-function UserMenu({ onNavigate }: SidebarProps) {
+function UserMenu({ onNavigate, desktop, labelled, open, onOpenChange }: { onNavigate?: () => void; desktop: boolean; labelled: boolean; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const loggingOut = useRef(false);
@@ -64,16 +66,17 @@ function UserMenu({ onNavigate }: SidebarProps) {
   };
 
   return <>
-  <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
+  <ParkMenu.Root open={open} onOpenChange={({ open: nextOpen }) => onOpenChange(nextOpen)} positioning={{ placement: desktop ? 'top-start' : 'bottom-end', strategy: 'fixed' }}>
     <ParkMenu.Trigger asChild>
-      <ParkIconButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
+      <ParkButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={cn(shellStyles.personaTrigger, desktop && labelled && shellStyles.personaTriggerLabelled)}>
         <span className={shellStyles.personaAvatarWrap}>
           <ParkAvatar className={shellStyles.personaAvatar}>
             <ParkAvatarFallback name={user?.full_name || 'Operator'} />
           </ParkAvatar>
           <span className={shellStyles.personaStatus} aria-hidden="true" />
         </span>
-      </ParkIconButton>
+        {desktop && labelled && <span className={shellStyles.personaDetails} aria-hidden="true"><strong className={shellStyles.personaName}>{user?.full_name || 'Operator'}</strong><span className={shellStyles.personaPresence}>Signed in</span></span>}
+      </ParkButton>
     </ParkMenu.Trigger>
     <ParkMenu.Positioner>
       <ParkMenu.Content aria-label="Account menu" className={shellStyles.accountMenu}>
@@ -103,10 +106,25 @@ function UserMenu({ onNavigate }: SidebarProps) {
   </>;
 }
 
-function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
+function SidebarContent({ onNavigate, personaHost }: SidebarProps) {
   const location = useLocation();
   const labelled = useOperatorPreferencesContext().navigation === 'labelled';
   const shellStyles = ParkShell();
+  const renderNavigationItem = (item: (typeof navigation)[number]) => {
+    const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
+    return <ParkLink key={item.name} asChild variant="plain">
+      <Link
+        to={item.href}
+        title={item.name}
+        aria-label={item.name}
+        aria-current={isActive ? 'page' : undefined}
+        onClick={onNavigate}
+        className={cn(shellStyles.navigationLink, labelled ? shellStyles.navigationLinkLabelled : shellStyles.navigationLinkIcon)}
+      >
+        <item.icon aria-hidden="true" className={shellStyles.navigationIcon} />{labelled && <span>{item.name}</span>}
+      </Link>
+    </ParkLink>;
+  };
   return (
         <div className={cn(shellStyles.sidebar, labelled ? shellStyles.sidebarLabelled : shellStyles.sidebarCompact)}>
           <ParkLink asChild variant="plain">
@@ -116,28 +134,14 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
           </ParkLink>
 
           <nav aria-label="Workspace navigation" className={shellStyles.navigation}>
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-              return (
-                <ParkLink key={item.name} asChild variant="plain">
-                  <Link
-                    to={item.href}
-                    title={item.name}
-                    aria-label={item.name}
-                    aria-current={isActive ? "page" : undefined}
-                    onClick={onNavigate}
-                    className={cn(
-                      shellStyles.navigationLink,
-                      labelled ? shellStyles.navigationLinkLabelled : shellStyles.navigationLinkIcon,
-                    )}
-                  >
-                    <item.icon aria-hidden="true" className={shellStyles.navigationIcon} />{labelled && <span>{item.name}</span>}
-                  </Link>
-                </ParkLink>
-              );
-            })}
+            {navigation.filter(item => item.name !== 'Settings').map(renderNavigationItem)}
           </nav>
-
+          <div className={shellStyles.sidebarFooter}>
+            <nav aria-label="Settings navigation" className={shellStyles.settingsNavigation}>
+              {navigation.filter(item => item.name === 'Settings').map(renderNavigationItem)}
+            </nav>
+            {personaHost && <div ref={personaHost} className={shellStyles.sidebarPersonaHost} />}
+          </div>
         </div>
   );
 }
@@ -177,9 +181,44 @@ function LayoutContent() {
   const navigationTrigger = useRef<HTMLButtonElement>(null);
   const restoreNavigationFocus = useRef(true);
   const main = useRef<HTMLElement>(null);
+  const [desktopPersona, setDesktopPersona] = useState(() => window.matchMedia?.(DESKTOP_PERSONA_QUERY).matches ?? false);
+  const desktopPersonaRef = useRef(desktopPersona);
+  desktopPersonaRef.current = desktopPersona;
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuOpenRef = useRef(accountMenuOpen);
+  accountMenuOpenRef.current = accountMenuOpen;
+  const [personaPortal] = useState(() => document.createElement('div'));
+  const [headerPersonaHost, setHeaderPersonaHost] = useState<HTMLDivElement | null>(null);
+  const [sidebarPersonaHost, setSidebarPersonaHost] = useState<HTMLDivElement | null>(null);
+  const restorePersonaFocus = useRef(false);
   const isInboxRoute = location.pathname.startsWith('/inbox');
   const shellStyles = ParkShell();
   const title = pageTitle(location.pathname);
+
+  useEffect(() => {
+    const media = window.matchMedia?.(DESKTOP_PERSONA_QUERY);
+    if (!media) return;
+    const onBreakpointChange = () => {
+      if (media.matches === desktopPersonaRef.current) return;
+      restorePersonaFocus.current = accountMenuOpenRef.current || personaPortal.contains(document.activeElement);
+      setAccountMenuOpen(false);
+      desktopPersonaRef.current = media.matches;
+      setDesktopPersona(media.matches);
+    };
+    onBreakpointChange();
+    media.addEventListener('change', onBreakpointChange);
+    return () => media.removeEventListener('change', onBreakpointChange);
+  }, [personaPortal]);
+
+  React.useLayoutEffect(() => {
+    const destination = desktopPersona ? sidebarPersonaHost : headerPersonaHost;
+    if (!destination) return;
+    destination.appendChild(personaPortal);
+    if (restorePersonaFocus.current) {
+      restorePersonaFocus.current = false;
+      queueMicrotask(() => personaPortal.querySelector<HTMLButtonElement>('button[aria-label="Account options"]')?.focus());
+    }
+  }, [desktopPersona, headerPersonaHost, sidebarPersonaHost, personaPortal]);
 
   useEffect(() => { main.current?.focus(); }, [location.pathname]);
   const loadActivity = React.useCallback(async () => {
@@ -269,22 +308,6 @@ function LayoutContent() {
 
   return (
       <div className={cn(shellStyles.root, isInboxRoute ? shellStyles.rootInbox : shellStyles.rootStandard)}>
-      <aside className={shellStyles.sidebarDesktop}>
-        <SidebarContent navigationFocus={() => main.current} />
-      </aside>
-        <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
-          labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
-          finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
-          data-tocyn-dialog-edge=""
-          className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
-          <ParkVisuallyHidden id={`${mobileDialogId}-title`}>Navigation</ParkVisuallyHidden>
-          <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
-            className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
-          <div className={shellStyles.mobileContent}><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
-        </TocynDialog>
-
-      {/* Main content */}
-      <div className={shellStyles.main}>
         <header className={shellStyles.header}>
           <ParkButton
             type="button"
@@ -301,7 +324,7 @@ function LayoutContent() {
 
           <span className={shellStyles.pageTitle} aria-label={`Current page: ${title}`}>{title}</span>
 
-          <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
+          <div className={shellStyles.headerSearch}><GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} /></div>
 
           <ParkPopover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <ParkPopover.Trigger asChild>
@@ -350,7 +373,7 @@ function LayoutContent() {
             </ParkPopover.Positioner>
           </ParkPopover.Root>
 
-          <UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} navigationFocus={() => main.current} />
+          <div ref={setHeaderPersonaHost} className={shellStyles.headerPersonaHost} />
 
           {!isConnected && <ParkPopover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
           <div className={shellStyles.connectionWrap}>
@@ -358,13 +381,14 @@ function LayoutContent() {
             <ParkButton
               type="button"
               ref={connectionTrigger}
+              aria-label="Disconnected"
               aria-expanded={showConnDetails}
               aria-controls={connectionId}
               className={shellStyles.connectionButton}
             >
-              <WifiOff className={shellStyles.smallIcon} />
-              <span>Disconnected</span>
-              <ChevronDown className={cn(shellStyles.connectionChevron, showConnDetails && css({ transform: 'rotate(180deg)' }))} />
+              <WifiOff aria-hidden="true" className={shellStyles.smallIcon} />
+              <span className={shellStyles.connectionLabel}>Disconnected</span>
+              <ChevronDown aria-hidden="true" className={cn(shellStyles.connectionChevron, showConnDetails && css({ transform: 'rotate(180deg)' }))} />
             </ParkButton></ParkPopover.Trigger>
 
             <ParkPopover.Positioner>
@@ -395,11 +419,28 @@ function LayoutContent() {
           </ParkPopover.Root>}
           {connectionRecoveryMessage && <ParkVisuallyHidden role="status" aria-live="polite">{connectionRecoveryMessage}</ParkVisuallyHidden>}
         </header>
+        <div className={shellStyles.body}>
+          <aside className={shellStyles.sidebarDesktop}>
+            <SidebarContent personaHost={setSidebarPersonaHost} />
+          </aside>
+          <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
+          labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
+          finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
+          data-tocyn-dialog-edge=""
+          className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
+          <ParkVisuallyHidden id={`${mobileDialogId}-title`}>Navigation</ParkVisuallyHidden>
+          <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
+            className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
+          <div className={shellStyles.mobileContent}><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
+          </TocynDialog>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn(shellStyles.content, isInboxRoute ? shellStyles.contentInbox : shellStyles.contentStandard, !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && shellStyles.contentPadded)}>
-          <Outlet />
-        </main>
-      </div>
+          <div className={shellStyles.main}>
+            <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn(shellStyles.content, isInboxRoute ? shellStyles.contentInbox : shellStyles.contentStandard, !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && shellStyles.contentPadded)}>
+              <Outlet />
+            </main>
+          </div>
+        </div>
+        {createPortal(<UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} desktop={desktopPersona} labelled={preferences.navigation === 'labelled'} open={accountMenuOpen} onOpenChange={setAccountMenuOpen} />, personaPortal)}
     </div>
   );
 }

@@ -93,8 +93,10 @@ it('keeps the active inbox route and retry action after workspace autosave fails
 it('shows malformed batch SLA data as unavailable without asserting a breach', async () => {
   stubApi(true, false);
   showInbox();
-  await screen.findByRole('option', { name: /Saved workspace result/ });
+  const row = await screen.findByRole('option', { name: /Saved workspace result/ });
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => url === '/api/ticket-sla/projections')).toBe(true));
   expect(await screen.findByLabelText('Service level unavailable')).toBeInTheDocument();
-  expect(screen.queryByText('Overdue')).not.toBeInTheDocument();
+  expect(within(row).queryByText('Overdue')).not.toBeInTheDocument();
+  const metricBand = document.querySelector('[data-part="inbox-page-metrics"]') as HTMLElement;
+  expect(within(metricBand).getByText('Overdue').parentElement).toHaveTextContent('—');
 });

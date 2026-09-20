@@ -85,6 +85,13 @@ async function typeRichReply(value: string) {
   await userEvent.type(editor, value, { skipClick: true });
   return editor;
 }
+function pointDropAt(editor: HTMLElement) {
+  // JSDOM does not provide elementFromPoint, which ProseMirror calls before a
+  // file drop can bubble to the composer's attachment handler.
+  const prior = Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
+  Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => editor });
+  return () => prior ? Object.defineProperty(document, 'elementFromPoint', prior) : Reflect.deleteProperty(document, 'elementFromPoint');
+}
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
   ticket=initialTicket();vi.stubGlobal('WebSocket',Socket);vi.stubGlobal('alert',vi.fn());
@@ -797,14 +804,43 @@ it('uploads dropped and pasted images through the existing authenticated attachm
     return json(ticket);
   });
   showDetail(); await screen.findByText('Customer question');
-  const composer = screen.getByLabelText('Rich message composer');
+  await chooseSelect('Message format', 'Markdown');
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  expect(editor).toHaveAttribute('contenteditable', 'true');
   const dropped = new File(['png'], 'dropped.png', { type: 'image/png' });
   const pasted = new File(['webp'], 'pasted.webp', { type: 'image/webp' });
-  fireEvent.drop(composer, { dataTransfer: { files: [dropped] } });
-  fireEvent.paste(composer, { clipboardData: { files: [pasted] } });
+  const restorePoint = pointDropAt(editor);
+  try {
+    fireEvent.drop(editor, { dataTransfer: { files: [dropped], types: ['Files'], getData: () => '' } });
+    fireEvent.paste(editor, { clipboardData: { files: [pasted], types: ['Files'], getData: () => '' } });
+  } finally { restorePoint(); }
   await waitFor(() => expect(uploaded).toEqual([dropped, pasted]));
   expect(screen.getByRole('button', { name: 'Remove dropped.png' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Remove pasted.webp' })).toBeInTheDocument();
+});
+
+it.each(['drop', 'paste'] as const)('rejects %s images in ProseMirror without uploading them', async action => {
+  let uploads = 0;
+  transport(path => {
+    if (path === '/api/attachments/upload') uploads += 1;
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  await chooseSelect('Message format', 'Markdown');
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  const rejected = action === 'drop'
+    ? new File(['svg'], 'unsupported.svg', { type: 'image/svg+xml' })
+    : new File(['synthetic'], 'oversized.png', { type: 'image/png' });
+  if (action === 'paste') Object.defineProperty(rejected, 'size', { value: 10 * 1024 * 1024 + 1 });
+  const restorePoint = pointDropAt(editor);
+  try {
+    if (action === 'drop') fireEvent.drop(editor, { dataTransfer: { files: [rejected], types: ['Files'], getData: () => '' } });
+    else fireEvent.paste(editor, { clipboardData: { files: [rejected], types: ['Files'], getData: () => '' } });
+  } finally { restorePoint(); }
+  expect(await screen.findByText(/1 image was not attached/)).toBeInTheDocument();
+  expect(uploads).toBe(0);
+  expect(screen.queryByRole('button', { name: `Remove ${rejected.name}` })).toBeNull();
+  expect(editor.querySelector('img, [data-tocyn-image]')).toBeNull();
 });
 
 it('promotes a completed upload in one committed attachment row and keeps it after draft save', async () => {

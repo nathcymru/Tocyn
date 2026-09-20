@@ -189,7 +189,7 @@ export const GroupsPage: React.FC = () => {
           </ParkDialog.Body>
           <ParkDialog.Footer>
             <ParkButton type="button" variant="outline" ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</ParkButton>
-            <ParkButton type="button" colorPalette="red" loading={deleting} loadingText="Deleting group…" onClick={handleDeleteGroup}>Delete group</ParkButton>
+            <ParkButton type="button" variant="outline" colorPalette="red" loading={deleting} loadingText="Deleting group…" onClick={handleDeleteGroup}>Delete group</ParkButton>
           </ParkDialog.Footer>
       </TocynDialog>
 

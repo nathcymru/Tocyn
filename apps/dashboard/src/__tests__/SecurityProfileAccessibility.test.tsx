@@ -61,7 +61,9 @@ it.each(['agent','admin'])('does not expose disabling mandatory MFA for %s',role
 it('confirms optional disabling with safe focus, blocks pending dismissal and retains enabled state after failure',async()=>{
   useAuthStore.getState().setAuth('synthetic-session',{...user,role:'customer',mfa_enabled:true});
   let reject!:(error:Error)=>void;vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise((_resolve,failure)=>{reject=failure;}));
-  render(<SecurityProfilePage/>);const trigger=screen.getByRole('button',{name:'Disable 2FA'});trigger.focus();fireEvent.click(trigger);
+  render(<SecurityProfilePage/>);const trigger=screen.getByRole('button',{name:'Disable 2FA'});
+  expect(trigger).toHaveClass('button', 'button--variant_outline', 'color-palette_red');
+  trigger.focus();fireEvent.click(trigger);
   const dialog=await screen.findByRole('dialog',{name:'Disable two-factor authentication?'});
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());
   fireEvent.click(within(dialog).getByRole('button',{name:'Disable 2FA'}));fireEvent.keyDown(dialog,{key:'Escape'});

@@ -55,6 +55,7 @@ export default {
     ':root[data-tocyn-focus-mode="true"] [data-tocyn-focus-decoration]': { display: 'none' },
     '[data-tocyn-density="compact"] main[aria-label="Workspace"]': { padding: '1rem' },
     '[data-tabular]': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
+    '.table__root': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
   },
 
   include: ['./src/**/*.{ts,tsx}', '../../apps/dashboard/src/**/*.{ts,tsx}', '../../apps/portal/src/**/*.{ts,tsx}', '../../apps/widget/src/**/*.{ts,tsx}'],
@@ -119,8 +120,8 @@ export default {
 
             subtle: {
               value: {
-                _light: "{colors.gray.10}",
-                _dark: "{colors.gray.10}"
+                _light: "{colors.gray.11}",
+                _dark: "{colors.gray.11}"
               }
             }
           },
@@ -151,6 +152,7 @@ export default {
         fonts: {
           primary: { value: "'Atkinson Hyperlegible', sans-serif" },
           tabular: { value: "'Inter', sans-serif" },
+          code: { value: "'Inter', sans-serif" },
         },
 
         radii: {
@@ -529,15 +531,21 @@ export default {
         },
         shell: {
           className: 'shell',
-          slots: ['root', 'sidebar', 'main', 'header', 'pageTitle', 'content', 'navigation', 'navigationLink', 'navigationLinkLabelled', 'navigationLinkIcon', 'navigationIcon', 'sidebarDesktop', 'sidebarLabelled', 'sidebarCompact', 'logoLink', 'logo', 'mobileDialog', 'mobileDialogLabelled', 'mobileDialogCompact', 'mobileContent', 'mobileClose', 'mobileTrigger', 'personaTrigger', 'personaAvatarWrap', 'personaAvatar', 'personaStatus', 'accountMenu', 'accountSummary', 'accountSummaryName', 'accountSummaryEmail', 'menuItem', 'activityTrigger', 'activityPopover', 'activityBadge', 'activityHeader', 'activityTitle', 'activityRefresh', 'activityDismiss', 'activityLoading', 'activityEmpty', 'activityScroll', 'activityList', 'activityRow', 'activityItem', 'activitySubject', 'activityMoreWrap', 'activityMore', 'connectionWrap', 'connectionPopover', 'connectionButton', 'connectionDot', 'connectionChevron', 'reconnectDivider', 'reconnectButton', 'icon', 'menuIcon', 'smallIcon', 'dismissIcon', 'rootInbox', 'rootStandard', 'contentInbox', 'contentStandard', 'contentPadded'],
+          slots: ['root', 'body', 'sidebar', 'sidebarFooter', 'settingsNavigation', 'sidebarPersonaHost', 'headerPersonaHost', 'headerSearch', 'main', 'header', 'pageTitle', 'content', 'navigation', 'navigationLink', 'navigationLinkLabelled', 'navigationLinkIcon', 'navigationIcon', 'sidebarDesktop', 'sidebarLabelled', 'sidebarCompact', 'logoLink', 'logo', 'mobileDialog', 'mobileDialogLabelled', 'mobileDialogCompact', 'mobileContent', 'mobileClose', 'mobileTrigger', 'personaTrigger', 'personaTriggerLabelled', 'personaAvatarWrap', 'personaAvatar', 'personaStatus', 'personaDetails', 'personaName', 'personaPresence', 'accountMenu', 'accountSummary', 'accountSummaryName', 'accountSummaryEmail', 'menuItem', 'activityTrigger', 'activityPopover', 'activityBadge', 'activityHeader', 'activityTitle', 'activityRefresh', 'activityDismiss', 'activityLoading', 'activityEmpty', 'activityScroll', 'activityList', 'activityRow', 'activityItem', 'activitySubject', 'activityMoreWrap', 'activityMore', 'connectionWrap', 'connectionPopover', 'connectionButton', 'connectionLabel', 'connectionDot', 'connectionChevron', 'reconnectDivider', 'reconnectButton', 'icon', 'menuIcon', 'smallIcon', 'dismissIcon', 'rootInbox', 'rootStandard', 'contentInbox', 'contentStandard', 'contentPadded'],
           base: {
-            root: { display: 'flex', width: '100%', minHeight: '100dvh', background: 'bg.canvas', color: 'text.primary', fontFamily: 'primary' },
+            root: { display: 'flex', width: '100%', minHeight: '100dvh', flexDirection: 'column', overflow: 'hidden', background: 'bg.canvas', color: 'text.primary', fontFamily: 'primary' },
+            body: { display: 'flex', flex: '1', minWidth: '0', minHeight: '0', overflow: 'hidden' },
             sidebar: { display: 'flex', boxSizing: 'border-box', height: '100%', flexDirection: 'column', flexShrink: '0', width: '4rem', minHeight: '100%', background: 'bg.default', color: 'fg.default', borderRight: '1px solid', borderColor: 'border.default', padding: '1rem 0.5rem' },
             main: { display: 'flex', flex: '1', minWidth: '0', minHeight: '0', flexDirection: 'column', background: 'bg.canvas' },
             header: { display: 'flex', flexWrap: 'wrap', flexShrink: '0', minHeight: '4rem', alignItems: 'center', gap: '0.5rem 1rem', borderBottom: '1px solid', borderColor: 'border.default', background: 'bg.surface', padding: '0.5rem 1rem' },
+            headerSearch: { display: 'flex', order: { base: '1', md: '0' }, flex: { base: '0 0 100%', md: '1' }, minWidth: '0', maxWidth: { base: '100%', md: '36rem' }, marginInline: { md: 'auto' } },
             pageTitle: { display: { base: 'none', md: 'block' }, minWidth: '0', maxWidth: { base: '8rem', sm: '14rem', lg: '18rem' }, flexShrink: '0', margin: '0', overflow: 'hidden', color: 'text.primary', fontSize: '1rem', fontWeight: '700', lineHeight: '1.25', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
             content: { display: 'flex', flex: '1', minWidth: '0', minHeight: '0', flexDirection: 'column', '&:focus': { outline: 'none' } },
             navigation: { display: 'flex', flex: '1', width: '100%', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem' },
+            sidebarFooter: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', gap: '0.5rem', borderTop: '1px solid', borderColor: 'border.default', paddingTop: '0.75rem' },
+            settingsNavigation: { display: 'flex', width: '100%', justifyContent: 'center' },
+            sidebarPersonaHost: { display: 'flex', minWidth: '0', width: '100%', minHeight: '2.75rem', alignItems: 'center', justifyContent: 'center', '& > div': { display: 'flex', width: '100%', justifyContent: 'center' } },
+            headerPersonaHost: { display: { base: 'inline-flex', lg: 'none' }, flexShrink: '0', alignItems: 'center' },
             navigationLink: { display: 'inline-flex', minWidth: '2.75rem', minHeight: '2.75rem', alignItems: 'center', justifyContent: 'center', borderRadius: 'l2', color: 'fg.muted', padding: '0.5rem', transition: 'colors', _hover: { background: 'bg.subtle', color: 'fg.default' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, '&[aria-current="page"]': { background: 'bg.subtle', color: 'fg.default', fontWeight: 'semibold' } },
             navigationLinkLabelled: { width: '100%', justifyContent: 'flex-start', gap: '0.75rem', padding: '0.5rem 0.75rem' },
             navigationLinkIcon: { position: 'relative', width: '100%', aspectRatio: '1' },
@@ -554,9 +562,13 @@ export default {
             mobileClose: { padding: '0.5rem' },
             mobileTrigger: { display: { base: 'inline-flex', lg: 'none' }, padding: '0.5rem' },
             personaTrigger: { position: 'relative', display: 'inline-flex', flexShrink: '0', alignItems: 'center', justifyContent: 'center', minWidth: '2.75rem', minHeight: '2.75rem', padding: '0.125rem' },
+            personaTriggerLabelled: { width: '100%', minWidth: '0', justifyContent: 'flex-start', gap: '0.75rem', padding: '0.25rem 0.5rem' },
             personaAvatarWrap: { position: 'relative', display: 'inline-flex', width: '2.5rem', height: '2.5rem', flexShrink: '0', alignItems: 'center', justifyContent: 'center' },
             personaAvatar: { width: '2.5rem', height: '2.5rem' },
-            personaStatus: { position: 'absolute', insetBlockEnd: '-0.0625rem', insetInlineEnd: '-0.0625rem', width: '0.75rem', height: '0.75rem', borderRadius: 'full', borderWidth: '2px', borderColor: 'bg.surface', background: 'green.9' },
+            personaStatus: { position: 'absolute', insetBlockEnd: '-0.0625rem', insetInlineEnd: '-0.0625rem', width: '0.75rem', height: '0.75rem', borderRadius: 'full', borderWidth: '2px', borderColor: { base: 'bg.surface', lg: 'bg.default' }, background: 'green.9' },
+            personaDetails: { display: 'flex', minWidth: '0', flexDirection: 'column', alignItems: 'flex-start', gap: '0.125rem', overflow: 'hidden', textAlign: 'left' },
+            personaName: { maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 'medium' },
+            personaPresence: { color: 'fg.muted', fontSize: '0.75rem', lineHeight: '1rem' },
             accountMenu: { zIndex: '60', boxSizing: 'border-box', minWidth: '15rem', maxWidth: 'min(22rem, calc(100vw - 2rem))', overflow: 'hidden', padding: '0.375rem' },
             accountSummary: { display: 'flex', minWidth: '0', height: 'auto', minHeight: '3.5rem', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: '0.125rem', margin: '0 0 0.25rem', padding: '0.5rem 0.75rem 0.375rem' },
             accountSummaryName: { minWidth: '0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
@@ -580,9 +592,10 @@ export default {
             activityMore: { width: '100%', padding: '0.5rem 0.75rem' },
             connectionWrap: { position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem' },
             connectionPopover: { zIndex: '50', width: '16rem', padding: '1rem' },
-            connectionButton: { display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.375rem 0.75rem' },
+            connectionButton: { display: 'flex', width: { base: '2.75rem', sm: 'auto' }, minWidth: '2.75rem', minHeight: '2.75rem', alignItems: 'center', justifyContent: 'center', gap: { base: '0', sm: '0.5rem' }, padding: { base: '0', sm: '0.375rem 0.75rem' } },
+            connectionLabel: { display: { base: 'none', sm: 'inline' } },
             connectionDot: { width: '0.5rem', height: '0.5rem', borderRadius: 'full', '&[data-state="connected"]': { background: 'accent.primary' }, '&[data-state="disconnected"]': { background: 'critical' } },
-            connectionChevron: { width: '0.875rem', height: '0.875rem' },
+            connectionChevron: { display: { base: 'none', sm: 'inline' }, width: '0.875rem', height: '0.875rem' },
             reconnectDivider: { marginTop: '1rem', paddingTop: '1rem' },
             reconnectButton: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', padding: '0.5rem 0.75rem' },
             icon: { width: '1.5rem', height: '1.5rem' },

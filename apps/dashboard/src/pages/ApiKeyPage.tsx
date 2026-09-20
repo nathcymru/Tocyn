@@ -348,7 +348,7 @@ export function ApiKeyPage() {
             </ParkDialog.Body>}
             <ParkDialog.Footer>
               <ParkButton type="button" ref={revokeCancel} variant="outline" disabled={revoking} onClick={() => { if (!revokeGuard.current) setRevokeOpen(false); }}>Cancel</ParkButton>
-              <ParkButton type="button" variant="solid" colorPalette="red" disabled={revoking} onClick={handleDelete}>{revoking ? 'Revoking...' : 'Revoke key'}</ParkButton>
+              <ParkButton type="button" variant="outline" colorPalette="red" disabled={revoking} onClick={handleDelete}>{revoking ? 'Revoking...' : 'Revoke key'}</ParkButton>
             </ParkDialog.Footer>
           </ParkDialog.Content>
         </ParkDialog.Positioner>

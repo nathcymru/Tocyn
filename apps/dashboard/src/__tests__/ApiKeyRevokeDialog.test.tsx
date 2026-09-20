@@ -19,7 +19,9 @@ it('cancels revocation and returns focus without sending a mutation',async()=>{
 });
 it('retains a failed target, blocks duplicate/pending dismissal, and removes only an acknowledged revocation',async()=>{
  let reject!:(error:Error)=>void;api.delete.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
- render(<ApiKeyPage/>);const {dialog}=await confirm();const revoke=within(dialog).getByRole('button',{name:'Revoke key'});fireEvent.click(revoke);fireEvent.click(revoke);expect(api.delete).toHaveBeenCalledTimes(1);
+ render(<ApiKeyPage/>);const {dialog}=await confirm();const revoke=within(dialog).getByRole('button',{name:'Revoke key'});
+ expect(revoke).toHaveClass('button', 'button--variant_outline', 'color-palette_red');
+ fireEvent.click(revoke);fireEvent.click(revoke);expect(api.delete).toHaveBeenCalledTimes(1);
  expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
  await act(async()=>reject(new Error('synthetic untrusted failure text')));const failure=await screen.findByRole('alert');expect(failure).toHaveClass('alert__root');expect(failure).toHaveTextContent('could not be confirmed');expect(screen.queryByText('synthetic untrusted failure text')).not.toBeInTheDocument();
  fireEvent.click(within(dialog).getByRole('button',{name:'Revoke key'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

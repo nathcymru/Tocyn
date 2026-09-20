@@ -10,8 +10,32 @@ const shellSlotNames = [
     "shell__root"
   ],
   [
+    "body",
+    "shell__body"
+  ],
+  [
     "sidebar",
     "shell__sidebar"
+  ],
+  [
+    "sidebarFooter",
+    "shell__sidebarFooter"
+  ],
+  [
+    "settingsNavigation",
+    "shell__settingsNavigation"
+  ],
+  [
+    "sidebarPersonaHost",
+    "shell__sidebarPersonaHost"
+  ],
+  [
+    "headerPersonaHost",
+    "shell__headerPersonaHost"
+  ],
+  [
+    "headerSearch",
+    "shell__headerSearch"
   ],
   [
     "main",
@@ -98,6 +122,10 @@ const shellSlotNames = [
     "shell__personaTrigger"
   ],
   [
+    "personaTriggerLabelled",
+    "shell__personaTriggerLabelled"
+  ],
+  [
     "personaAvatarWrap",
     "shell__personaAvatarWrap"
   ],
@@ -108,6 +136,18 @@ const shellSlotNames = [
   [
     "personaStatus",
     "shell__personaStatus"
+  ],
+  [
+    "personaDetails",
+    "shell__personaDetails"
+  ],
+  [
+    "personaName",
+    "shell__personaName"
+  ],
+  [
+    "personaPresence",
+    "shell__personaPresence"
   ],
   [
     "accountMenu",
@@ -204,6 +244,10 @@ const shellSlotNames = [
   [
     "connectionButton",
     "shell__connectionButton"
+  ],
+  [
+    "connectionLabel",
+    "shell__connectionLabel"
   ],
   [
     "connectionDot",

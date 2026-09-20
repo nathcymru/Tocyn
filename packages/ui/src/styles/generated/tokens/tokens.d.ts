@@ -25,7 +25,7 @@ export type SpacingToken = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" |
 
 export type AnimationToken = "spin" | "ping" | "pulse" | "bounce"
 
-export type FontToken = "sans" | "serif" | "mono" | "primary" | "tabular"
+export type FontToken = "sans" | "serif" | "mono" | "primary" | "tabular" | "code"
 
 export type RadiusToken = "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "full" | "l1" | "l2" | "l3" | "control" | "panel"
 

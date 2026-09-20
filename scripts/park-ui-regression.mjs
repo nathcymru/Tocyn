@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { fileURLToPath } from 'node:url';
 import { parkLinkCompositionFailures } from './park-link-composition.mjs';
 import { parkRawLabelFailure } from './park-raw-label.mjs';
+import { parkTailwindClassFailure } from './park-tailwind-class.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = path.join(root, 'packages/ui');
@@ -133,6 +134,8 @@ function visit(relative) {
         }
       }
       if (ts.isJsxAttribute(node) && node.name.text === 'className' && node.initializer) {
+        const tailwindFailure = parkTailwindClassFailure(relative, node, jsx);
+        if (tailwindFailure) failures.push(tailwindFailure);
         const literals = current => {
           if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
             for (const name of current.text.split(/\s+/)) if (name.startsWith('tocyn-')) classes.add(name);

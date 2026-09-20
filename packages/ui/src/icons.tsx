@@ -8,13 +8,8 @@ import {
   List, ListBullets, MagnifyingGlass, Paperclip as PaperclipGlyph, PaperPlaneTilt, PencilSimple, Plus as PlusGlyph,
   Shield as ShieldGlyph, ShieldCheck as ShieldCheckGlyph, SignOut, TextT, Textbox, Ticket as TicketGlyph, TreeStructure,
   Trash, ToggleLeft, ToggleRight, User as UserGlyph, UserPlus, Users as UsersGlyph, Warning, WarningCircle,
-  WifiHigh, X as XGlyph,
+  WifiHigh, WifiSlash, X as XGlyph,
 } from '@phosphor-icons/react';
-
-/** Park Icon contract for custom SVGs and library icons. */
-export function ParkIcon({ children, className, size = 20, ...props }: React.SVGProps<SVGSVGElement> & { size?: number; children?: React.ReactNode }) {
-  return <svg {...props} width={size} height={size} viewBox="0 0 24 24" className={[iconRecipe(), className].filter(Boolean).join(' ')} aria-hidden={props['aria-label'] ? undefined : true}>{children}</svg>;
-}
 
 /** Shared icon boundary: application icons are duotone and inherit semantic colour. */
 function duotone(Icon: any) {
@@ -86,6 +81,7 @@ export const IconUser = duotone(UserGlyph);
 export const IconUserPlus = duotone(UserPlus);
 export const IconUsers = duotone(UsersGlyph);
 export const IconWifi = duotone(WifiHigh);
+export const IconWifiOff = duotone(WifiSlash);
 export const IconWpforms = duotone(Textbox);
 export const IconXmark = duotone(XGlyph);
 
@@ -129,7 +125,7 @@ export const Book = IconBook;
 export const BooksIcon = IconBooks;
 export const HouseIcon = IconHouse;
 export const Menu = IconBars;
-export const WifiOff = IconWifi;
+export const WifiOff = IconWifiOff;
 export const Bell = IconBell;
 export const ChevronDown = IconChevronDown;
 export const RefreshCw = IconArrowsRotate;

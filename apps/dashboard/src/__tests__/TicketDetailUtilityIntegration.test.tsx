@@ -93,3 +93,22 @@ it('unmounts the active reference dialog and discards an unresolved copy result 
   fireEvent.click(within(currentDialog).getByRole('button',{name:'Close ticket reference'}));
   await waitFor(()=>expect(currentOpener).toHaveFocus());
 });
+
+it('uses Park Dialog anatomy and restores the reference action after Escape', async () => {
+  show(id => json(manifest(id)));
+  fireEvent.click(await screen.findByText('More ticket actions'));
+  const opener = await screen.findByRole('button', { name: 'View ticket reference' });
+  opener.focus();
+  fireEvent.click(opener);
+  const dialog = await screen.findByRole('dialog', { name: 'Ticket reference' });
+  expect(dialog).toHaveAttribute('data-scope', 'dialog');
+  expect(dialog).toHaveAttribute('data-part', 'content');
+  expect(dialog).toHaveClass('dialog__content');
+  expect(dialog.querySelector('[data-part="title"]')).toHaveTextContent('Ticket reference');
+  expect(dialog.querySelector('[data-part="description"]')).toHaveTextContent('Use this reference');
+  const close = within(dialog).getByRole('button', { name: 'Close ticket reference' });
+  await waitFor(() => expect(close).toHaveFocus());
+  fireEvent.keyDown(close, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Ticket reference' })).not.toBeInTheDocument());
+  await waitFor(() => expect(opener).toHaveFocus());
+});

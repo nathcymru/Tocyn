@@ -63,4 +63,10 @@ describe('Tocyn theme contract', () => {
     expect(() => resolveTocynTheme({ tenant: accessor })).toThrow(TypeError);
     expect(Object.isFrozen(resolveTocynTheme().variables)).toBe(true);
   });
+
+  it('requires at least 4.5:1 text contrast on every content surface', () => {
+    // #6e6e6e reaches only 4.48:1 against the muted light surface.
+    expect(() => resolveTocynTheme({ tenant: { colorTextMuted: '#6e6e6e' } })).toThrow(TypeError);
+    expect(resolveTocynTheme({ tenant: { colorTextMuted: '#6d6d6d' } }).tokens.colorTextMuted).toBe('#6d6d6d');
+  });
 });

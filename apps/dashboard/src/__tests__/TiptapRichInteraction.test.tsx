@@ -7,9 +7,19 @@ import { RichComposer, TiptapMarkdownField } from '../components/RichComposer';
 it('disables knowledge formatting actions while the editor is read-only', () => {
   render(<TiptapMarkdownField id="knowledge-readonly" value="**Saved**" onChange={() => undefined} readOnly />);
   expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('contenteditable', 'false');
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveAttribute('aria-readonly', 'true');
   for (const name of ['Add bold text (ctrl + b)', 'Add italic text (ctrl + i)', 'Add heading', 'Add bullet list', 'Add code block']) {
     expect(screen.getByRole('button', { name })).toBeDisabled();
   }
+});
+
+it('removes the knowledge editor read-only announcement when editing resumes', () => {
+  const view = render(<TiptapMarkdownField id="knowledge-resume" value="Saved" onChange={() => undefined} readOnly />);
+  const editor = screen.getByRole('textbox', { name: 'Content (Markdown)' });
+  expect(editor).toHaveAttribute('aria-readonly', 'true');
+  view.rerender(<TiptapMarkdownField id="knowledge-resume" value="Saved" onChange={() => undefined} readOnly={false} />);
+  expect(editor).toHaveAttribute('contenteditable', 'true');
+  expect(editor).not.toHaveAttribute('aria-readonly');
 });
 
 it('disables reply formatting actions while the composer is read-only', () => {

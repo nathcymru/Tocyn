@@ -435,6 +435,10 @@ const tokens = {
     "value": "'Inter', sans-serif",
     "variable": "var(--fonts-tabular)"
   },
+  "fonts.code": {
+    "value": "'Inter', sans-serif",
+    "variable": "var(--fonts-code)"
+  },
   "radii.xs": {
     "value": "0.125rem",
     "variable": "var(--radii-xs)"

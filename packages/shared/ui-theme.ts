@@ -140,7 +140,7 @@ export function resolveTocynTheme(input: TocynThemeInput = {}): ResolvedTocynThe
     const textColours = surface === tokens.colorSelected
       ? [tokens.colorText, tokens.colorCritical, tokens.colorQuiet]
       : [tokens.colorText, tokens.colorTextMuted, tokens.colorCritical, tokens.colorQuiet];
-    if (textColours.some(text => contrast(text, surface) < 4.3)
+    if (textColours.some(text => contrast(text, surface) < 4.5)
       || contrast(tokens.colorFocus, surface) < 3) throw new TypeError('Tocyn theme colours do not meet contrast requirements');
   }
   const variables = Object.fromEntries(Object.entries(tokens).map(([key, value]) => [tokenName(key), value])) as ResolvedTocynTheme['variables'];

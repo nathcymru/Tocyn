@@ -144,7 +144,9 @@ it('cancels group deletion safely and locks failed/retried deletion until comple
  let dialog=await screen.findByRole('dialog',{name:'Delete group: Support'});const cancel=within(dialog).getByRole('button',{name:'Cancel'});
  await waitFor(()=>expect(cancel).toHaveFocus());fireEvent.click(cancel);await waitFor(()=>expect(opener).toHaveFocus());expect(fixture.delete).not.toHaveBeenCalled();
  fireEvent.click(opener);dialog=await screen.findByRole('dialog',{name:'Delete group: Support'});
- const remove=within(dialog).getByRole('button',{name:'Delete group'});fireEvent.click(remove);fireEvent.click(remove);expect(fixture.delete).toHaveBeenCalledTimes(1);
+ const remove=within(dialog).getByRole('button',{name:'Delete group'});
+ expect(remove).toHaveClass('button', 'button--variant_outline', 'color-palette_red');
+ fireEvent.click(remove);fireEvent.click(remove);expect(fixture.delete).toHaveBeenCalledTimes(1);
  expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
  await act(async()=>reject(new Error('synthetic failure')));const deleteError=await screen.findByRole('alert');
  expect(deleteError).toHaveClass('alert__root');expect(deleteError).toHaveTextContent('no active tickets');
