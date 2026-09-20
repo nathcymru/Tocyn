@@ -227,7 +227,7 @@ export function SecurityProfilePage() {
                         Scan the QR code below with your authenticator app (like Google Authenticator, Authy, or Microsoft Authenticator).
                       </p>
                       <div className={securityStyles.qr}>
-                        <QRCodeSVG value={setupData.provisioning_uri} size={200} />
+                        <QRCodeSVG role="img" aria-label="Authenticator setup QR code; a text key follows" value={setupData.provisioning_uri} size={200} />
                       </div>
                       <p className={securityStyles.stepCopy}>
                         If you can't scan the QR code, you can manually enter this secret key:<br/>

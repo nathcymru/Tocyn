@@ -14,6 +14,15 @@ export function LoginPage() {
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const submitButton = React.useRef<HTMLButtonElement>(null);
+  const restoreSubmitFocus = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!loading && restoreSubmitFocus.current) {
+      restoreSubmitFocus.current = false;
+      submitButton.current?.focus();
+    }
+  }, [loading]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +35,7 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+    restoreSubmitFocus.current = document.activeElement === submitButton.current;
     setError('');
     setLoading(true);
 
@@ -97,9 +107,10 @@ export function LoginPage() {
             />
           </ParkField>
           <ParkButton
+            ref={submitButton}
             type="submit"
             variant="solid"
-            aria-disabled={loading}
+            disabled={loading}
             className={authStyles.submit}
           >
             {loading ? 'Signing in...' : 'Sign In'}
