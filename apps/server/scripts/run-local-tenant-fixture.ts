@@ -12,6 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { createLocalFixtureBootstrap } from './local-tenant-fixture';
+import { configureLocalBetaTicketAdmission, initializeLocalBetaTicketAdmission } from './local-beta-ticket-admission';
 
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = resolve(serverRoot, '../..');
@@ -142,7 +143,7 @@ async function main(): Promise<void> {
   assert.equal(config.vars?.ENVIRONMENT, 'local');
   assert.ok(config.d1_databases?.every((binding: { remote?: boolean }) => binding.remote === false));
   assert.ok(config.r2_buckets?.every((binding: { remote?: boolean }) => binding.remote === false));
-  if (localBeta) config.vars.LOCAL_BETA_ENABLED = 'true';
+  configureLocalBetaTicketAdmission(config, localBeta);
   config.main = join(serverRoot, 'src/local-index.ts');
   config.d1_databases[0].migrations_dir = join(serverRoot, 'migrations');
   writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
@@ -150,7 +151,7 @@ async function main(): Promise<void> {
   const secrets = { JWT_SECRET: localSecret(), APP_MASTER_KEY: localSecret(), MFA_ENCRYPTION_KEY: localSecret() };
   writeFileSync(join(temporary, '.dev.vars'), Object.entries(secrets).map(([key, value]) => `${key}=${value}`).join('\n') + '\n', { mode: 0o600 });
   localWrangler(['d1', 'migrations', 'apply', 'tocyn-local', '--local', '--persist-to', state]);
-  const bootstrap = await createLocalFixtureBootstrap(secrets);
+  const bootstrap = await createLocalFixtureBootstrap(secrets, { priorityReview: localBeta });
   const fixtureSql = join(temporary, 'fixture.sql');
   writeFileSync(fixtureSql, bootstrap.sql, { mode: 0o600 });
   localWrangler(['d1', 'execute', 'tocyn-local', '--local', '--persist-to', state, '--file', fixtureSql]);
@@ -168,7 +169,9 @@ async function main(): Promise<void> {
         invitations.push({tenantId,kind:'api-key',id:key.id});
         betaApiKeys.push({tenantId,apiKey:key.apiKey});
       }
-      new LocalBetaOperator(db).initialize({runId:'local-beta-'+randomBytes(8).toString('hex'),tenants:['fixture-tenant-a','fixture-tenant-b'],invitations},0);
+      const runId = 'local-beta-'+randomBytes(8).toString('hex');
+      new LocalBetaOperator(db).initialize({runId,tenants:['fixture-tenant-a','fixture-tenant-b'],invitations},0);
+      initializeLocalBetaTicketAdmission(db, runId);
     } finally { db.close(); }
   }
 
