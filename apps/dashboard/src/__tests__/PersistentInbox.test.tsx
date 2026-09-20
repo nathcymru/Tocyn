@@ -35,9 +35,10 @@ const tickets=Array.from({length:20},(_,index)=>({
   created_at:'2026-09-11T00:00:00Z',updated_at:`2026-09-11T00:${String(index).padStart(2,'0')}:00Z`,
 }));
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
-const workspace=(selectedTicketId:string|null=null)=>({revision:4,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel:'conversation',updatedAt:'2026-09-11T00:00:00Z'});
+const workspace=(selectedTicketId:string|null=null)=>({revision:4,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel:'conversation',splitterRatio:savedRatio,updatedAt:'2026-09-11T00:00:00Z'});
 let client:QueryClient;
 let savedSelection:string|null=null;
+let savedRatio=32;
 
 function Location(){const location=useLocation();return <output data-testid="location">{location.pathname}</output>;}
 function showInbox(entry='/inbox/all',globalSearch=false){
@@ -82,12 +83,12 @@ beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false,refetchInterval:false},mutations:{retry:false}}});
   useAuthStore.setState({token:null,user:null,mfaRequired:false,sessionGeneration:0});
   useAuthStore.getState().setAuth('tenant-session',operator);
-  savedSelection=null;presentation.enabled=true;
+  savedSelection=null;savedRatio=32;presentation.enabled=true;
   detailNavigation.pending=false;
   detailNavigation.flush.mockReset().mockResolvedValue(true);
   vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
     if(url==='/api/workspace/state'&&options.method==='PUT'){
-      const input=JSON.parse(String(options.body));savedSelection=input.selectedTicketId??null;
+      const input=JSON.parse(String(options.body));savedSelection=input.selectedTicketId??null;savedRatio=input.splitterRatio;
       return json({...input,revision:5,updatedAt:'2026-09-11T00:01:00Z'});
     }
     if(url==='/api/workspace/state')return json(workspace(savedSelection));
@@ -111,6 +112,31 @@ it('gives the desktop splitter a 24px hit area and one Park keyboard focus ring'
   expect(separator.className).toContain('before:bg_gray.outline.border');
   separator.focus();
   expect(separator).toHaveFocus();
+});
+
+it('persists a pointer-resized splitter ratio and restores it on a fresh inbox mount',async()=>{
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){
+    return this.dataset.part==='resize-trigger' ? new DOMRect(320,0,24,600) : new DOMRect(0,0,1000,600);
+  });
+  const first=showInbox();
+  await screen.findByRole('listbox',{name:'Conversation list'});
+  const separator=screen.getByRole('separator',{name:'Resize conversation panes'});
+  Object.defineProperties(separator,{
+    setPointerCapture:{configurable:true,value:vi.fn()},
+    hasPointerCapture:{configurable:true,value:()=>true},
+    releasePointerCapture:{configurable:true,value:vi.fn()},
+  });
+  await waitFor(()=>expect(separator).toHaveAttribute('aria-valuenow','32'));
+  fireEvent.pointerDown(separator,{button:0,buttons:1,pointerId:1,pointerType:'mouse',clientX:320,clientY:20});
+  await waitFor(()=>expect(separator).toHaveAttribute('data-dragging'));
+  await act(async()=>{await new Promise(resolve=>window.setTimeout(resolve,0));});
+  fireEvent.pointerMove(document,{button:0,buttons:1,pointerId:1,pointerType:'mouse',clientX:400,clientY:20});
+  await waitFor(()=>expect(separator).toHaveAttribute('aria-valuenow','40'));
+  fireEvent.pointerUp(document,{button:0,buttons:0,pointerId:1,pointerType:'mouse',clientX:400,clientY:20});
+  await waitFor(()=>expect(savedRatio).toBe(40));
+  first.unmount();
+  showInbox();
+  await waitFor(()=>expect(screen.getByRole('separator',{name:'Resize conversation panes'})).toHaveAttribute('aria-valuenow','40'));
 });
 
 it('keeps the 20-result list node, scroll position and roving focus while conversations change',async()=>{

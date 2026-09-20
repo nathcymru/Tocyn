@@ -90,6 +90,7 @@ function InboxWorkspace(){
   const advance = useRef<((id:string)=>void)|null>(null);
   const classificationRefresh = useRef<(() => void)|null>(null);
   const [advanceNotice,setAdvanceNotice] = useState('');
+  const [liveSplitterRatio,setLiveSplitterRatio] = useState<number|null>(null);
   const {data:filters,isLoading:isLoadingFilters}=useFilters();
   const resolveScope = JSON.stringify([assignmentIdentity(), viewId, conversationId, workspace.listQuery, workspace.sort, workspace.filters, filters]);
   const committedResolveScope = useRef(resolveScope);
@@ -111,6 +112,8 @@ function InboxWorkspace(){
   const splitterRatio = Number.isFinite(workspace.splitterRatio)
     ? Math.max(24, Math.min(50, Math.round(workspace.splitterRatio)))
     : 32;
+  // Ark's controlled size follows pointer movement; persistence waits for resize end.
+  const displayedSplitterRatio = liveSplitterRatio ?? splitterRatio;
 
   useEffect(()=>{
     if(workspace.status==='loading'||isLoadingFilters)return;
@@ -136,9 +139,13 @@ function InboxWorkspace(){
   />;
 
   return <ParkSplitter.Root className={page.inboxWorkspace} orientation="horizontal"
-    size={[splitterRatio, 100 - splitterRatio]} keyboardResizeBy={2}
+    size={[displayedSplitterRatio, 100 - displayedSplitterRatio]} keyboardResizeBy={2}
     panels={[{ id: 'inbox-list', minSize: 24, maxSize: 50 }, { id: 'inbox-detail', minSize: 30, maxSize: 76 }]}
+    onResize={({ size }) => {
+      setLiveSplitterRatio(Math.max(24, Math.min(50, Math.round(size[0] ?? splitterRatio))));
+    }}
     onResizeEnd={({ size }) => {
+      setLiveSplitterRatio(null);
       const ratio = Math.max(24, Math.min(50, Math.round(size[0] ?? workspace.splitterRatio)));
       workspace.update({ splitterRatio: ratio });
       // Resize events can arrive after the controller's debounce was cancelled by
