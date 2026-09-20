@@ -275,6 +275,18 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
       WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-waiting-customer'`).first<{definition_id:string;waiting_reason:string;next_action:string}>();
     assert.equal(waiting?.definition_id, 'beta2-awaiting-customer');
     assert.ok(waiting?.waiting_reason && waiting.next_action);
+    const waitingCustomerClock = tenantAClocks.find(clock => clock.ticket_id === 'beta2-waiting-customer');
+    assert.equal(waitingCustomerClock?.stop_reason,'waiting');
+    assert.equal(waitingCustomerClock?.active_since,null);
+    assert.equal(projected.get('beta2-waiting-customer')?.paused,true);
+    const provider = await fixture.db.prepare(`SELECT definition_id,waiting_reason,next_action FROM ticket_support_state
+      WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-waiting-provider'`).first<{definition_id:string;waiting_reason:string;next_action:string}>();
+    assert.equal(provider?.definition_id, 'beta2-awaiting-provider');
+    assert.ok(provider?.waiting_reason && provider.next_action);
+    const waitingProviderClock = tenantAClocks.find(clock => clock.ticket_id === 'beta2-waiting-provider');
+    assert.equal(waitingProviderClock?.stop_reason,'waiting');
+    assert.equal(waitingProviderClock?.active_since,null);
+    assert.equal(projected.get('beta2-waiting-provider')?.paused,true);
 
     const policies = await fixture.db.prepare('SELECT tenant_id,response_target_ms,resolution_target_ms FROM sla_policies ORDER BY tenant_id')
       .all<{ tenant_id: string; response_target_ms: number; resolution_target_ms: number }>();
