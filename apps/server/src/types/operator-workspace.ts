@@ -1,7 +1,8 @@
 export const OPERATOR_WORKSPACE_VIEWS = ['all', 'mine', 'unassigned', 'mentions', 'drafts', 'snoozed', 'needs_action', 'team', 'custom'] as const;
 export type OperatorWorkspaceView = typeof OPERATOR_WORKSPACE_VIEWS[number];
 
-export const OPERATOR_WORKSPACE_SORTS = ['updated_desc', 'updated_asc', 'created_desc', 'created_asc', 'priority_desc', 'priority_asc', 'sla_priority'] as const;
+export const OPERATOR_WORKSPACE_SORTS = ['updated_desc', 'updated_asc', 'created_desc', 'created_asc', 'priority_desc', 'priority_asc',
+  'sla_priority', 'priority_focus', 'priority_criticality', 'priority_commitment'] as const;
 export type OperatorWorkspaceSort = typeof OPERATOR_WORKSPACE_SORTS[number];
 
 export type OperatorDraftMode = 'public' | 'internal';

@@ -1143,15 +1143,18 @@ dashboard.get("/tickets", async (c) => {
   }
   const draftNotExpiredAt = queue.data === 'drafts' && c.env.ENVIRONMENT === 'local' && c.env.LOCAL_BETA_ENABLED === 'true'
     ? new Date(c.env.localNow?.() ?? Date.now()).toISOString() : undefined;
-  if (sort.data === 'sla_priority') {
+  if (sort.data === 'sla_priority' || sort.data === 'priority_focus' || sort.data === 'priority_criticality' || sort.data === 'priority_commitment') {
+    const priorityMatrixSort = sort.data !== 'sla_priority';
+    const restartCode = priorityMatrixSort ? 'priority_sort_restart' : 'sla_sort_restart';
+    const unavailableCode = priorityMatrixSort ? 'priority_sort_unavailable' : 'sla_sort_unavailable';
     const limit=Number(c.req.query('limit')||20),pageNumber=Number(c.req.query('page')||1),cursor=c.req.query('cursor');
     if(c.req.query('offset')!==undefined||!Number.isInteger(limit)||limit<1||limit>50||!Number.isInteger(pageNumber)||pageNumber<1)
-      return c.json({error:'Invalid SLA pagination'},400);
-    if(pageNumber>1)return c.json({code:'sla_sort_restart',error:'Restart SLA ordering from the first page'},409);
+      return c.json({error:'Invalid queue pagination'},400);
+    if(pageNumber>1)return c.json({code:restartCode,error:'Restart queue ordering from the first page'},409);
     if(staffTicketAdmissionMode(c.env)!=='enabled'||!c.env.BUDGET_COORDINATOR_DO||!payload
       ||!['admin','agent'].includes(payload.role)||payload.sub!==d.scope.actorId||payload.tenant_id!==d.scope.tenantId
       ||!Number.isSafeInteger(payload.session_version)||!Number.isSafeInteger(payload.exp)||payload.mfa_verified!==true)
-      return c.json({code:'sla_sort_unavailable',error:'SLA ordering authority is unavailable'},503);
+      return c.json({code:unavailableCode,error:'Queue ordering authority is unavailable'},503);
     const service=new SlaPriorityQueueService(d.database,d.scope,{tenantId:d.scope.tenantId,actorId:d.scope.actorId,
       role:payload.role as 'admin'|'agent',sessionVersion:payload.session_version!,expiresAt:payload.exp,mfaVerified:true},
       {service:sessionTicketBudgetAdmission,repository:d.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,
@@ -1161,15 +1164,18 @@ dashboard.get("/tickets", async (c) => {
       const selection=Object.fromEntries(Object.entries({customerEmail:c.req.query('customer_email'),createdAfter:createdAfter.data,filterId:c.req.query('filter_id'),
         status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),groupId:c.req.query('group_id'),
         ticketNo:c.req.query('ticket_no'),search:search.data,queue:queue.data,draftNotExpiredAt}).filter(([,value])=>value!==undefined));
-      const result=await service.read(selection,{limit,cursor});
+      const result=await service.read(selection,{limit,cursor,sort:sort.data});
       const body={data:result.data.map(item=>item.ticket),meta:{page:result.page,limit,total:result.total,total_pages:Math.ceil(result.total/limit)},
-        sla:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.sla])),asOf:result.asOf,next:result.next};
+        sla:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.sla])),
+        priorityClocks:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.priorityClock?{
+          remainingHours:item.priorityClock.timeRemainingHours,paused:item.priorityClock.paused,asOf:result.asOf,
+        }:null])),triageOverdueCount:result.triageOverdueCount,asOf:result.asOf,next:result.next};
       assertConversationResponseBounds(body);
       const response=c.json(body);completed=result;return response;
     }catch(error){
       return error instanceof SlaQueueRestart
-        ? c.json({code:'sla_sort_restart',error:'Queue changed or expired; restart SLA ordering'},409)
-        : c.json({code:'sla_sort_unavailable',error:'The complete SLA queue is unavailable within current bounds'},503);
+        ? c.json({code:restartCode,error:'Queue changed or expired; restart ordering'},409)
+        : c.json({code:unavailableCode,error:'The complete queue is unavailable within current bounds'},503);
     }finally{service.finish(completed);}
   }
   const admission = await admitHttpTicketList({ env: c.env, deps: d, payload, operation: 'dashboard.ticket.list',

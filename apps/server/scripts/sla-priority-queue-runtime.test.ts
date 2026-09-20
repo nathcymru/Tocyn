@@ -13,7 +13,7 @@ import { createVerifiedTenantScope } from '../src/auth/scope';
 import { BudgetAuthorityRepository } from '../src/repositories/budget-authority.repository';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
-import { SlaPriorityQueueService,SlaQueueRestart } from '../src/budgets/sla-priority-queue-admission.service';
+import { SlaPriorityQueueService,SlaQueueRestart,type PriorityQueueSort } from '../src/budgets/sla-priority-queue-admission.service';
 import { SlaPriorityQueueRepository,SlaQueueUnavailable,type SlaQueueSelection } from '../src/repositories/sla-priority-queue.repository';
 import { DEFAULT_SLA_CALENDAR,SlaEvaluationExhaustedError } from '../src/domain/sla-clock';
 import type { BudgetCoordinatorDO } from '../src/durable_objects/BudgetCoordinatorDO';
@@ -49,7 +49,7 @@ async function fixture(){
  let clock=now;
  const service=(repo=new SlaPriorityQueueRepository(observed,scope))=>new SlaPriorityQueueService(observed,scope,{tenantId:'a',actorId:'actor',role:'agent',sessionVersion:1,expiresAt:Math.floor(now/1000)+3600,mfaVerified:true},
  {service:admission,repository:new BudgetAuthorityRepository(db,scope),namespace,secret:'synthetic-sla-queue-cursor-secret-at-least-32-characters',now:()=>clock,settle:(authority,outcome,at)=>cache.settleOperation(authority,outcome,at)},repo);
- const read=async(selection:SlaQueueSelection={},options:{limit?:number;cursor?:string}={})=>{const s=service();const result=await s.read(selection,options);s.finish(result);return result;};
+ const read=async(selection:SlaQueueSelection={},options:{limit?:number;cursor?:string;sort?:PriorityQueueSort}={})=>{const s=service();const result=await s.read(selection,options);s.finish(result);return result;};
  const ticket=async(id:string,target=3600000,priority='normal',tenant='a',created='2026-09-01T00:00:00Z',legacy=false)=>{
   await db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_email,group_id,source,priority,created_at) VALUES(?,?,?,'synthetic@example.test','group','dashboard',?,?)").bind(tenant,id,id,priority,created).run();
   await db.prepare(`INSERT INTO ticket_sla_clocks(tenant_id,ticket_id,response_started_at,resolution_started_at,policy_calendar_json,policy_response_target_ms,policy_resolution_target_ms)
@@ -64,9 +64,17 @@ test('whole queue sorts beyond25 before pagination with priority then oldest the
  for(let i=0;i<30;i++)await f.ticket('ticket-'+String(i).padStart(2,'0'),3600000+i*60000);
  await f.ticket('outside-page',60000,'low');await f.ticket('tie-urgent',3600000,'urgent','a','2026-09-10T00:00:00Z');
  await f.ticket('tie-older',3600000,'normal','a','2026-08-01T00:00:00Z');await f.ticket('foreign',60000,'urgent','b');
+ await f.db.prepare(`UPDATE tickets SET priority_category='security-privacy',priority_scope='systemic',
+  priority_regulatory_officer_on_site=1,priority_vip_blocked=1,priority_hard_deadline=0,
+  priority_score=40,contract_sla_tier='alpha',criticality_tier=4
+  WHERE tenant_id='a' AND id='outside-page'`).run();
  const started=performance.now(),heap=process.memoryUsage().heapUsed;
  const first=await f.read({}, {limit:10});assert.equal(first.total,33);
  assert.deepEqual(first.data.slice(0,4).map(item=>item.ticket.id),['outside-page','tie-urgent','tie-older','ticket-00']);
+ assert.deepEqual(first.data[0].ticket.priority_category,'security-privacy');
+ assert.equal(first.data[0].ticket.priority_score,40);
+ assert.equal(first.data[0].ticket.contract_sla_tier,'alpha');
+ assert.equal(first.data[0].ticket.criticality_tier,4);
  const all=[...first.data];let cursor=first.next;
  while(cursor){const page=await f.read({}, {limit:10,cursor});all.push(...page.data);cursor=page.next;}
  assert.equal(new Set(all.map(item=>item.ticket.id)).size,33);assert.equal(all.some(item=>item.ticket.id==='foreign'),false);
@@ -74,6 +82,51 @@ test('whole queue sorts beyond25 before pagination with priority then oldest the
  console.log(JSON.stringify({fixture:'whole-sla-queue33',wallMs:performance.now()-started,heapDeltaBytes:process.memoryUsage().heapUsed-heap,batches:f.batches,calls:f.calls,note:'Node process observations, not peak heap or provider CPU billing'}));
  await f.db.prepare("UPDATE tickets SET priority='urgent' WHERE tenant_id='a' AND id='ticket-01'").run();
  await assert.rejects(f.read({}, {limit:10,cursor:first.next!}),SlaQueueRestart);
+ }finally{await f.mf.dispose();}
+});
+
+test('priority views sort the complete authorised clock snapshot before pagination and bind cursors to view',async()=>{
+ const f=await fixture();try{
+  const at=(hoursAgo:number)=>new Date(f.now-hoursAgo*3_600_000).toISOString();
+  const rows:[string,number,'alpha'|'charlie'|'delta',1|2|4,boolean][]=[
+   ['drift-fast',47.75,'delta',1,false],['a-high',0.5,'alpha',4,true],['a-low',0.5,'alpha',4,false],
+   ['drift-one',47,'delta',1,false],['drift-four',44,'delta',1,false],['fresh-charlie',0,'charlie',2,false],
+   ['waiting',0.75,'alpha',4,false],
+  ];
+  for(const [id,age,contract,criticality,vip] of rows){
+   await f.ticket(id,3_600_000,'normal','a',at(age));
+   await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+    priority_regulatory_officer_on_site=0,priority_vip_blocked=?,priority_hard_deadline=0,
+    priority_score=?,contract_sla_tier=?,criticality_tier=? WHERE tenant_id='a' AND id=?`)
+    .bind(Number(vip),vip?6:1,contract,criticality,id).run();
+  }
+  await f.db.prepare(`UPDATE ticket_support_state SET definition_id='legacy-pending',waiting_reason='awaiting customer',
+   changed_at=?,revision=revision+1 WHERE tenant_id='a' AND ticket_id='waiting'`).bind(at(0.5)).run();
+  const focus=await f.read({}, {sort:'priority_focus',limit:3});
+  assert.equal(focus.total,7);
+  assert.deepEqual(focus.data.map(item=>item.ticket.id),['drift-fast','a-high','a-low']);
+  assert.equal(focus.data[0].priorityClock?.timeRemainingHours,0.25);
+  assert.equal(focus.data[1].ticket.priority_score,6);
+  assert.ok(focus.next);
+  await assert.rejects(f.read({}, {sort:'priority_commitment',limit:3,cursor:focus.next!}),SlaQueueRestart);
+  const focusNext=await f.read({}, {sort:'priority_focus',limit:3,cursor:focus.next!});
+  assert.deepEqual(focusNext.data.map(item=>item.ticket.id),['drift-one','drift-four','fresh-charlie']);
+  const focusLast=await f.read({}, {sort:'priority_focus',limit:3,cursor:focusNext.next!});
+  assert.deepEqual(focusLast.data.map(item=>item.ticket.id),['waiting']);
+  assert.equal(focusLast.data[0].priorityClock?.paused,true);
+  const criticality=await f.read({}, {sort:'priority_criticality'});
+  assert.deepEqual(criticality.data.map(item=>item.ticket.id),rows.map(row=>row[0]));
+  const commitment=await f.read({}, {sort:'priority_commitment'});
+  assert.deepEqual(commitment.data.map(item=>item.ticket.id),['a-high','a-low','drift-fast','drift-one','drift-four','fresh-charlie','waiting']);
+  for(const [id,age] of [['overdue-one',2],['overdue-two',1.5]] as const){
+   await f.ticket(id,3_600_000,'normal','a',at(age));
+   await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+    priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+    priority_score=1,contract_sla_tier='alpha',criticality_tier=4 WHERE tenant_id='a' AND id=?`).bind(id).run();
+  }
+  const overdue=await f.read({}, {sort:'priority_focus',limit:2});
+  assert.equal(overdue.triageOverdueCount,2,'the banner count covers the complete selected queue before pagination');
+  assert.deepEqual(overdue.data.map(item=>item.ticket.id),['overdue-one','overdue-two']);
  }finally{await f.mf.dispose();}
 });
 
@@ -188,6 +241,9 @@ test('actual staff HTTP SLA contract preserves selectors and settles only comple
   for(const [id,email,priority] of [['sla-a','match@example.test','urgent'],['sla-b','match@example.test','normal'],['sla-other','other@example.test','urgent']]){
    await f.db.prepare("INSERT INTO tickets(tenant_id,id,subject,customer_email,source,priority) VALUES(?,?,? ,?,'fixture',?)").bind(tenant,id,'needle '+id,email,priority).run();
   }
+  await f.db.prepare(`UPDATE tickets SET priority_category='information-requests',priority_scope='isolated',
+   priority_regulatory_officer_on_site=0,priority_vip_blocked=0,priority_hard_deadline=0,
+   priority_score=1,contract_sla_tier='alpha',criticality_tier=4 WHERE tenant_id=? AND id='sla-a'`).bind(tenant).run();
   await f.db.prepare("INSERT INTO ticket_filters(tenant_id,id,name,conditions) VALUES(?,'sla-saved','Synthetic','[]')").bind(tenant).run();
   const outcomes:string[]=[],original=apiTicketBudgetCache.settleOperation.bind(apiTicketBudgetCache);
   apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{outcomes.push(outcome);original(authority,outcome,now);};
@@ -196,6 +252,13 @@ test('actual staff HTTP SLA contract preserves selectors and settles only comple
    const body=await first.json<{data:Array<{id:string}>;meta:{total:number;page:number};sla:Record<string,unknown>;asOf:string;next:string}>();
    assert.equal(body.meta.total,2);assert.equal(body.meta.page,1);assert.equal(body.data[0].id,'sla-a');assert.ok('sla-a' in body.sla);assert.ok(body.next);assert.ok(Number.isFinite(Date.parse(body.asOf)));
    assert.deepEqual(outcomes,['committed','committed']);
+   const matrix=await f.request('/api/tickets?sort=priority_focus&limit=1&search=needle&customer_email=match%40example.test',{token:agent.token});
+   assert.equal(matrix.status,200,await matrix.clone().text());
+   const matrixBody=await matrix.json<{data:Array<{id:string;priority_score:number}>;priorityClocks:Record<string,{remainingHours:number;paused:boolean;asOf:string}|null>;sla:Record<string,unknown>;next:string}>();
+   assert.equal(matrixBody.data[0].id,'sla-a');assert.equal(matrixBody.data[0].priority_score,1);
+   assert.equal(typeof matrixBody.priorityClocks['sla-a']?.remainingHours,'number');
+   assert.equal(matrixBody.priorityClocks['sla-a']?.paused,false);
+   assert.ok('sla-a' in matrixBody.sla);assert.ok(matrixBody.next);
    const next=await f.request(url+'&filter_id=sla-saved&cursor='+encodeURIComponent(body.next),{token:agent.token});assert.equal(next.status,200,await next.clone().text());
    const second=await next.json<{data:Array<{id:string}>;meta:{page:number};next:null}>();assert.equal(second.meta.page,2);assert.equal(second.data[0].id,'sla-b');assert.equal(second.next,null);
    assert.equal((await f.request(url+'&page=2',{token:agent.token})).status,409);
