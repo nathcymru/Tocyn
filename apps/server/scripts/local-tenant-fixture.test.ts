@@ -65,6 +65,13 @@ test('real local-beta bootstrap includes the classified review matrix', async ()
     'The real review email article must identify its owning customer');
   assert.doesNotMatch(bootstrap.sql, /2099-01-01|2026-09-10T09:20:00/,
     'The real review launcher must use plausible relative snooze and attachment dates');
+  const [pdf] = beta2ReviewAttachmentObjects();
+  const pdfText = new TextDecoder().decode(pdf.bytes);
+  assert.match(pdfText, /Reference: TC-2048-17/);
+  assert.match(pdfText, /Recipient: Owen Hughes/);
+  assert.match(pdfText, /Amount due: GBP 0\.00/);
+  assert.doesNotMatch(pdfText, /Synthetic order summary for UI review/,
+    'Downloaded review attachments must read like a fictional customer document');
 });
 
 test('general Miniflare helper retains the eight-ticket base matrix without review-only SLA facts', async () => {
@@ -140,12 +147,14 @@ test('general Miniflare helper retains the eight-ticket base matrix without revi
 
 test('opt-in local beta review has 20 tenant-A conversations, real SLA variety and tenant isolation', async () => {
   await withTwoTenantFixture(async fixture => {
-    const reviewTickets = await fixture.db.prepare(`SELECT tenant_id,id,ticket_no,priority,status,assigned_to,source,customer_id,customer_email
+    const reviewTickets = await fixture.db.prepare(`SELECT tenant_id,id,ticket_no,subject,priority,status,assigned_to,source,customer_id,customer_email
       FROM tickets WHERE id LIKE 'beta2-%' ORDER BY tenant_id,id`).all<{
-      tenant_id: string; id: string; ticket_no: number; priority: string; status: string; assigned_to: string | null; source: string; customer_id: string | null; customer_email: string;
+      tenant_id: string; id: string; ticket_no: number; subject: string; priority: string; status: string; assigned_to: string | null; source: string; customer_id: string | null; customer_email: string;
     }>();
     assert.equal(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').length, 20);
     assert.equal(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-b').length, 2);
+    assert.ok(reviewTickets.results.every(ticket => !/\b(?:synthetic|fixture|demo|beta\s*2)\b/i.test(ticket.subject)),
+      'The review Inbox uses believable subjects while all data remains synthetic');
     assert.equal(new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.ticket_no)).size, 20);
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.priority))].sort(), ['high', 'low', 'normal', 'urgent']);
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.status))].sort(), ['closed', 'open', 'pending', 'resolved']);

@@ -236,11 +236,22 @@ function sqlLiteral(value: string): string {
 }
 
 function syntheticOrderSummaryPdf(): Uint8Array {
-  const pageText = 'BT /F1 12 Tf 36 160 Td (Synthetic order summary for UI review.) Tj ET';
+  const lines = [
+    'Order summary',
+    'Reference: TC-2048-17',
+    'Recipient: Owen Hughes',
+    'Item: Replacement desk lamp',
+    'Quantity: 1',
+    'Delivery: Unit 4, Harbour Industrial Estate',
+    'Status: Confirm delivery address before dispatch',
+    'Amount due: GBP 0.00',
+  ];
+  const pageText = `BT /F1 12 Tf 36 320 Td\n${lines.map((line, index) =>
+    `${index === 0 ? '' : '0 -25 Td '}(${line}) Tj`).join('\n')}\nET`;
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 520 360] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
     `<< /Length ${pageText.length} >>\nstream\n${pageText}\nendstream`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ];
