@@ -121,10 +121,6 @@ const pageSlotNames = [
     "page__knowledgeDeleteActions"
   ],
   [
-    "knowledgeStatusBadge",
-    "page__knowledgeStatusBadge"
-  ],
-  [
     "accountGrid",
     "page__accountGrid"
   ],

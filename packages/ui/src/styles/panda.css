@@ -3661,38 +3661,6 @@
       margin-top: 1rem;
 }
 
-    .page__knowledgeStatusBadge {
-      background: var(--colors-bg\.subtle);
-      padding: 0.25rem 0.625rem;
-      border-radius: var(--radii-full);
-      display: inline-flex;
-      align-items: center;
-      color: var(--colors-text\.muted);
-      font-size: 0.8125rem;
-      font-weight: 600;
-      min-height: 1.75rem;
-}
-
-    .page__knowledgeStatusBadge[data-status="active"] {
-      background: var(--colors-info\.surface);
-      color: var(--colors-info\.text);
-}
-
-    .page__knowledgeStatusBadge[data-status="processing"] {
-      background: var(--colors-warning\.surface);
-      color: var(--colors-warning);
-}
-
-    .page__knowledgeStatusBadge[data-status="error"] {
-      background: var(--colors-critical\.surface);
-      color: var(--colors-critical);
-}
-
-    .page__knowledgeStatusBadge[data-tier="sop"] {
-      background: var(--colors-bg\.input);
-      color: var(--colors-text\.primary);
-}
-
     .page__accountGrid {
       gap: 1rem;
       margin-block: 1rem;

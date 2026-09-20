@@ -1,7 +1,7 @@
 import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Link as ParkLink } from '@luminatick/ui/components';
+import { Badge, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory, KnowledgeDoc } from '../types';
@@ -345,14 +345,14 @@ export const KnowledgePage: React.FC = () => {
                   >
                     <ParkTable.Cell><ParkLink asChild variant="plain"><Link to={`/knowledge/edit/${doc.id}`} aria-label={`Edit ${doc.title}`} className={css({ minW: 0, minH: '10', maxW: 'full', whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: 'start' })}>{doc.title}</Link></ParkLink></ParkTable.Cell>
                     <ParkTable.Cell>
-                      <span className={pageStyles.knowledgeStatusBadge} data-status={doc.status}>
+                      <Badge variant="subtle" colorPalette={doc.status === 'active' ? 'blue' : doc.status === 'error' ? 'red' : 'gray'} data-status={doc.status}>
                         {doc.status}
-                      </span>
+                      </Badge>
                     </ParkTable.Cell>
                     <ParkTable.Cell>
-                      <span className={pageStyles.knowledgeStatusBadge} data-tier={doc.tier}>
+                      <Badge variant="subtle" colorPalette="gray" data-tier={doc.tier}>
                         {doc.tier === 'sop' ? 'SOP' : 'Answer'}
-                      </span>
+                      </Badge>
                     </ParkTable.Cell>
                     <ParkTable.Cell>
                       {new Date(doc.created_at).toLocaleDateString()}

@@ -55,6 +55,21 @@ it('exposes category selection as named pressed-state buttons',async()=>{
  fireEvent.click(all);expect(category).toHaveAttribute('aria-pressed','false');expect(all).toHaveAttribute('aria-pressed','true');
 });
 
+it('uses installed Park badges for article status and tier', async () => {
+ api.get.mockImplementation(async (path: string) => path.endsWith('categories') ? [] : [
+   { id: 'active', title: 'Active answer', category_id: null, created_at: '2026-09-10', status: 'active', tier: 'answer' },
+   { id: 'processing', title: 'Processing SOP', category_id: null, created_at: '2026-09-10', status: 'processing', tier: 'sop' },
+   { id: 'error', title: 'Failed answer', category_id: null, created_at: '2026-09-10', status: 'error', tier: 'answer' },
+ ]);
+ render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
+ const table = await screen.findByRole('table');
+ for (const status of ['active', 'processing', 'error']) {
+   expect(table.querySelector(`[data-status="${status}"]`)).toHaveClass('badge', 'badge--variant_subtle');
+ }
+ expect(table.querySelector('[data-tier="sop"]')).toHaveClass('badge', 'badge--variant_subtle');
+ expect(table.querySelector('.page__knowledgeStatusBadge')).not.toBeInTheDocument();
+});
+
 it('wraps long category names while keeping selection and actions keyboard discoverable', async () => {
  const name = 'A long synthetic knowledge category name that requires accessible wrapping';
  api.get.mockImplementation(async (path: string) => path.endsWith('categories') ? [{ id: 'category-a', name, parent_id: null }] : []);
