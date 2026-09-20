@@ -87,6 +87,12 @@ test('supported interactive npm beta launcher removes credentials/state after Ct
       };
       terminal.stdout!.on('data', capture);
       terminal.stderr!.on('data', capture);
+      // The optional second Ctrl-C can race the launcher's clean exit. The
+      // first signal is required; a closed PTY pipe after it is not a failure.
+      const inputErrors: Error[] = [];
+      terminal.stdin!.on('error', error => {
+        if ((error as NodeJS.ErrnoException).code !== 'EPIPE') inputErrors.push(error);
+      });
       await until(() => {
         const newRuns = readdirSync(tmpdir()).filter(name => name.startsWith('tocyn-local-tenants-') && !existingRuns.has(name));
         if (newRuns.length !== 1) return false;
@@ -144,15 +150,17 @@ test('supported interactive npm beta launcher removes credentials/state after Ct
       assert.equal(foreignAttachment.status, 404, 'Tenant-A operator cannot download tenant-B seeded bytes');
       await foreignAttachment.body?.cancel();
       output = '';
+      assert.equal(terminal.exitCode, null, 'The running fixture must receive the first Ctrl-C');
       terminal.stdin!.write('\x03');
       if (repeated) {
         await pause(25);
-        terminal.stdin!.write('\x03');
+        if (terminal.exitCode === null && !terminal.stdin!.destroyed) terminal.stdin!.write('\x03');
       }
       await until(() => !existsSync(runDirectory!), 'Ctrl-C must remove the exact run-owned state and credentials');
       await until(() => portFree(port), 'Ctrl-C must release the isolated local Worker port');
       await until(() => terminal!.exitCode !== null || terminal!.signalCode !== null, 'The supported npm terminal must exit');
       assert.equal(existsSync(runDirectory), false);
+      assert.deepEqual(inputErrors, [], 'The terminal must not have a non-closure input error');
     } finally {
       output = '';
       if (terminal && terminal.exitCode === null && terminal.signalCode === null) terminal.kill('SIGTERM');
