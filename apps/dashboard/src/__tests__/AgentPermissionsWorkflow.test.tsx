@@ -63,6 +63,22 @@ describe('permission administration recovery', () => {
     await waitFor(()=>expect(screen.getByRole('checkbox', { name: 'Allow agents to use General settings' })).not.toBeChecked());
     expect(dashboardApi.put).toHaveBeenCalledTimes(1);
   });
+  it('shows the saved policy read-only after the local beta permanently rejects permission changes', async () => {
+    vi.mocked(dashboardApi.get).mockResolvedValue(policy);
+    vi.mocked(dashboardApi.put).mockRejectedValue(Object.assign(new Error('disabled'), { code: 'feature_disabled' }));
+    render(<AgentPermissionsPage />);
+    const toggle = await screen.findByRole('checkbox', { name: 'Allow agents to use General settings' });
+    await userEvent.click(screen.getByText('Allow agents to use General settings'));
+    expect(toggle).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Permission changes are unavailable in this local review');
+    expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_warning');
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reload permissions' })).not.toBeInTheDocument();
+    expect(dashboardApi.put).toHaveBeenCalledTimes(1);
+  });
   it('blocks stale saves when the write succeeds but refreshing fails, then recovers on explicit reload', async () => {
     vi.mocked(dashboardApi.get).mockResolvedValueOnce(policy)
       .mockRejectedValueOnce(new Error('Policy temporarily unavailable'))
