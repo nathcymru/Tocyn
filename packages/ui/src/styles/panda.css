@@ -1564,6 +1564,20 @@
       inset-block-start: var(--animate-to-y);
 }
 }
+
+  @keyframes overduePulse {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
+}
+
+    70% {
+      box-shadow: 0 0 0 8px color-mix(in srgb, currentColor 0%, transparent);
+}
+
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 0%, transparent);
+}
+}
 }
 
 @layer recipes{
@@ -11542,6 +11556,10 @@
     background: var(--colors-critical);
 }
 
+  .anim_overduePulse_1\.5s_infinite {
+    animation: overduePulse 1.5s infinite;
+}
+
   .p_2rem_1rem {
     padding: 2rem 1rem;
 }
@@ -11766,6 +11784,14 @@
     text-decoration: none;
 }
 
+  .trs_grid-template-rows_180ms_ease\,_opacity_180ms_ease {
+    transition: grid-template-rows 180ms ease, opacity 180ms ease;
+}
+
+  .bdr_full {
+    border-radius: var(--radii-full);
+}
+
   .gap_1\.5rem {
     gap: 1.5rem;
 }
@@ -11788,10 +11814,6 @@
 
   .bdr_xl {
     border-radius: var(--radii-xl);
-}
-
-  .bdr_full {
-    border-radius: var(--radii-full);
 }
 
   .bdr_l3 {
@@ -12366,12 +12388,32 @@
     color: inherit;
 }
 
+  .grid-tr_0fr {
+    grid-template-rows: 0fr;
+}
+
+  .grid-tr_1fr {
+    grid-template-rows: 1fr;
+}
+
+  .op_0 {
+    opacity: 0;
+}
+
+  .op_1 {
+    opacity: 1;
+}
+
   .ai_baseline {
     align-items: baseline;
 }
 
   .grid-tc_repeat\(2\,_minmax\(0\,_1fr\)\) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+  .lh_1\.5 {
+    line-height: 1.5;
 }
 
   .d_inline-grid {
@@ -12465,10 +12507,6 @@
 
   .justify-items_center {
     justify-items: center;
-}
-
-  .lh_1\.5 {
-    line-height: 1.5;
 }
 
   .justify-self_center {
@@ -12889,13 +12927,6 @@
 
   .max-w_44 {
     max-width: var(--sizes-44);
-}
-
-  .lc_3 {
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
 }
 
   .w_12 {
@@ -13426,6 +13457,15 @@
   @media screen and (max-width: 47.9975rem) {
     .mdDown\:inset-x_4 {
       inset-inline: var(--spacing-4);
+}
+}
+
+  @media (prefers-reduced-motion: reduce) {
+    .\[\@media_\(prefers-reduced-motion\:_reduce\)\]\:anim_none {
+      animation: none;
+}
+    .\[\@media_\(prefers-reduced-motion\:_reduce\)\]\:trs_none {
+      transition: none;
 }
 }
 }

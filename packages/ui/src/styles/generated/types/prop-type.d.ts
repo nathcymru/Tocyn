@@ -153,7 +153,7 @@ export interface UtilityValues {
 	transitionProperty: "common" | "colors" | "size" | "position" | "background";
 	transition: "all" | "common" | "size" | "position" | "background" | "colors" | "opacity" | "shadow" | "transform";
 	animation: Tokens["animations"];
-	animationName: "spin" | "ping" | "pulse" | "bounce" | "expand-height" | "collapse-height" | "expand-width" | "collapse-width" | "fade-in" | "fade-out" | "slide-from-left-full" | "slide-from-right-full" | "slide-from-top-full" | "slide-from-bottom-full" | "slide-to-left-full" | "slide-to-right-full" | "slide-to-top-full" | "slide-to-bottom-full" | "slide-from-top" | "slide-from-bottom" | "slide-from-left" | "slide-from-right" | "slide-to-top" | "slide-to-bottom" | "slide-to-left" | "slide-to-right" | "scale-in" | "scale-out" | "bg-position" | "position";
+	animationName: "spin" | "ping" | "pulse" | "bounce" | "expand-height" | "collapse-height" | "expand-width" | "collapse-width" | "fade-in" | "fade-out" | "slide-from-left-full" | "slide-from-right-full" | "slide-from-top-full" | "slide-from-bottom-full" | "slide-to-left-full" | "slide-to-right-full" | "slide-to-top-full" | "slide-to-bottom-full" | "slide-from-top" | "slide-from-bottom" | "slide-from-left" | "slide-from-right" | "slide-to-top" | "slide-to-bottom" | "slide-to-left" | "slide-to-right" | "scale-in" | "scale-out" | "bg-position" | "position" | "overduePulse";
 	animationTimingFunction: Tokens["easings"];
 	animationDuration: Tokens["durations"];
 	animationDelay: Tokens["durations"];

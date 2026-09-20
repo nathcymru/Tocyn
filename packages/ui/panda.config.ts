@@ -627,7 +627,14 @@ export default {
       },
 
       animationStyles: animationStyles,
-      keyframes: keyframes,
+      keyframes: {
+        ...keyframes,
+        'overduePulse': {
+          '0%': { boxShadow: '0 0 0 0 color-mix(in srgb, currentColor 55%, transparent)' },
+          '70%': { boxShadow: '0 0 0 8px color-mix(in srgb, currentColor 0%, transparent)' },
+          '100%': { boxShadow: '0 0 0 0 color-mix(in srgb, currentColor 0%, transparent)' },
+        },
+      },
       layerStyles: layerStyles
     },
   },

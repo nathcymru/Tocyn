@@ -129,7 +129,9 @@ it('renders spaced ticket surfaces with a left SLA anchor, stable marker slots a
   const row=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   const surface=row.querySelector('[data-part="ticket-row-surface"]');
   const slaAnchor=row.querySelector('[data-part="ticket-sla-anchor"]');
+  const details=row.querySelector('[data-part="ticket-default"]');
   const preview=row.querySelector('[data-part="ticket-preview"]');
+  const previewPanel=row.querySelector('[data-part="ticket-preview-panel"]');
   expect(surface).toBeInTheDocument();
   expect(surface?.firstElementChild).toBe(slaAnchor);
   await waitFor(() => {
@@ -144,11 +146,16 @@ it('renders spaced ticket surfaces with a left SLA anchor, stable marker slots a
   expect(row.querySelector('[data-part="ticket-pill-slots"]')).toHaveTextContent('Unassigned');
   expect(preview).toHaveTextContent('Last confirmed message 1');
   expect(preview).toHaveAttribute('data-expanded','false');
-  expect(preview).toHaveClass('sr_true');
+  expect(details).toHaveAttribute('aria-hidden','false');
+  expect(previewPanel).toHaveAttribute('aria-hidden','true');
   expect(row.className).not.toMatch(/shadow_xs|rounded_lg/);
   fireEvent.mouseEnter(row);
   expect(preview).toHaveAttribute('data-expanded','true');
-  expect(preview).not.toHaveClass('sr_true');
+  expect(details).toHaveAttribute('aria-hidden','true');
+  expect(previewPanel).toHaveAttribute('aria-hidden','false');
+  expect(slaAnchor?.querySelector('[aria-label]')).toHaveAttribute('aria-label','Service level unavailable');
+  expect(row).toHaveAttribute('aria-label',expect.stringContaining('Fixture conversation 1'));
+  expect(within(row).getByRole('link',{name:'Open #1: Fixture conversation 1'})).toBeInTheDocument();
   fireEvent.mouseLeave(row);
   expect(preview).toHaveAttribute('data-expanded','false');
   act(()=>row.focus());
@@ -159,8 +166,47 @@ it('renders spaced ticket surfaces with a left SLA anchor, stable marker slots a
   expect(preview).toHaveAttribute('data-expanded','false');
   fireEvent.keyDown(row,{key:' '});
   expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.keyDown(row,{key:'Escape'});
+  expect(preview).toHaveAttribute('data-expanded','false');
+  fireEvent.keyDown(row,{key:' '});
+  expect(preview).toHaveAttribute('data-expanded','true');
   fireEvent.blur(row,{relatedTarget:document.body});
   expect(preview).toHaveAttribute('data-expanded','false');
+});
+
+it('does not open the hover preview on a touch-only device, while keyboard Space remains available',async()=>{
+  vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addListener:vi.fn(),removeListener:vi.fn(),addEventListener:vi.fn(),removeEventListener:vi.fn()})));
+  showInbox();
+  const row=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fireEvent.mouseEnter(row);
+  expect(row).toHaveAttribute('data-preview-expanded','false');
+  act(()=>row.focus());
+  expect(row).toHaveAttribute('data-preview-expanded','true');
+  fireEvent.keyDown(row,{key:' '});
+  expect(row).toHaveAttribute('data-preview-expanded','false');
+});
+
+it('pulses either live breached SLA phase but keeps a historical breach static',async()=>{
+  const baselineFetch=fetch as typeof fetch;
+  const running={state:'on-track',phase:'running',completedAt:null,dueAt:'2026-09-11T01:00:00Z',remainingWorkingMilliseconds:1000,targetWorkingMilliseconds:3600000};
+  const liveBreach={...running,state:'breached',remainingWorkingMilliseconds:0};
+  const completedBreach={...liveBreach,phase:'completed',completedAt:'2026-09-11T02:00:00Z'};
+  vi.stubGlobal('fetch',vi.fn((url:string,options?:RequestInit)=>url==='/api/ticket-sla/projections'
+    ? Promise.resolve(json({
+      'ticket-1':{response:liveBreach,resolution:running,handlerName:null},
+      'ticket-2':{response:running,resolution:liveBreach,handlerName:null},
+      'ticket-3':{response:completedBreach,resolution:running,handlerName:null},
+      ...Object.fromEntries(tickets.slice(3).map(ticket=>[ticket.id,unavailableSla])),
+    }))
+    : baselineFetch(url,options)));
+  showInbox();
+  const rows=await within(screen.getByRole('listbox',{name:'Conversation list'})).findAllByRole('option');
+  await waitFor(()=>expect(rows[0].querySelector('[data-sla-pulsing]')).toHaveAttribute('data-sla-pulsing','true'));
+  expect(rows[0]).toHaveAttribute('aria-label',expect.stringContaining('Service level overdue'));
+  expect(rows[1].querySelector('[data-sla-pulsing]')).toHaveAttribute('data-sla-pulsing','true');
+  expect(rows[1].querySelector('[data-sla-breached]')).toHaveAttribute('aria-label','Breached service level');
+  expect(rows[2].querySelector('[data-sla-breached]')).toHaveAttribute('data-sla-breached','true');
+  expect(rows[2].querySelector('[data-sla-pulsing]')).toHaveAttribute('data-sla-pulsing','false');
 });
 
 it('keeps one compact toolbar and shows honest metrics only in the statistics drawer',async()=>{
