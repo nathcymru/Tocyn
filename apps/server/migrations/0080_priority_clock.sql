@@ -53,8 +53,10 @@ WHEN NEW.revision > OLD.revision BEGIN
         NEW.snoozed_until IS NOT NULL
       FROM support_state_definitions d WHERE d.tenant_id=NEW.tenant_id AND d.id=NEW.definition_id
     ) THEN NULL ELSE COALESCE(active_since,
+      -- A manual/customer-reply wake after a missed deadline inherits time
+      -- since that deadline too; an early wake starts at its actual change.
       CASE WHEN OLD.snoozed_until IS NOT NULL AND NEW.snoozed_until IS NULL
-        AND NEW.resurface_reason='due' THEN MIN(OLD.snoozed_until,NEW.changed_at) ELSE NEW.changed_at END) END,
+        THEN MIN(OLD.snoozed_until,NEW.changed_at) ELSE NEW.changed_at END) END,
     stop_reason = (
       SELECT CASE WHEN d.legacy_status IN ('resolved','closed') THEN 'resolved'
         WHEN d.legacy_status='pending' AND NEW.waiting_reason IS NOT NULL THEN 'waiting'

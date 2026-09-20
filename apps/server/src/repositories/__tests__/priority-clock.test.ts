@@ -203,6 +203,21 @@ describe('priority clock database lifecycle', () => {
     } finally { db.close(); }
   });
 
+  it.each(['manual', 'customer_reply'] as const)('inherits expired snooze debt on a late %s wake', reason => {
+    const db = dbWithClock();
+    try {
+      ticket(db,'tenant-A',`late-${reason}`);
+      snooze(db,'tenant-A',`late-${reason}`,'2026-09-20T10:30:00.000Z',null,'2026-09-20T10:10:00.000Z');
+      snooze(db,'tenant-A',`late-${reason}`,null,reason,'2026-09-20T11:00:00.000Z');
+      expect(clock(db,'tenant-A',`late-${reason}`)).toMatchObject({
+        active_since:'2026-09-20T10:30:00.000Z',accrued_active_ms:600_000,stop_reason:null,
+      });
+      const resumed = projectPriorityClock(clock(db,'tenant-A',`late-${reason}`),Date.parse('2026-09-20T11:00:00Z'));
+      expect(resumed).toMatchObject({elapsedActiveMs:2_400_000,paused:false});
+      expect(resumed?.timeRemainingHours).toBeCloseTo(1/3);
+    } finally { db.close(); }
+  });
+
   it('isolates tenants and ignores stale or same-revision state writes', () => {
     const db = dbWithClock();
     try {
