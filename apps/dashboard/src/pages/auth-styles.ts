@@ -4,6 +4,7 @@ import { css } from '@luminatick/ui/styled-system/css';
 export const authStyles = {
   page: css({ width: '100%', minWidth: '0', display: 'flex', justifyContent: 'center' }),
   card: css({ width: '100%', maxWidth: '30rem', display: 'grid', gap: '1.5rem', padding: 'clamp(1.25rem, 4vw, 2rem)', background: 'bg.surface', color: 'text.primary', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.input', borderRadius: 'l3', boxShadow: 'sm' }),
+  cardLogo: css({ display: 'block', width: '12rem', maxWidth: '100%', height: 'auto', marginInline: 'auto' }),
   heading: css({ display: 'grid', gap: '0.375rem', textAlign: 'center', '& h1': { margin: '0', fontSize: '1.75rem', lineHeight: '1.2' }, '& p': { margin: '0', color: 'text.muted' } }),
   form: css({ display: 'grid', gap: '1.25rem', minWidth: '0' }),
   submit: css({ width: '100%', minHeight: '2.75rem' }),

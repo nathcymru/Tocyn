@@ -54,7 +54,7 @@ function ProtectedRoute({ children, requireMfa = true }: { children: React.React
 export default function App() {
   const [router] = React.useState(() => createBrowserRouter(createRoutesFromElements(
       <>
-        <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
+        <Route path="/login" element={<AuthLayout showOuterLogo={false}><LoginPage /></AuthLayout>} />
         <Route
           path="/mfa"
           element={

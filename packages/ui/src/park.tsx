@@ -22,6 +22,7 @@ import * as OfficialCheckbox from './components/ui/checkbox';
 import * as OfficialSwitch from './components/ui/switch';
 import * as OfficialTable from './components/ui/table';
 import * as OfficialRadioGroup from './components/ui/radio-group';
+import * as OfficialAlert from './components/ui/alert';
 
 /** Official Park component source, with a narrow compatibility alias for existing routes. */
 export type ParkButtonVariant = 'solid' | 'subtle' | 'surface' | 'outline' | 'plain' | 'ghost' | 'destructive';
@@ -116,6 +117,7 @@ export const ParkCheckbox = OfficialCheckbox;
 export const ParkSwitch = OfficialSwitch;
 export const ParkTable = OfficialTable;
 export const ParkRadioGroup = OfficialRadioGroup;
+export const ParkAlert = OfficialAlert;
 export const ParkCard = OfficialCard;
 
 export interface ParkPinInputProps extends React.ComponentPropsWithoutRef<typeof OfficialPinInput.Root> {

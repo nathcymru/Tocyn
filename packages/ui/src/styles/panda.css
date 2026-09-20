@@ -12712,6 +12712,14 @@
     max-width: 30rem;
 }
 
+  .w_12rem {
+    width: 12rem;
+}
+
+  .h_auto {
+    height: auto;
+}
+
   .min-h_2\.75rem {
     min-height: 2.75rem;
 }

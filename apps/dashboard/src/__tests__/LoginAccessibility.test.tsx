@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
+import { AuthLayout } from '@luminatick/ui/auth-layout';
 import { MfaPage } from '../pages/MfaPage';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -16,6 +17,18 @@ function mount(Page: typeof LoginPage) {
 }
 
 describe('staff login accessibility', () => {
+  it('centers the Tocyn logo inside the login card and keeps the access notice below Sign In', () => {
+    render(<MemoryRouter><AuthLayout showOuterLogo={false}><LoginPage /></AuthLayout></MemoryRouter>);
+    const card = document.querySelector('[data-auth-login-card]');
+    const logo = screen.getByRole('img', { name: 'Tocyn' });
+    const submit = screen.getByRole('button', { name: 'Sign In' });
+    const notice = screen.getByRole('note', { name: 'Authorised users notice' });
+    expect(card).toContainElement(logo);
+    expect(notice.textContent).toBe('Authorised Users Only. Unauthorised access is strictly prohibited and subject to legal action under applicable local and international cybercrime laws. All system activity is monitored and logged.');
+    expect(submit.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notice.querySelector('button')).toBeNull();
+  });
+
   it('associates fields, announces progress/failure, retains focus and rejects duplicate pending submission', async () => {
     let reject!: (error: Error) => void;
     vi.mocked(dashboardApi.post).mockImplementation(() => new Promise((_, fail) => { reject = fail; }));

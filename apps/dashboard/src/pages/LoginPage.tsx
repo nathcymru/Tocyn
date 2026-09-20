@@ -1,6 +1,7 @@
 import { MfaPage } from './MfaPage';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
-import { ParkButton, ParkField, ParkInput } from '@luminatick/ui/park';
+import { AuthLogo } from '@luminatick/ui/auth-layout';
+import { ParkAlert, ParkButton, ParkField, ParkInput } from '@luminatick/ui/park';
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -52,7 +53,8 @@ export function LoginPage() {
 
   return (
     <div className={authStyles.page}>
-      <div className={authStyles.card}>
+      <div className={authStyles.card} data-auth-login-card>
+        <AuthLogo className={authStyles.cardLogo} />
         <div className={authStyles.heading}>
 
           <h1>Welcome Back</h1>
@@ -102,6 +104,11 @@ export function LoginPage() {
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </ParkButton>
+          <ParkAlert.Root status="info" variant="surface" role="note" aria-label="Authorised users notice">
+            <ParkAlert.Content>
+              <ParkAlert.Description>Authorised Users Only. Unauthorised access is strictly prohibited and subject to legal action under applicable local and international cybercrime laws. All system activity is monitored and logged.</ParkAlert.Description>
+            </ParkAlert.Content>
+          </ParkAlert.Root>
         </form>
         <p role="status" aria-live="polite" className={authStyles.status}>{loading ? 'Signing in…' : ''}</p>
       </div>
