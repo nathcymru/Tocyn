@@ -10,6 +10,14 @@ const policy = {revision: 4, capabilities: [
   {key:'tools.reference.read', capability:'tools.reference.read', resource:'reference', action:'read', risk:'READ_ONLY', label:'Reference tool reads', ownerAllowed:true, roleAllowed:false, tenantAllowed:false},
 ]};
 describe('permission administration recovery', () => {
+  it('uses a retryable empty state when the initial policy load fails', async () => {
+    vi.mocked(dashboardApi.get).mockRejectedValueOnce(new Error('Synthetic policy failure')).mockResolvedValueOnce(policy);
+    render(<AgentPermissionsPage />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Permissions could not be loaded');
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Reload permissions' }));
+    expect(await screen.findByRole('checkbox', { name: 'Allow agents to use General settings' })).toBeInTheDocument();
+  });
   it('retains focus, bounds saves and preserves denied controls during refresh', async () => {
     let finish!: () => void;
     vi.mocked(dashboardApi.get).mockResolvedValue(policy);

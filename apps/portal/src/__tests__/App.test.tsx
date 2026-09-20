@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { resolveTocynTheme } from '@luminatick/shared/ui-theme';
 import App from '../App';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -10,10 +11,58 @@ describe('portal authentication bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    document.documentElement.removeAttribute('data-tocyn-theme-mode');
+    document.documentElement.classList.remove('dark');
     window.history.replaceState(null, '', '/verify?token=normal-link');
     useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: true, authGeneration: 0 });
   });
-  afterEach(() => { cleanup(); window.history.replaceState(null, '', '/'); });
+  afterEach(() => {
+    cleanup(); vi.unstubAllGlobals();
+    document.documentElement.removeAttribute('data-tocyn-theme-mode');
+    document.documentElement.classList.remove('dark');
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('puts the selected dark mode on html so Park outline tokens match the auth shell', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-color-scheme: dark)',
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
+    vi.mocked(portalApi.get).mockResolvedValue({});
+    window.history.replaceState(null, '', '/login');
+    render(<App />);
+    const method = await screen.findByRole('button', { name: 'Code (OTP)' });
+    expect(method).toHaveClass('button--variant_outline');
+    expect(method.closest('[data-auth-mode]')).toHaveAttribute('data-auth-mode', 'dark');
+    expect(document.documentElement).toHaveClass('dark');
+    expect(method).not.toHaveAttribute('style');
+  });
+
+  it('keeps an explicit light theme when the operating system prefers dark', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-color-scheme: dark)',
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
+    document.documentElement.setAttribute('data-tocyn-theme-mode', 'light');
+    vi.mocked(portalApi.get).mockResolvedValue({});
+    window.history.replaceState(null, '', '/login');
+    render(<App />);
+    const method = await screen.findByRole('button', { name: 'Code (OTP)' });
+    expect(method.closest('[data-auth-mode]')).toHaveAttribute('data-auth-mode', 'light');
+    expect(document.documentElement).not.toHaveClass('dark');
+  });
+
+  it('retains readable text contrast in the dark theme applied at the document boundary', () => {
+    const tokens = resolveTocynTheme({ mode: 'dark' }).tokens;
+    const luminance = (color: string) => {
+      const channels = color.match(/[0-9a-f]{2}/gi)?.map(channel => parseInt(channel, 16) / 255) ?? [];
+      const [red, green, blue] = channels.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    };
+    const foreground = luminance(tokens.colorText);
+    const background = luminance(tokens.colorSurface);
+    expect((foreground + 0.05) / (background + 0.05)).toBeGreaterThanOrEqual(7);
+  });
 
   it('does not let a stale bootstrap denial replace a completed normal verification', async () => {
     let rejectBootstrap: ((reason?: unknown) => void) | undefined;

@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { VerifyPage } from './VerifyPage';
@@ -78,7 +78,7 @@ export function LoginPage() {
       <div className={p.authShell}>
         <div className={[p.authHeading, p.authSuccess].join(' ')}>
           <div className={p.authSuccessIcon}>
-            <IconEnvelope className={p.authSuccessMark} />
+            <IconEnvelope className={p.authSuccessMark} aria-hidden="true" />
           </div>
           <h2 ref={successHeading} tabIndex={-1} className={p.authSuccessTitle}>Check your email</h2>
           <p className={p.authSuccessCopy}>
@@ -101,40 +101,34 @@ export function LoginPage() {
         </p>
       </div>
 
-      <div className={p.authCard}>
-        <div className={p.authCardBody}>
+      <ParkCard.Root>
+        <ParkCard.Body className={p.authForm}>
           {error && (
-            <div id="portal-login-error" role="alert" aria-atomic="true" className={p.authError}>
-              {error}
-            </div>
+            <ParkAlert.Root id="portal-login-error" role="alert" aria-atomic="true" status="error" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>
           )}
           {success && type === 'otp' && (
-            <div role="status" className={p.authNotice}>
-              OTP sent! Redirecting to verification...
-            </div>
+            <ParkAlert.Root role="status" status="info" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>OTP sent! Redirecting to verification...</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>
           )}
 
           <form aria-busy={loading} className={p.authForm} onSubmit={handleSubmit}>
-            <div className={p.authField}>
-              <label htmlFor="email" className={p.authLabel}>
-                Email address
-              </label>
-              <div className={p.authInput}>
-                <ParkInput
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  aria-describedby={error ? "portal-login-error" : undefined}
-                  required
-                  value={email}
-                  onChange={(e) => { if (!loading && !success) setEmail(e.target.value); }}
-                  className={p.formControl}
-                  placeholder="you@example.com"
-                  readOnly={loading || success}
-                />
-              </div>
-            </div>
+            <ParkField label="Email address">
+              <ParkInput
+                name="email"
+                type="email"
+                autoComplete="email"
+                aria-describedby={error ? "portal-login-error" : undefined}
+                required
+                value={email}
+                onChange={(e) => { if (!loading && !success) setEmail(e.target.value); }}
+                className={p.formControl}
+                placeholder="you@example.com"
+                readOnly={loading || success}
+              />
+            </ParkField>
 
             <fieldset>
               <legend className={p.authLegend}>Login method</legend>
@@ -143,7 +137,8 @@ export function LoginPage() {
                   type="button"
                   onClick={() => { if (!loading && !success) setType('magic_link'); }}
                   aria-pressed={type === 'magic_link'}
-                  className={[p.authMethod, type === 'magic_link' ? p.authMethodActive : p.authMethodInactive].join(' ')}
+                  variant={type === 'magic_link' ? 'surface' : 'outline'}
+                  className={p.authMethod}
                   aria-disabled={loading || success}
                 >
                   Magic Link
@@ -152,7 +147,8 @@ export function LoginPage() {
                   type="button"
                   onClick={() => { if (!loading && !success) setType('otp'); }}
                   aria-pressed={type === 'otp'}
-                  className={[p.authMethod, type === 'otp' ? p.authMethodActive : p.authMethodInactive].join(' ')}
+                  variant={type === 'otp' ? 'surface' : 'outline'}
+                  className={p.authMethod}
                   aria-disabled={loading || success}
                 >
                   Code (OTP)
@@ -180,14 +176,14 @@ export function LoginPage() {
                 aria-disabled={loading || success || !email || (!!siteKey && !turnstileToken)}
                 variant="solid" className={p.authSubmit}
               >
-                {loading ? <IconSpinner className={p.authSpinner} /> : <IconArrowRight className={p.authIcon} />}
+                {loading ? <IconSpinner className={p.authSpinner} aria-hidden="true" /> : <IconArrowRight className={p.authIcon} aria-hidden="true" />}
                 {loading ? 'Sending...' : `Send ${type === 'magic_link' ? 'Magic Link' : 'Code'}`}
               </ParkButton>
             </div>
           </form>
           <p role="status" aria-live="polite" className={p.authStatus}>{loading ? 'Sending login instructions…' : ''}</p>
-        </div>
-      </div>
+        </ParkCard.Body>
+      </ParkCard.Root>
     </div>
   );
 }

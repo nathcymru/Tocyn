@@ -2,7 +2,7 @@ import { p } from './portalStyles';
 import { AuthLayout } from '@luminatick/ui/auth-layout';
 import { ParkEmptyState } from '@luminatick/ui/park';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { portalApi } from './api/client';
 import { Layout } from './components/Layout';
@@ -32,6 +32,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   const { login, logout, setLoading } = useAuthStore();
   const localCaptureRoute = import.meta.env.DEV && window.location.pathname === '/__local/auth-capture';
+
+  useLayoutEffect(() => {
+    // Park palette aliases are defined on html. A dark child shell alone can
+    // retain light outline and plain button colours against dark surfaces.
+    const root = document.documentElement;
+    const wasDark = root.classList.contains('dark');
+    const darkPreference = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const sync = () => {
+      const configured = root.getAttribute('data-tocyn-theme-mode');
+      root.classList.toggle('dark', configured === 'dark' || (configured !== 'light' && Boolean(darkPreference?.matches)));
+    };
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ['data-tocyn-theme-mode'] });
+    darkPreference?.addEventListener('change', sync);
+    sync();
+    return () => {
+      observer.disconnect();
+      darkPreference?.removeEventListener('change', sync);
+      root.classList.toggle('dark', wasDark);
+    };
+  }, []);
 
   useEffect(() => {
     if (localCaptureRoute) {

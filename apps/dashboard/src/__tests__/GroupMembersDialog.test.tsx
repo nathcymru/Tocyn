@@ -1,17 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { GroupsPage } from '../pages/GroupsPage';
-const fixture=vi.hoisted(()=>({add:vi.fn(),remove:vi.fn(),create:vi.fn(),delete:vi.fn(),admin:true,membersError:false}));
+const fixture=vi.hoisted(()=>({add:vi.fn(),remove:vi.fn(),create:vi.fn(),delete:vi.fn(),refetchGroups:vi.fn(),admin:true,membersError:false,groupsError:false,groupsEmpty:false}));
 vi.mock('../store/authStore',()=>({useAuthStore:()=>({user:{role:fixture.admin?'admin':'agent'}})}));
 vi.mock('../hooks/useGroups',()=>({
- useGroups:()=>({data:[{id:'group-a',name:'Support',created_at:'2026-09-10'}],isLoading:false}),
+ useGroups:()=>({data:fixture.groupsEmpty?[]:[{id:'group-a',name:'Support',created_at:'2026-09-10'}],isLoading:false,isError:fixture.groupsError,refetch:fixture.refetchGroups}),
  useCreateGroup:()=>({mutateAsync:fixture.create}),useDeleteGroup:()=>({mutateAsync:fixture.delete}),
  useGroupMembers:()=>({data:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'}],isLoading:false,isError:fixture.membersError}),
  useAgents:()=>({data:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'},{id:'candidate-a',full_name:'Available agent',email:'available@example.invalid'}],isLoading:false,isError:false}),
  useAddMember:()=>({mutateAsync:fixture.add}),useRemoveMember:()=>({mutateAsync:fixture.remove}),
 }));
 beforeEach(()=>{
- fixture.admin=true;fixture.membersError=false;
+ fixture.admin=true;fixture.membersError=false;fixture.groupsError=false;fixture.groupsEmpty=false;
  // JSDOM has no layout; this supplies geometry only, not browser acceptance.
  vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});
 });
@@ -21,6 +21,22 @@ async function openMembers(){
  const dialog=await screen.findByRole('dialog',{name:'Manage Members: Support'});
  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Close group members'})).toHaveFocus());return {opener,dialog};
 }
+it('keeps the Park table structure and unifies the member search icon with its input',async()=>{
+ render(<GroupsPage/>);
+ const table=screen.getByRole('table');
+ expect(table.querySelector('tbody tr td')).toBeInTheDocument();
+ expect(table.querySelector('tbody tr')?.className).not.toMatch(/d_flex|display_flex/);
+ fireEvent.click(screen.getByRole('button',{name:'Members'}));
+ const dialog=await screen.findByRole('dialog',{name:'Manage Members: Support'});
+ expect(within(dialog).getByRole('textbox',{name:'Search agents'}).closest('[class*="input-group__root"]')).toBeInTheDocument();
+});
+it('offers a retryable empty state when the group list cannot be loaded',()=>{
+ fixture.groupsError=true;fixture.groupsEmpty=true;
+ render(<GroupsPage/>);
+ expect(screen.getByRole('alert')).toHaveTextContent('Groups could not be loaded');
+ fireEvent.click(screen.getByRole('button',{name:'Retry groups'}));
+ expect(fixture.refetchGroups).toHaveBeenCalledOnce();
+});
 it('labels member actions and restores the opener on Escape',async()=>{
  const {opener,dialog}=await openMembers();
  expect(within(dialog).getByRole('button',{name:'Remove Existing agent'})).not.toHaveClass('opacity-0');

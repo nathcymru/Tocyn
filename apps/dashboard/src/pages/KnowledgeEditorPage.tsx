@@ -1,4 +1,4 @@
-import { ParkButton, ParkEmptyState, ParkInput, ParkKnowledgeEditor } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput, ParkKnowledgeEditor, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -34,6 +34,7 @@ export const KnowledgeEditorPage: React.FC = () => {
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [articleLoadAttempt, setArticleLoadAttempt] = useState(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -71,6 +72,7 @@ export const KnowledgeEditorPage: React.FC = () => {
   useEffect(() => {
     let current = true;
     if (id) {
+      setLoadedRouteKey(null);
       const fetchArticle = async () => {
         try {
           const [doc, articleContent] = await Promise.all([
@@ -90,7 +92,7 @@ export const KnowledgeEditorPage: React.FC = () => {
       fetchArticle();
     }
     return () => { current = false; };
-  }, [id, routeKey]);
+  }, [id, routeKey, articleLoadAttempt]);
 
   const handleSave = async () => {
     if (savingRef.current || !editorReady) return;
@@ -183,12 +185,18 @@ export const KnowledgeEditorPage: React.FC = () => {
             <ParkEmptyState
               id={errorId}
               role="alert"
-              title="Article editor unavailable."
+              title={id && !editorReady ? 'Article could not be loaded' : 'Article editor unavailable'}
               description={error}
+              action={id && !editorReady ? <ParkButton onClick={() => { setError(null); setArticleLoadAttempt(attempt => attempt + 1); }}>Retry article</ParkButton> : undefined}
               headingLevel={false}
               className={styles.error}
             />
           )}
+
+          {!editorReady && !error && <div role="status" aria-label="Loading article" className={styles.card}>
+            <ParkSkeleton height="8" width="full" />
+            <ParkSkeleton height="8" width="full" />
+          </div>}
 
           <div className={styles.card}>
             <div className={styles.fields}>

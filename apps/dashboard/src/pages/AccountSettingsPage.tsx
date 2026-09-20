@@ -28,7 +28,7 @@ export function AccountSettingsPage() {
     <div className={page.accountGrid}>
       <ParkCard.Root variant="outline"><ParkCard.Body><OperatorThemeControl /></ParkCard.Body></ParkCard.Root>
       <ParkCard.Root variant="outline"><ParkCard.Body className={css({
-        '& [data-tocyn-preferences] fieldset > label': { display: 'grid', gap: '1', minW: '0' },
+        '& [data-tocyn-preferences] fieldset > label:not([data-scope="checkbox"])': { display: 'grid', gap: '1', minW: '0' },
         '& [data-tocyn-preferences] fieldset > label > [data-scope="select"]': { minW: '0', w: 'full' },
       })}><OperatorPreferencesControl /></ParkCard.Body></ParkCard.Root>
     </div>

@@ -1,5 +1,6 @@
 import { p } from '../portalStyles';
-import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkField, ParkInput, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -20,6 +21,10 @@ import { TicketSlaStatus } from '../components/TicketSlaStatus';
 type UploadedAttachment = { filename: string; size: number; contentType: string; storageKey: string };
 
 type DetailPage = { ticket: Ticket; articles: Article[]; pagination?: { next_cursor: string | null; has_more: boolean } };
+
+const messageArea = css({ h: 'clamp(12rem, 40dvh, 24rem)', minW: '0' });
+const messageViewport = css({ h: 'full', minH: '0' });
+const messageContent = css({ display: 'flex', minW: '0', flexDirection: 'column', gap: '4', p: '4' });
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -315,7 +320,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
     <div className={p.ticketDetail}>
       <div className={p.ticketDetailHeader}>
         <Link to="/tickets" aria-label="Back to Tickets" className={p.ticketDetailBack}>
-          <IconArrowLeft className={p.chatBackIcon} />
+          <IconArrowLeft className={p.chatBackIcon} aria-hidden="true" />
         </Link>
         <div>
           <h1 ref={conversationHeading} tabIndex={-1} className={p.ticketDetailTitle}>
@@ -339,7 +344,9 @@ function TicketDetail({ id }: { id: string | undefined }) {
       <TicketSlaStatus ticketId={ticket.id} />
       <div className={[p.surface, p.chatSurface].join(' ')}>
         {/* Messages List */}
-        <div ref={messagesRegion} id="conversation-messages" role="region" aria-label="Conversation messages" tabIndex={0} className={[p.messageFeed, p.chatFeed].join(' ')}>
+        <ParkScrollArea.Root className={messageArea}>
+          <ParkScrollArea.Viewport ref={messagesRegion} id="conversation-messages" role="region" aria-label="Conversation messages" tabIndex={0} className={messageViewport}>
+            <ParkScrollArea.Content className={messageContent}>
           {articles.length === 0 ? <ParkEmptyState title="No messages yet." description="Your conversation will appear here when a message is added." headingLevel={false} className={p.emptyState} /> : articles.map((article) => {
             const isCustomer = article.sender_type === 'customer';
             return (
@@ -368,7 +375,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                           onClick={() => downloadAttachment(att.id, att.filename)}
                           className={[p.chatAttachment, isCustomer ? p.chatAttachmentCustomer : p.chatAttachmentSupport].join(' ')}
                         >
-                          <IconPaperclip className={p.chatAttachmentIcon} />
+                          <IconPaperclip className={p.chatAttachmentIcon} aria-hidden="true" />
                           <span className={p.chatAttachmentName}>{att.filename || 'Attachment'}</span>
                           <span className={p.chatAttachmentSize}>
                             {attachmentSize(att.size)}
@@ -380,7 +387,10 @@ function TicketDetail({ id }: { id: string | undefined }) {
               </div>
             );
           })}
-        </div>
+            </ParkScrollArea.Content>
+          </ParkScrollArea.Viewport>
+          <ParkScrollArea.Scrollbar orientation="vertical" />
+        </ParkScrollArea.Root>
         {paginationVisible && <div className={p.chatPagination}>
           <ParkButton type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore || refreshing}
             aria-controls="conversation-messages" aria-busy={loadingMore}
@@ -394,27 +404,27 @@ function TicketDetail({ id }: { id: string | undefined }) {
         {(ticket.status === 'open' || ticket.status === 'pending') && (
           <div className={p.chatComposer}>
             <form aria-busy={sending} onSubmit={handleReply} className={p.chatComposerForm}>
-              <label htmlFor="reply-message" className={p.chatReplyLabel}>Reply</label>
-              {replyError && <p id="reply-error" role="alert" className={p.chatReplyError}>{replyError}</p>}
-              <p role="status" aria-label="Reply status" className={p.chatReplyStatus}>{replyStatus}</p>
-              <p id="reply-requirement" className={p.chatReplyRequirement}>Reply text is required, including when attaching files.</p>
-              <ParkTextarea
-                id="reply-message"
-                readOnly={sending}
-                aria-describedby={replyError ? 'reply-requirement reply-error' : 'reply-requirement'}
-                value={newMessage}
-                onChange={(e) => { if (!sending) setNewMessage(e.target.value); }}
-                placeholder="Type your reply here..."
-                className={p.chatReplyInput}
-                rows={3}
-              />
+              <ParkField label="Reply" className={p.chatReplyInput}>
+                {replyError && <p id="reply-error" role="alert" className={p.chatReplyError}>{replyError}</p>}
+                <p role="status" aria-label="Reply status" className={p.chatReplyStatus}>{replyStatus}</p>
+                <p id="reply-requirement" className={p.chatReplyRequirement}>Reply text is required, including when attaching files.</p>
+                <ParkTextarea
+                  readOnly={sending}
+                  aria-describedby={replyError ? 'reply-requirement reply-error' : 'reply-requirement'}
+                  value={newMessage}
+                  onChange={(e) => { if (!sending) setNewMessage(e.target.value); }}
+                  placeholder="Type your reply here..."
+                  className={p.chatReplyInput}
+                  rows={3}
+                />
+              </ParkField>
 
               {/* Attachment Preview */}
               {attachments.length > 0 && (
                 <div className={p.chatAttachmentList}>
                   {attachments.map((file, idx) => (
                     <div key={idx} className={p.chatAttachmentItem}>
-                      <IconPaperclip className={p.chatAttachmentIcon} />
+                      <IconPaperclip className={p.chatAttachmentIcon} aria-hidden="true" />
                       <span className={[p.chatAttachmentName, p.chatAttachmentNameCompact].join(' ')}>{file.name}</span>
                       <ParkButton
                         type="button"
@@ -423,7 +433,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                         onClick={() => removeAttachment(idx)}
                         className={p.chatAttachmentRemove}
                       >
-                        <IconXmark className={p.chatAttachmentRemoveIcon} />
+                        <IconXmark className={p.chatAttachmentRemoveIcon} aria-hidden="true" />
                       </ParkButton>
                     </div>
                   ))}
@@ -447,7 +457,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     className={p.chatAttachButton}
                     aria-disabled={sending}
                   >
-                    <IconPaperclip className={p.chatAttachIcon} />
+                    <IconPaperclip className={p.chatAttachIcon} aria-hidden="true" />
                     <span className={p.chatAttachLabel}>Attach Files</span>
                   </ParkButton>
                 </div>
@@ -457,7 +467,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
                   aria-disabled={sending || !newMessage.trim()}
                   className={p.chatSendButton}
                 >
-                  {sending ? <IconSpinner className={p.chatSendIcon} /> : <IconPaperPlane className={p.chatSendIcon} />}
+                  {sending ? <IconSpinner className={p.chatSendIcon} aria-hidden="true" /> : <IconPaperPlane className={p.chatSendIcon} aria-hidden="true" />}
                   Send Reply
                 </ParkButton>
               </div>

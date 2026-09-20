@@ -1,10 +1,8 @@
 import { css } from '@luminatick/ui/styled-system/css';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
-import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkEmptyState, ParkInput, ParkTable } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import React, { useEffect, useState } from 'react';
 import {
-  IconKey,
   IconPlus,
   IconTrash,
   IconCopy,
@@ -18,6 +16,7 @@ import { ApiKey, ApiKeyCreatedResponse } from '@luminatick/shared';
 export function ApiKeyPage() {
   const heading = React.useRef<HTMLHeadingElement>(null);
   const revokeOpener = React.useRef<HTMLButtonElement | null>(null);
+  const revokeCancel = React.useRef<HTMLButtonElement>(null);
   const revokeGuard = React.useRef(false);
   const revokedIds = React.useRef(new Set<string>());
   const revokeSucceeded = React.useRef(false);
@@ -38,6 +37,8 @@ export function ApiKeyPage() {
   const createSucceeded = React.useRef(false);
   const createIntent = React.useRef<{ name: string; key: string } | null>(null);
   const createTitleId = React.useId();
+  const revokeTitleId = React.useId();
+  const revokeDescriptionId = React.useId();
   const [creating, setCreating] = useState(false);
   const [createUnresolved, setCreateUnresolved] = useState(false);
   const [createError, setCreateError] = useState('');
@@ -156,31 +157,38 @@ export function ApiKeyPage() {
           }}
           variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
         >
-          <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} />
+          <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
           Create New Key
         </ParkButton>
       </div>
 
-      <TocynDialog open={isCreating} busy={creating} labelledBy={createTitleId} initialFocusEl={() => createUnresolved ? retryCreateButton.current : keyNameInput.current}
-        finalFocusEl={() => uncertainHeading.current ?? (createSucceeded.current ? createdHeading.current : createOpener.current)} onOpenChange={next => { if (!next) closeCreate(); }}>
-        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-          <h2 id={createTitleId} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Create New API Key</h2>
+      <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!open) closeCreate(); }}
+        initialFocusEl={() => createUnresolved ? retryCreateButton.current : keyNameInput.current}
+        finalFocusEl={() => uncertainHeading.current ?? (createSucceeded.current ? createdHeading.current : createOpener.current)}
+        closeOnEscape={!creating} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={createTitleId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={createTitleId}>Create New API Key</ParkDialog.Title>
+            </ParkDialog.Header>
           <form onSubmit={handleCreate} aria-labelledby={createTitleId}>
-            {createError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>{createError}</p>}
             <fieldset disabled={creating} className={css({"display":"grid","gap":"4"})}>
-            <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-              <label htmlFor={`${createTitleId}-name`} className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
-                Key Name
-              </label>
-              <ParkInput
-                type="text" required maxLength={120} disabled={createUnresolved} id={`${createTitleId}-name`} ref={keyNameInput}
-                placeholder="e.g. CRM Integration"
-                className={css({"w":"full"})}
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-              />
-            </div>
-            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+              <ParkDialog.Body className={css({ gap: '3' })}>
+                {createError && <ParkAlert.Root role="alert" status="error" variant="surface">
+                  <ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content>
+                </ParkAlert.Root>}
+                <ParkField label="Key Name" className={css({ w: 'full' })}>
+                  <ParkInput
+                    type="text" required maxLength={120} disabled={createUnresolved} ref={keyNameInput}
+                    placeholder="e.g. CRM Integration"
+                    className={css({"w":"full"})}
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                  />
+                </ParkField>
+              </ParkDialog.Body>
+              <ParkDialog.Footer>
               <ParkButton
                 type="submit" ref={retryCreateButton}
                 variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
@@ -194,16 +202,17 @@ export function ApiKeyPage() {
               >
                 Cancel
               </ParkButton>
-            </div>
+              </ParkDialog.Footer>
             </fieldset>
           </form>
-        </div>
-      </TocynDialog>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
 
       {createdKey && (
         <div className={css({"minW":0})}>
           <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-            <IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} />
+            <IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
             <div>
               <h3 ref={createdHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>New API Key Generated</h3>
               <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
@@ -219,11 +228,13 @@ export function ApiKeyPage() {
               className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}
               title="Copy to clipboard"
             >
-              {copied ? <IconCheck className={css({"w":"4","h":"4","flexShrink":0})} /> : <IconCopy className={css({"w":"4","h":"4","flexShrink":0})} />}
+              {copied ? <IconCheck className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" /> : <IconCopy className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />}
             </ParkButton>
           </div>
 
-          {copyError && <p role="alert">{copyError}</p>}
+          {copyError && <ParkAlert.Root role="alert" status="error" variant="surface">
+            <ParkAlert.Content><ParkAlert.Description>{copyError}</ParkAlert.Description></ParkAlert.Content>
+          </ParkAlert.Root>}
           {copied && <p role="status">API key copied.</p>}
           <ParkButton
             onClick={() => { setCreatedKey(null); createOpener.current?.focus(); }}
@@ -248,9 +259,11 @@ export function ApiKeyPage() {
         </div>
       )}
 
-      {listError && <p role="alert">{listError}</p>}
-      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","overflowX":"auto"})}>
-        <div className={css({"overflowX":"auto"})}>
+      {listError && <ParkAlert.Root role="alert" status="error" variant="surface">
+        <ParkAlert.Content><ParkAlert.Description>{listError}</ParkAlert.Description></ParkAlert.Content>
+      </ParkAlert.Root>}
+      <ParkCard.Root variant="outline">
+        <ParkCard.Body className={css({ overflowX: 'auto' })}>
           <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
             <ParkTable.Head>
               <ParkTable.Row className={css({"borderBottomWidth":"1px","borderColor":"border.default"})}>
@@ -258,19 +271,17 @@ export function ApiKeyPage() {
                 <ParkTable.Header>Prefix</ParkTable.Header>
                 <ParkTable.Header>Created</ParkTable.Header>
                 <ParkTable.Header>Last Used</ParkTable.Header>
-                <ParkTable.Header className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default","textAlign":"right"})}>Actions</ParkTable.Header>
+                <ParkTable.Header className={css({ textAlign: 'right' })}>Actions</ParkTable.Header>
               </ParkTable.Row>
             </ParkTable.Head>
             <ParkTable.Body className={css({"minW":0})}>
               {isLoading ? (
                 <ParkTable.Row>
                   <ParkTable.Cell colSpan={5} className={css({"minW":0})}>
-                    <ParkEmptyState
-                      title="Loading keys..."
-                      headingLevel={false}
-                      aria-busy="true"
-                      className={css({"minW":0})}
-                    />
+                    <div aria-label="Loading API keys" aria-busy="true" className={css({ display: 'grid', gap: '2' })}>
+                      <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
+                      <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
+                    </div>
                   </ParkTable.Cell>
                 </ParkTable.Row>
               ) : keys.length === 0 ? (
@@ -281,12 +292,13 @@ export function ApiKeyPage() {
                       description={listError ? 'Reload this page before relying on the list.' : 'Create a key when an integration requires external API access.'}
                       headingLevel={false}
                       className={css({"minW":0})}
+                      action={listError ? <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton> : undefined}
                     />
                   </ParkTable.Cell>
                 </ParkTable.Row>
               ) : (
                 keys.map((key) => (
-                  <ParkTable.Row key={key.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","borderBottomWidth":"1px","borderColor":"border.default"})}>
+                  <ParkTable.Row key={key.id}>
                     <ParkTable.Cell className={css({"fontWeight":"medium","color":"text.default"})}>{key.name}</ParkTable.Cell>
                     <ParkTable.Cell className={css({"minW":0})}>{key.prefix}</ParkTable.Cell>
                     <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
@@ -294,17 +306,17 @@ export function ApiKeyPage() {
                     </ParkTable.Cell>
                     <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                       <div className={css({"minW":0})}>
-                        <IconClock className={css({"minW":0})} />
+                        <IconClock className={css({"minW":0})} aria-hidden="true" />
                         {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
                       </div>
                     </ParkTable.Cell>
-                    <ParkTable.Cell className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                    <ParkTable.Cell>
                       <ParkButton
                         aria-label={`Revoke ${key.name}`} onClick={event => { revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(key); setRevokeError(''); setRevokeOpen(true); }}
                         className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Revoke Key"
                       >
-                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
+                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
                       </ParkButton>
                     </ParkTable.Cell>
                   </ParkTable.Row>
@@ -312,13 +324,33 @@ export function ApiKeyPage() {
               )}
             </ParkTable.Body>
           </ParkTable.Root>
-        </div>
-      </div>
+        </ParkCard.Body>
+      </ParkCard.Root>
       {revokeStatus && <p role="status">{revokeStatus}</p>}
-      <TocynConfirmDialog open={revokeOpen} busy={revoking} title={`Revoke API key: ${revocation?.name ?? ''}`}
-        description="Revoke this API key? This action cannot be undone." confirmLabel={revoking ? 'Revoking...' : 'Revoke key'} error={revokeError}
-        onConfirm={handleDelete} onOpenChange={next => { if (!next && !revokeGuard.current) setRevokeOpen(false); }}
-        finalFocusEl={() => revokeSucceeded.current ? heading.current : revokeOpener.current} />
+      <ParkDialog.Root open={revokeOpen}
+        onOpenChange={({ open }) => { if (!open && !revokeGuard.current) setRevokeOpen(false); }}
+        initialFocusEl={() => revokeCancel.current}
+        finalFocusEl={() => revokeSucceeded.current ? heading.current : revokeOpener.current}
+        closeOnEscape={!revoking} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={revokeTitleId} aria-describedby={revokeDescriptionId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={revokeTitleId}>{`Revoke API key: ${revocation?.name ?? ''}`}</ParkDialog.Title>
+              <ParkDialog.Description id={revokeDescriptionId}>Revoke this API key? This action cannot be undone.</ParkDialog.Description>
+            </ParkDialog.Header>
+            {revokeError && <ParkDialog.Body>
+              <ParkAlert.Root role="alert" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{revokeError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>
+            </ParkDialog.Body>}
+            <ParkDialog.Footer>
+              <ParkButton type="button" ref={revokeCancel} variant="outline" disabled={revoking} onClick={() => { if (!revokeGuard.current) setRevokeOpen(false); }}>Cancel</ParkButton>
+              <ParkButton type="button" variant="solid" colorPalette="red" disabled={revoking} onClick={handleDelete}>{revoking ? 'Revoking...' : 'Revoke key'}</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 }

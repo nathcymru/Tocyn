@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useOperatorCapacity,type CapacityInput } from '../../hooks/useOperatorCapacity';
 import { DashboardSelect } from '../DashboardSelect';
@@ -25,6 +25,18 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
   const value=ceiling.trim()===''?NaN:Number(ceiling);
   const valid=Number.isSafeInteger(value)&&value>=0&&value<=1000;
   const submit=async(event:React.FormEvent)=>{event.preventDefault();if(valid)await capacity.save({availability,assignmentCeiling:value});};
+  if(!data&&phase==='loading')return <div className={capacityStyles.panel} role="status" aria-live="polite">
+    <ParkVisuallyHidden>Loading current work…</ParkVisuallyHidden>
+    <ParkSkeleton className={css({ h: '5', w: '70%' })}/>
+    <ParkSkeleton className={css({ h: '5', w: '90%' })}/>
+    <ParkSkeleton className={css({ h: '5', w: '55%' })}/>
+  </div>;
+  if(!data)return <ParkEmptyState
+    headingLevel={3}
+    title={phase==='idle'?'Current work unavailable for this session':'Current work unavailable'}
+    description={message??'The current policy could not be confirmed.'}
+    action={phase==='error'||phase==='conflict'?<ParkButton type="button" onClick={()=>void capacity.reload()}>Retry</ParkButton>:undefined}
+  />;
   return <div className={capacityStyles.panel}>
     <p className={capacityStyles.note}>Current work includes assigned open and pending conversations, including waiting and snoozed work.</p>
     {data&&<>

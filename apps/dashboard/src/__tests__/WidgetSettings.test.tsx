@@ -24,6 +24,14 @@ it('blocks saving unavailable settings instead of writing defaults',async()=>{
  api.get.mockRejectedValue(new Error('synthetic unavailable'));render(<QueryClientProvider client={client}><WidgetChannelPage/></QueryClientProvider>);
  expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded');expect(screen.getByRole('button',{name:'Save Changes'})).toBeDisabled();expect(api.put).not.toHaveBeenCalled();
 });
+it('offers a retry after settings fail to load and restores the feature controls',async()=>{
+ api.get.mockRejectedValueOnce(new Error('synthetic unavailable')).mockResolvedValueOnce(initial);
+ render(<QueryClientProvider client={client}><WidgetChannelPage/></QueryClientProvider>);
+ fireEvent.click(await screen.findByRole('button',{name:'Retry widget settings'}));
+ expect(await screen.findByRole('checkbox',{name:'Chat Enabled'})).toBeChecked();
+ expect(screen.getByRole('button',{name:'Save Changes'})).toBeEnabled();
+ expect(api.get).toHaveBeenCalledTimes(2);
+});
 it('waits for clipboard success and recovers from failure without claiming an installed widget',async()=>{
  let finish!:()=>void;const write=vi.fn().mockRejectedValueOnce(new Error('synthetic clipboard failure')).mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:write}});
  await open();const copy=screen.getByRole('button',{name:'Copy Snippet'});fireEvent.click(copy);expect(await screen.findByRole('alert')).toHaveTextContent('could not be copied');expect(screen.queryByText('Snippet copied.')).not.toBeInTheDocument();

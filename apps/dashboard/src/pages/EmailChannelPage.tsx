@@ -1,8 +1,8 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCheckbox, ParkInput } from '@luminatick/ui/park';
-import { ParkEmptyState } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
+import { Badge } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -11,10 +11,8 @@ import {
   IconEnvelope,
   IconPlus,
   IconTrash,
-  IconCheck,
-  IconCircleExclamation
+  IconCheck
 } from '@luminatick/ui/icons';
-import { clsx } from 'clsx';
 
 import {
   IconGear,
@@ -157,16 +155,16 @@ export function EmailChannelPage() {
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Email Channels</h1>
-          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Manage inbound support email addresses</p>
+          <h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Email Channels</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Manage inbound support email addresses</p>
         </div>
         {!isAdding && (
-          <ParkButton
+          <ParkButton type="button"
             ref={addOpener}
             onClick={() => { setIsAdding(true); setError(null); setAddStatus(''); }}
             className={css({"minW":0})}
           >
-            <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} />
+            <IconPlus aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
             Add Email
           </ParkButton>
         )}
@@ -174,20 +172,14 @@ export function EmailChannelPage() {
 
 
       {addStatus && <p role="status">{addStatus}</p>}
-      <form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-        <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-          <div className={css({"w":"4","h":"4","flexShrink":0})}>
-            <IconGear className={css({"w":"4","h":"4","flexShrink":0})} />
-          </div>
-          <div>
-            <h2 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Resend Integration</h2>
-            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Configure your Resend API credentials for outbound emails.</p>
-          </div>
-        </div>
+      <ParkCard.Root variant="outline">
+        <ParkCard.Header><ParkCard.Title asChild><h2 className={css({ display: 'flex', alignItems: 'center', gap: '2' })}><IconGear aria-hidden="true" className={css({ w: '5', h: '5' })} /> Resend Integration</h2></ParkCard.Title>
+          <ParkCard.Description>Configure your Resend API credentials for outbound emails.</ParkCard.Description></ParkCard.Header>
+        <ParkCard.Body><form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className={css({ display: 'grid', gap: '4' })}>
 
-        {settingsLoading && <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading configuration…" className={css({"minW":0})} />}
+        {settingsLoading && <div role="status" aria-label="Loading email configuration" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading configuration…</span><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /></div>}
         {settingsFailed && <ParkEmptyState role="alert" headingLevel={false} title="Configuration could not be loaded." action={<ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton>} className={css({"minW":0})} />}
-        {providerError && <p role="alert">{providerError}</p>}
+        {providerError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{providerError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
         <div className={css({"display":"grid","gap":"4"})}>
           <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
             <label htmlFor="resend-api-key">
@@ -200,7 +192,7 @@ export function EmailChannelPage() {
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendApiKey(e.target.value); }}
               className={css({"w":"full"})}
             />
-            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Required to send outbound email replies.</p>
+            <p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Required to send outbound email replies.</p>
           </div>
           <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
             <label htmlFor="resend-from-email">
@@ -213,43 +205,40 @@ export function EmailChannelPage() {
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendFromEmail(e.target.value); }}
               className={css({"w":"full"})}
             />
-            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Fallback email if a group email is not configured.</p>
+            <p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Fallback email if a group email is not configured.</p>
           </div>
         </div>
         <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-          {resendSuccess && <span role="status" className={css({"color":"text.default"})}><IconCheck className={css({"w":"4","h":"4","flexShrink":0})}/> Configuration saved; delivery has not been verified.</span>}
+          {resendSuccess && <span role="status" className={css({ color: 'fg.default' })}><IconCheck aria-hidden="true" className={css({ w: '4', h: '4' })} /> Configuration saved; delivery has not been verified.</span>}
           <ParkButton
             type="submit"
-            disabled={savingResend || settingsLoading || settingsFailed || !resendApiKey || !resendFromEmail}
+            disabled={settingsLoading || settingsFailed || !resendApiKey || !resendFromEmail} loading={savingResend} loadingText="Saving configuration…"
             className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            <IconFloppyDisk className={css({"w":"4","h":"4","flexShrink":0})} />
-            {savingResend ? 'Saving...' : 'Save Configuration'}
+            <IconFloppyDisk aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
+            Save Configuration
           </ParkButton>
         </div>
-      </form>
+      </form></ParkCard.Body></ParkCard.Root>
 
       {isAdding && (
-        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-          <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-            <h2 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Add Support Email</h2>
-            <ParkButton
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+            <ParkCard.Title asChild><h2>Add Support Email</h2></ParkCard.Title>
+            <ParkButton type="button" variant="outline"
               disabled={createEmail.isPending}
               onClick={() => { setIsAdding(false); setError(null); requestAnimationFrame(() => addOpener.current?.focus()); }}
               className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
               Cancel
             </ParkButton>
-          </div>
+          </ParkCard.Header>
 
           {error && (
-            <div role="alert" ref={addError} tabIndex={-1} className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>
-              <IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} />
-              {error}
-            </div>
+            <ParkAlert.Root role="alert" status="error" ref={addError} tabIndex={-1}><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>
           )}
 
-          <form aria-label="Add support email" aria-busy={createEmail.isPending} onSubmit={handleSubmit} className={css({"minW":0})}>
+          <ParkCard.Body><form aria-label="Add support email" aria-busy={createEmail.isPending} onSubmit={handleSubmit} className={css({ display: 'grid', gap: '4' })}>
             <div className={css({"display":"grid","gap":"4"})}>
               <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                 <label htmlFor="support-email-address">
@@ -284,7 +273,7 @@ export function EmailChannelPage() {
                   Assign to Group
                 </label>
                 <DashboardSelect id="support-email-group" aria-label="Assign to Group" disabled={createEmail.isPending} value={formData.group_id} onValueChange={value => setFormData({ ...formData, group_id: value })} options={[{ value: '', label: '(No specific group)' }, ...(groups ?? []).map(group => ({ value: group.id, label: group.name }))]} />
-                <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                <p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                   Tickets from this email will be automatically assigned to this group.
                 </p>
               </div>
@@ -302,19 +291,19 @@ export function EmailChannelPage() {
             <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
               <ParkButton
                 type="submit"
-                disabled={createEmail.isPending}
+                loading={createEmail.isPending} loadingText="Saving email…"
                 className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
-                {createEmail.isPending ? 'Saving...' : 'Save Email'}
+                Save Email
               </ParkButton>
             </div>
-          </form>
-        </div>
+          </form></ParkCard.Body>
+        </ParkCard.Root>
       )}
 
-      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+      <ParkCard.Root variant="outline"><ParkCard.Body>
         {isLoading ? (
-          <ParkEmptyState role="status" title="Loading emails..." description="Configured support addresses are loading." className={css({"minW":0})} />
+          <div role="status" aria-label="Loading email channels" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading emails...</span><ParkSkeleton aria-hidden="true" className={css({ h: '16', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '16', w: 'full' })} /></div>
         ) : emailsFailed ? (
           <ParkEmptyState role="alert" title="Email channels could not be loaded." description="Retry to check the configured support addresses again." action={<ParkButton onClick={() => { void reloadEmails(); }}>Retry channels</ParkButton>} className={css({"minW":0})} />
         ) : emails?.length === 0 ? (
@@ -322,21 +311,17 @@ export function EmailChannelPage() {
         ) : (
           <div className={css({"display":"grid","gap":"4"})}>
             {emails?.map((email) => (
-              <div key={email.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                  <div className={css({"w":"4","h":"4","flexShrink":0})}>
-                    <IconEnvelope className={css({"w":"4","h":"4","flexShrink":0})} />
-                  </div>
+              <div key={email.id} className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4', flexWrap: 'wrap', py: '3' })}>
+                <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: '0' })}>
+                  <IconEnvelope aria-hidden="true" className={css({ w: '5', h: '5', flexShrink: 0, color: 'fg.muted' })} />
                   <div>
-                    <div className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
-                      <p className={css({"minW":0})}>{email.email_address}</p>
+                    <div className={css({ display: 'flex', alignItems: 'center', gap: '2', flexWrap: 'wrap' })}>
+                      <p className={css({ m: '0', fontWeight: 'semibold', color: 'fg.default', overflowWrap: 'anywhere' })}>{email.email_address}</p>
                       {email.is_default && (
-                        <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted"})}>
-                          <IconCheck className={css({"w":"4","h":"4","flexShrink":0})} /> Default
-                        </span>
+                        <Badge colorPalette="green"><IconCheck aria-hidden="true" className={css({ w: '4', h: '4' })} /> Default</Badge>
                       )}
                     </div>
-                    <div className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                    <div className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>
                       {email.name && <span>{email.name}</span>}
                       {email.name && <span className={css({"minW":0})}>•</span>}
                       {email.group_id && groups ? (
@@ -349,20 +334,20 @@ export function EmailChannelPage() {
                 </div>
 
                 <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                  <ParkButton
+                  <ParkButton type="button" variant="outline"
                     aria-label={`Remove ${email.email_address}`} onClick={event => { removalOpener.current = event.currentTarget; removalSucceeded.current = false; setRemoval(email); setRemoveError(''); setRemoveOpen(true); }}
                     disabled={deleteEmail.isPending}
                     className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                     title="Remove email"
                   >
-                    <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
+                    <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                   </ParkButton>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </ParkCard.Body></ParkCard.Root>
       {removeStatus && <p role="status">{removeStatus}</p>}
       <TocynConfirmDialog open={removeOpen} busy={removing} title={`Remove email channel: ${removal?.email_address ?? ''}`}
         description="Remove this configured email channel?" confirmLabel={removing ? 'Removing...' : 'Remove channel'} error={removeError}

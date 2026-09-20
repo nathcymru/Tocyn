@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { useEffect } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { createMemoryRouter, Link, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
@@ -41,7 +41,7 @@ function show(autoSelect = false) {
     { path: '/inbox/all/beta2-email', element: <OperatorWorkspaceProvider><Conversation autoSelect={autoSelect} /></OperatorWorkspaceProvider> },
     { path: '/settings', element: <h1>General settings</h1> },
   ], { initialEntries: ['/inbox/all/beta2-email'] });
-  render(<RouterProvider router={router} />);
+  render(<StrictMode><RouterProvider router={router} /></StrictMode>);
   return router;
 }
 
@@ -82,6 +82,31 @@ it('does not turn a restored splitter ratio into an unsaved preference or block 
   fireEvent.click(screen.getByRole('link', { name: 'Settings' }));
   expect(await screen.findByRole('heading', { name: 'General settings' })).toBeInTheDocument();
   expect(writes).toHaveLength(1);
+});
+
+it('navigates after an immediate selection save while an untouched draft is still restoring', async () => {
+  const initial = { ...storedWorkspace, selectedTicketId: null };
+  let acknowledgeWorkspace!: (response: Response) => void;
+  const workspaceWrite = new Promise<Response>(resolve => { acknowledgeWorkspace = resolve; });
+  const untouchedDraftRead = new Promise<Response>(() => {});
+  const writes: unknown[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit = {}) => {
+    if (url === '/api/workspace/state' && options.method === 'PUT') {
+      writes.push(JSON.parse(String(options.body)));
+      return workspaceWrite;
+    }
+    if (url === '/api/workspace/state') return json(initial);
+    if (url === '/api/workspace/drafts/beta2-email') return untouchedDraftRead;
+    return json([]);
+  }));
+  const router = show(true);
+  await waitFor(() => expect(state()).toMatchObject({ status: 'unsaved', dirty: true, draft: 'loading' }));
+  fireEvent.click(screen.getByRole('link', { name: 'Settings' }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(router.state.location.pathname).toBe('/inbox/all/beta2-email');
+  await act(async () => acknowledgeWorkspace(json({ ...initial, selectedTicketId: 'beta2-email', revision: 8 })));
+  expect(await screen.findByRole('heading', { name: 'General settings' })).toBeInTheDocument();
+  expect(writes[0]).toMatchObject({ selectedTicketId: 'beta2-email', expectedRevision: 7 });
 });
 
 it('still fences a genuinely edited reply until its draft write is acknowledged', async () => {

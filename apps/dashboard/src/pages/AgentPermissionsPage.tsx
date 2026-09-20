@@ -1,9 +1,7 @@
 import { css } from '@luminatick/ui/styled-system/css';
-import { ParkButton, ParkEmptyState, ParkSwitch } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkSkeleton, ParkSwitch } from '@luminatick/ui/park';
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  IconCircleExclamation,
-  IconSpinner,
   IconFloppyDisk,
   IconShieldHalved
 } from '@luminatick/ui/icons';
@@ -85,32 +83,38 @@ export function AgentPermissionsPage() {
 
 
   return (
-    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
+    <div className={css({ display: 'grid', gap: '5', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}><IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} /> Agent permissions</h1>
-          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
+          <h1 className={css({ m: '0', display: 'flex', alignItems: 'center', gap: '2', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}><IconShieldHalved aria-hidden="true" className={css({ w: '5', h: '5', flexShrink: 0 })} /> Agent permissions</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
         </div>
-        <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
-          {saving ? <IconSpinner className={css({"w":"4","h":"4","flexShrink":0})} /> : <IconFloppyDisk className={css({"w":"4","h":"4","flexShrink":0})} />} Save changes
+        <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} loading={saving} loadingText="Saving permissions…">
+          <IconFloppyDisk aria-hidden="true" className={css({ w: '4', h: '4', flexShrink: 0 })} /> Save changes
         </ParkButton>
       </div>
 
-      {loading ? <ParkEmptyState title="Loading permissions…" headingLevel={false} aria-busy="true" className={css({"py":"6"})} /> : <p role="status" aria-live="polite" className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{status}</p>}
-      {error && <div role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}><IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} /><p className={css({"minW":0})}>{error}</p><ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Reload permissions</ParkButton></div>}
+      {loading ? <section role="status" aria-label="Loading permissions" aria-busy="true" className={css({ display: 'grid', gap: '3' })}>
+        <span className={css({ srOnly: true })}>Loading permissions…</span>
+        <ParkSkeleton aria-hidden="true" className={css({ h: '20', w: 'full' })} />
+        <ParkSkeleton aria-hidden="true" className={css({ h: '20', w: 'full' })} />
+      </section> : <p role="status" aria-live="polite" className={css({ color: 'fg.muted', textStyle: 'sm' })}>{status}</p>}
+      {error && capabilities.length === 0 ? <ParkEmptyState role="alert" title="Permissions could not be loaded" description={error} action={<ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>} /> : error && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description>
+        <ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>
+      </ParkAlert.Content></ParkAlert.Root>}
 
       <div className={css({"display":"grid","gap":"3"})}>
-        {capabilities.length === 0 && !loading ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className={css({"py":"6"})} /> : capabilities.map(capability => {
+        {capabilities.length === 0 && !loading && !error ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className={css({"py":"6"})} action={<ParkButton type="button" onClick={() => void loadPermissions()}>Reload permissions</ParkButton>} /> : capabilities.map(capability => {
           const tenantManaged = capability.key !== capability.capability;
           const available = capability.ownerAllowed && capability.roleAllowed && tenantManaged;
           const checked = policies[capability.key] ?? false;
           const descriptionId = `capability-${capability.capability}-description`;
           return (
-            <div key={capability.capability} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","p":"4","bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"md"})}>
-              <div className={css({"minW":0})}>
-                <h2 className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>{capability.label}</h2>
-                <p id={descriptionId} className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
-                {!available && <p className={css({"minW":0})}>Managed by the deployment owner; this tenant cannot enable it.</p>}
+            <ParkCard.Root key={capability.capability} variant="outline"><ParkCard.Body className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4', flexWrap: 'wrap' })}>
+              <div className={css({ minW: '0', flex: '1' })}>
+                <h2 className={css({ m: '0', fontWeight: 'medium', color: 'fg.default', textStyle: 'sm' })}>{capability.label}</h2>
+                <p id={descriptionId} className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
+                {!available && <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Managed by the deployment owner; this tenant cannot enable it.</p>}
               </div>
               <ParkSwitch.Root checked={checked} disabled={!available || saving || loading || revision === null}
                 onCheckedChange={() => handleToggle(capability)} className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}>
@@ -118,7 +122,7 @@ export function AgentPermissionsPage() {
                 <ParkSwitch.HiddenInput aria-describedby={descriptionId} />
                 <ParkSwitch.Label>Allow agents to use {capability.label}</ParkSwitch.Label>
               </ParkSwitch.Root>
-            </div>
+            </ParkCard.Body></ParkCard.Root>
           );
         })}
       </div>

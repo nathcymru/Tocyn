@@ -1,5 +1,5 @@
 import { css } from '@luminatick/ui/styled-system/css';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkProgress } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkField, ParkInput, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi, ApiError } from '../api/client';
 import {
@@ -147,32 +147,24 @@ export function UsagePage() {
         <div>
           <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.default","maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>2. Enter your credentials:</h4>
           <div className={css({"display":"grid","gap":"4"})}>
-            <div>
-              <label htmlFor="cloudflare-account-id" className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
-                Cloudflare Account ID
-              </label>
+            <ParkField label="Cloudflare Account ID">
               <ParkInput
-                id="cloudflare-account-id"
                 type="text"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 placeholder="e.g., 1234567890abcdef1234567890abcdef"
                 className={css({"w":"full"})}
               />
-            </div>
-            <div>
-              <label htmlFor="cloudflare-api-token" className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
-                Cloudflare API Token
-              </label>
+            </ParkField>
+            <ParkField label="Cloudflare API Token">
               <ParkInput
-                id="cloudflare-api-token"
                 type="password"
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
                 placeholder={isAuthError ? "Enter your API token" : "•••••••• (Leave blank to keep existing)"}
                 className={css({"w":"full"})}
               />
-            </div>
+            </ParkField>
             <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
               <ParkButton
                 onClick={saveCredentials}
@@ -198,7 +190,12 @@ export function UsagePage() {
   );
 
   if (loading) {
-    return <ParkEmptyState title="Loading usage data…" headingLevel={false} aria-busy="true" className={css({"py":"6"})} />;
+    return <div aria-label="Loading usage data" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })}>
+      <ParkSkeleton aria-hidden="true" className={css({ w: '48', h: '8' })} />
+      <div className={css({ display: 'grid', gap: '4', gridTemplateColumns: { base: '1fr', md: 'repeat(2,minmax(0,1fr))', xl: 'repeat(3,minmax(0,1fr))' } })}>
+        {Array.from({ length: 6 }, (_, index) => <ParkSkeleton key={index} aria-hidden="true" className={css({ h: '32', w: 'full' })} />)}
+      </div>
+    </div>;
   }
 
   if (isMasterKeyMissing) {
@@ -210,25 +207,7 @@ export function UsagePage() {
             Usage & Costs
           </h1>
         </div>
-        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-          <IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} />
-          <div>
-            <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Critical: Missing Encryption Key</h3>
-            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>
-              Your server is missing the <code className={css({"overflowX":"auto","rounded":"md","bg":"bg.muted","p":"3","fontFamily":"mono","fontSize":"sm"})}>APP_MASTER_KEY</code> environment variable.
-              This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
-            </p>
-            <p className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
-              Please ask your system administrator to add it to your server's environment configuration, then restart the application.
-            </p>
-            <ParkButton
-              onClick={fetchUsage}
-              className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
-            >
-              Retry
-            </ParkButton>
-          </div>
-        </div>
+        <ParkEmptyState role="alert" title="Usage data is unavailable" description="The server is missing its encryption key. Ask an administrator to restore the server configuration, then retry." action={<ParkButton onClick={fetchUsage}>Retry</ParkButton>} />
       </div>
     );
   }
@@ -242,16 +221,7 @@ export function UsagePage() {
             Usage & Costs
           </h1>
         </div>
-        <div className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>
-          <p className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Error loading usage data</p>
-          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>{error}</p>
-          <ParkButton
-            onClick={fetchUsage}
-            className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
-          >
-            Retry
-          </ParkButton>
-        </div>
+        <ParkEmptyState role="alert" title="Error loading usage data" description={error} action={<ParkButton onClick={fetchUsage}>Retry</ParkButton>} />
       </div>
     );
   }

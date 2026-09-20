@@ -8,6 +8,15 @@ vi.mock('../api/client',async()=>({...await vi.importActual<typeof import('../ap
 const row=(revision=1)=>({userId:'operator',revision,availability:'available',assignmentCeiling:3,currentWork:2,status:'available',definitionVersion:'2026-09-11.3',asOf:'2026-09-13T13:00:00Z'});
 beforeEach(()=>{vi.resetAllMocks();useAuthStore.getState().setAuth('synthetic',{id:'admin',tenant_id:'a',email:'admin@example.test',role:'admin',full_name:'Synthetic Admin',mfa_enabled:true});});
 afterEach(()=>{cleanup();useAuthStore.getState().logout();});
+it('shows a retryable Park empty state when the first current-work load fails',async()=>{
+ vi.mocked(dashboardApi.get).mockRejectedValueOnce(new Error('Synthetic unavailable')).mockResolvedValueOnce(row());
+ render(<OperatorCapacityPanel userId="operator"/>);
+ expect(await screen.findByRole('region',{name:'Current work unavailable'})).toBeVisible();
+ expect(screen.queryByText('Loading current work…')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+ await screen.findByText('Current work');
+ expect(screen.queryByRole('region',{name:'Current work unavailable'})).not.toBeInTheDocument();
+});
 it('retains entered values through a conflict and failed reload, then explicitly resubmits the fresh revision',async()=>{
  vi.mocked(dashboardApi.get).mockResolvedValueOnce(row()).mockRejectedValueOnce(new Error('Synthetic failed reload')).mockResolvedValueOnce({...row(4),assignmentCeiling:8});
  vi.mocked(dashboardApi.put).mockRejectedValueOnce(new ApiError('Conflict',409)).mockResolvedValueOnce({...row(5),availability:'unavailable',assignmentCeiling:5});

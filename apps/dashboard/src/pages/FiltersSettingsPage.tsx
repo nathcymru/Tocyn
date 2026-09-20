@@ -1,7 +1,8 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog, TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkEmptyState, ParkInput, ParkTable } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
+import { Badge } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
 import {
@@ -28,7 +29,7 @@ const OPERATORS = [
 ];
 
 export function FiltersSettingsPage() {
-  const { data: filters, isLoading } = useFilters();
+  const { data: filters, isLoading, isError, refetch } = useFilters();
   const createFilter = useCreateFilter();
   const updateFilter = useUpdateFilter();
   const deleteFilter = useDeleteFilter();
@@ -140,21 +141,21 @@ export function FiltersSettingsPage() {
   };
 
   if (isLoading) {
-    return <ParkEmptyState role="status" className={css({"py":"6"})} title="Loading filters..." headingLevel={false} />;
+    return <section role="status" aria-label="Loading filters" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}><span className={css({ srOnly: true })}>Loading filters...</span><ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} /></section>;
   }
 
   return (
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Custom Filters</h1>
-          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Create and manage ticket filters for your team.</p>
+          <h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Custom Filters</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Create and manage ticket filters for your team.</p>
         </div>
-        <ParkButton
+        <ParkButton type="button"
           onClick={event => handleOpenModal(undefined, event.currentTarget)}
           className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
         >
-          <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} />
+          <IconPlus aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
           Create Filter
         </ParkButton>
       </div>
@@ -164,17 +165,18 @@ export function FiltersSettingsPage() {
         description="Delete this filter? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete filter'} error={deleteError}
         onConfirm={handleDelete} onOpenChange={next => { if (!next && !deletionGuard.current) setDeleteOpen(false); }}
         finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
-      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","overflowX":"auto"})}>
-        <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
+      {isError && !filters?.length ? <ParkEmptyState role="alert" title="Filters could not be loaded" description="Retry to load saved filters before editing them." action={<ParkButton type="button" onClick={() => void refetch()}>Retry filters</ParkButton>} /> : <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
+        {isError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>The filter list could not be refreshed.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetch()}>Retry filters</ParkButton></ParkAlert.Content></ParkAlert.Root>}
+        <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
           <ParkTable.Head>
-            <ParkTable.Row className={css({"borderBottomWidth":"1px","borderColor":"border.default"})}>
-              <ParkTable.Header className={css({"p":"3","textAlign":"left","verticalAlign":"top","fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Name</ParkTable.Header>
-              <ParkTable.Header className={css({"p":"3","textAlign":"left","verticalAlign":"top","fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>System</ParkTable.Header>
-              <ParkTable.Header className={css({"p":"3","textAlign":"right","verticalAlign":"top","fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default","display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>Actions</ParkTable.Header>
+            <ParkTable.Row>
+              <ParkTable.Header>Name</ParkTable.Header>
+              <ParkTable.Header>System</ParkTable.Header>
+              <ParkTable.Header>Actions</ParkTable.Header>
             </ParkTable.Row>
           </ParkTable.Head>
-          <ParkTable.Body className={css({"minW":0})}>
-            {filters?.length === 0 ? (
+          <ParkTable.Body>
+            {!filters?.length ? (
               <ParkTable.Row>
                 <ParkTable.Cell colSpan={3} className={css({"py":"6"})}>
                   <ParkEmptyState title="No filters created yet." description="Create a filter to save a view for your team."
@@ -183,33 +185,29 @@ export function FiltersSettingsPage() {
               </ParkTable.Row>
             ) : (
               filters?.map((filter) => (
-                <ParkTable.Row key={filter.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","borderBottomWidth":"1px","borderColor":"border.default"})}>
-                  <ParkTable.Cell className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>
-                    <div className={css({"fontWeight":"medium","color":"text.default"})}>{filter.name}</div>
+                <ParkTable.Row key={filter.id}>
+                  <ParkTable.Cell>
+                    <div className={css({ fontWeight: 'medium', color: 'fg.default' })}>{filter.name}</div>
                   </ParkTable.Cell>
-                  <ParkTable.Cell className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>
-                    {filter.is_system ? (
-                      <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted","minW":0})}>System</span>
-                    ) : (
-                      <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted","minW":0})}>Custom</span>
-                    )}
+                  <ParkTable.Cell>
+                    <Badge colorPalette={filter.is_system ? 'blue' : 'gray'}>{filter.is_system ? 'System' : 'Custom'}</Badge>
                   </ParkTable.Cell>
-                  <ParkTable.Cell className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>
-                    <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                      <ParkButton
+                  <ParkTable.Cell>
+                    <div className={css({ display: 'flex', alignItems: 'center', gap: '2', flexWrap: 'wrap' })}>
+                      <ParkButton type="button" variant="outline" aria-label={`Edit ${filter.name}`}
                         onClick={event => handleOpenModal(filter, event.currentTarget)}
                         className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Edit Filter"
                       >
-                        <IconPenToSquare className={css({"w":"4","h":"4","flexShrink":0})} />
+                        <IconPenToSquare aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                       </ParkButton>
                       {!filter.is_system && (
-                        <ParkButton
+                        <ParkButton type="button" variant="outline"
                           aria-label={`Delete ${filter.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(filter); setDeleteError(''); setDeleteOpen(true); }}
                           className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                           title="Delete Filter"
                         >
-                          <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
+                          <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                         </ParkButton>
                       )}
                     </div>
@@ -219,21 +217,20 @@ export function FiltersSettingsPage() {
             )}
           </ParkTable.Body>
         </ParkTable.Root>
-      </div>
+      </ParkCard.Body></ParkCard.Root>}
 
       <TocynDialog open={isModalOpen} busy={saving} onOpenChange={open => { if (!open) handleCloseModal(); }}
         labelledBy={titleId} initialFocusEl={() => nameInput.current} finalFocusEl={() => opener.current}>
-          <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-              <h2 id={titleId} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+          <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+              <ParkDialog.Title id={titleId}>
                 {editingFilter ? 'Edit Filter' : 'Create Filter'}
-              </h2>
-              <ParkButton type="button" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
-                <IconXmark className={css({"w":"4","h":"4","flexShrink":0})} />
+              </ParkDialog.Title>
+              <ParkButton type="button" variant="plain" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal}>
+                <IconXmark aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
               </ParkButton>
-            </div>
-            <form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
-              {saveError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>{saveError}</p>}
+          </ParkDialog.Header>
+          <ParkDialog.Body><form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
+              {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
               <fieldset disabled={saving} className={css({"display":"grid","gap":"4"})}>
               <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                 <label htmlFor={nameId}>Filter Name</label>
@@ -249,19 +246,19 @@ export function FiltersSettingsPage() {
 
               <div>
                 <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                  <label className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>Conditions</label>
+                  <h3 className={css({ m: '0', fontWeight: 'medium', color: 'fg.default', textStyle: 'sm' })}>Conditions</h3>
                   <ParkButton
                     type="button"
                     onClick={addCondition}
                     className={css({"minW":0})}
                   >
-                    <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} /> Add Condition
+                    <IconPlus aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} /> Add Condition
                   </ParkButton>
                 </div>
 
                 <div className={css({"display":"grid","gap":"4"})}>
                   {formData.conditions.map((cond, idx) => (
-                    <div key={idx} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                    <div key={idx} className={css({ display: 'grid', gap: '2', gridTemplateColumns: { base: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr)) auto' }, alignItems: 'end' })}>
                       <DashboardSelect aria-label={`Condition ${idx + 1} field`} value={cond.field} onValueChange={value => changeCondition(idx, 'field', value)} options={FIELDS} />
                       <DashboardSelect aria-label={`Condition ${idx + 1} operator`} value={cond.operator} onValueChange={value => changeCondition(idx, 'operator', value)} options={OPERATORS} />
                       <ParkInput
@@ -276,7 +273,7 @@ export function FiltersSettingsPage() {
                         aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}
                         className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                       >
-                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
+                        <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                       </ParkButton>
                     </div>
                   ))}
@@ -289,9 +286,9 @@ export function FiltersSettingsPage() {
                 </div>
               </div>
 
-              <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+              <ParkDialog.Footer>
                 <ParkButton
-                  type="button"
+                  type="button" variant="outline"
                   onClick={handleCloseModal}
                   className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                 >
@@ -304,10 +301,9 @@ export function FiltersSettingsPage() {
                 >
                   {editingFilter ? 'Save Changes' : 'Create Filter'}
                 </ParkButton>
-              </div>
+              </ParkDialog.Footer>
               </fieldset>
-            </form>
-          </div>
+            </form></ParkDialog.Body>
       </TocynDialog>
     </div>
   );

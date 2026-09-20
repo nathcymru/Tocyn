@@ -151,6 +151,11 @@ it('stages ticket filters until Apply, clears them, and closes on Escape',async(
   expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
   fireEvent.click(screen.getByRole('button',{name:'Clear all'}));
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Ticket filters cleared.'));
+  await waitFor(()=>{
+    const latest=vi.mocked(fetch).mock.calls.filter(([url])=>String(url).startsWith('/api/tickets?')).at(-1);
+    expect(latest).toBeDefined();
+    expect(new URL(String(latest![0]),'http://localhost').searchParams.has('search')).toBe(false);
+  });
   openFilters();
   fireEvent.change(screen.getByRole('textbox',{name:'Search ticket text'}),{target:{value:'urgent'}});
   fireEvent.keyDown(screen.getByRole('textbox',{name:'Search ticket text'}),{key:'Escape'});
@@ -179,6 +184,56 @@ it('applies owner, date and customer choices together after the queue route chan
   expect(screen.getByRole('button',{name:'Ticket owner: My tickets'})).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Created: day'})).toBeInTheDocument();
   expect(screen.getByRole('textbox',{name:'Filter by exact customer email'})).toHaveValue('customer-1@example.invalid');
+});
+
+it('keeps applied date, customer and text filters when changing the three reference view rankings',async()=>{
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(screen.queryByText('Current view')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Filter'})).not.toBeInTheDocument();
+  openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'day'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Filter by exact customer email'}),{target:{value:'customer-1@example.invalid'}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Search ticket text'}),{target:{value:'billing'}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  const matchingQuery=(queue:string|null,sort:string)=>vi.mocked(fetch).mock.calls.some(([url])=>{
+    if(!String(url).startsWith('/api/tickets?'))return false;
+    const params=new URL(String(url),'http://localhost').searchParams;
+    return params.get('queue')===queue&&params.get('sort')===sort&&params.get('customer_email')==='customer-1@example.invalid'
+      &&params.get('search')==='billing'&&Boolean(params.get('created_after'));
+  });
+  await waitFor(()=>expect(matchingQuery(null,'updated_desc')).toBe(true));
+
+  await chooseView('Highest Impact');
+  await waitFor(()=>expect(matchingQuery(null,'priority_desc')).toBe(true));
+  await chooseView('Contract SLAs');
+  await waitFor(()=>expect(matchingQuery(null,'sla_priority')).toBe(true));
+  await chooseView('Needs Attention');
+  await waitFor(()=>expect(matchingQuery('actionable','updated_desc')).toBe(true));
+  openFilters();
+  expect(screen.getByRole('button',{name:'Created: day'})).toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:'Filter by exact customer email'})).toHaveValue('customer-1@example.invalid');
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
+});
+
+it('uses clamped calendar dates for the month and quarter filter choices',async()=>{
+  vi.spyOn(Date,'now').mockReturnValue(Date.UTC(2026,2,31,10,15));
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'month'}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  const requestedDate=(expected:string)=>vi.mocked(fetch).mock.calls.some(([url])=>String(url).startsWith('/api/tickets?')
+    &&new URL(String(url),'http://localhost').searchParams.get('created_after')===expected);
+  await waitFor(()=>expect(requestedDate('2026-02-28T10:15:00.000Z')).toBe(true));
+
+  openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: month'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'quarter'}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  await waitFor(()=>expect(requestedDate('2025-12-31T10:15:00.000Z')).toBe(true));
 });
 
 it('saves only filter combinations the server can reproduce as a quick view',async()=>{

@@ -4,10 +4,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketFieldsPage } from '../pages/TicketFieldsPage';
 import { dashboardApi } from '../api/client';
-vi.mock('../hooks/useTicketFields',()=>({useTicketFields:()=>({data:[],isLoading:false})}));
+const fieldQuery=vi.hoisted(()=>vi.fn());
+vi.mock('../hooks/useTicketFields',()=>({useTicketFields:fieldQuery}));
 vi.mock('../api/client',()=>({dashboardApi:{post:vi.fn()}}));
 let client:QueryClient;
-beforeEach(()=>{client=new QueryClient({defaultOptions:{mutations:{retry:false}}});vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});});
+beforeEach(()=>{client=new QueryClient({defaultOptions:{mutations:{retry:false}}});fieldQuery.mockReturnValue({data:[],isLoading:false,isError:false});vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});});
 afterEach(()=>{cleanup();client.clear();vi.restoreAllMocks();vi.resetAllMocks();});
 async function openEditor(){
  render(<QueryClientProvider client={client}><TicketFieldsPage/></QueryClientProvider>);
@@ -53,4 +54,21 @@ it('returns focus to the empty-state opener when that button opened the dialog',
  const dialog=await screen.findByRole('dialog',{name:'Create Ticket Field'});
  fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
  await waitFor(()=>expect(opener).toHaveFocus());
+});
+
+it('uses Park table rows and badges for loaded fields',()=>{
+ fieldQuery.mockReturnValue({data:[{id:'field-1',label:'Device model',name:'device_model',field_type:'text',options:null,is_active:true}],isLoading:false,isError:false});
+ render(<QueryClientProvider client={client}><TicketFieldsPage/></QueryClientProvider>);
+ const table=screen.getByRole('table');
+ expect(table.querySelector('tbody tr td')).toBeInTheDocument();
+ expect(screen.getByText('Active').className).toContain('badge');
+ expect(screen.getByText('Device model')).toBeInTheDocument();
+});
+
+it('keeps a retry action when the field list fails to load',()=>{
+ const refetch=vi.fn();fieldQuery.mockReturnValue({data:undefined,isLoading:false,isError:true,refetch});
+ render(<QueryClientProvider client={client}><TicketFieldsPage/></QueryClientProvider>);
+ expect(screen.getByRole('alert')).toHaveTextContent('Ticket fields could not be loaded');
+ fireEvent.click(screen.getByRole('button',{name:'Retry ticket fields'}));
+ expect(refetch).toHaveBeenCalledOnce();
 });

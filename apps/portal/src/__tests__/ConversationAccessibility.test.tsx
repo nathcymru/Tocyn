@@ -9,12 +9,13 @@ vi.mock('@marsidev/react-turnstile', () => ({ Turnstile: () => null }));
 // JSDOM has no layout. Supply nonzero rects for mounted, non-hidden controls so
 // the real Ark focus trap can classify them; browser focus/visibility is a separate gate.
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (this: HTMLElement) {
     return (this.isConnected && !this.closest('[hidden]') && this.getAttribute('type') !== 'hidden'
       ? [new DOMRect(0, 0, 100, 30)] : []) as unknown as DOMRectList;
   });
 });
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const ticket = { id: 'ticket', subject: 'Accepted conversation', status: 'open', priority: 'normal', ticket_no: 1, created_at: '2026-09-09 00:00:00' };
 const article = { id: 'article', body: 'Accepted message', sender_type: 'customer', created_at: '2026-09-09 00:00:00', attachments: [{ id: 'file', filename: 'readable.txt', size: 100 }] };
 const detail = { ticket, articles: [article], pagination: { has_more: false, next_cursor: null } };
@@ -49,14 +50,24 @@ describe('portal conversation accessibility and recovery', () => {
     expect(await screen.findByText(new RegExp(`Ticket ${reference} • Created`))).toBeTruthy();
   });
 
-  it('names the shared create dialog, focuses its first field and returns focus after Escape', async () => {
+  it('uses Park Dialog and Field anatomy, focuses its first field and returns focus after Escape', async () => {
     setupReads(); mountList();
     const opener = await screen.findByRole('button', { name: 'New Ticket' });
     opener.focus(); fireEvent.click(opener);
-    await screen.findByRole('dialog', { name: 'Create New Ticket' });
-    await waitFor(() => expect(screen.getByLabelText('Subject')).toBe(document.activeElement));
+    const dialog = await screen.findByRole('dialog', { name: 'Create New Ticket' });
+    expect(dialog).toHaveClass('dialog__content');
+    expect(dialog.querySelector('.dialog__body')).toBeInTheDocument();
+    const subject = screen.getByLabelText('Subject');
+    expect(subject.closest('.field__root')).toBeInTheDocument();
+    await waitFor(() => expect(subject).toBe(document.activeElement));
     expect(screen.getByLabelText('Message')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveClass('button--variant_outline');
     fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    fireEvent.click(opener);
+    const reopened = await screen.findByRole('dialog', { name: 'Create New Ticket' });
+    fireEvent.click(within(reopened).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(opener));
     expect(portalApi.post).not.toHaveBeenCalled();
@@ -78,6 +89,7 @@ describe('portal conversation accessibility and recovery', () => {
     expect(within(dialog).getByRole('status').textContent).toContain('Creating ticket');
     fireEvent.click(submit);
     fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(portalApi.post).toHaveBeenCalledTimes(1);
     expect(dialog.getAttribute('data-state')).toBe('open');
     reject(new Error('The operator has stopped intake.'));
@@ -119,9 +131,11 @@ describe('portal conversation accessibility and recovery', () => {
 
   it('names history, reply and attachment controls and restores focus when a selected file is removed', async () => {
     setupReads(); mountDetail();
-    await screen.findByRole('region', { name: 'Conversation messages' });
+    const feed = await screen.findByRole('region', { name: 'Conversation messages' });
+    expect(feed).toHaveClass('scroll-area__viewport');
+    expect(feed.closest('.scroll-area__root')?.querySelector('.scroll-area__content')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to Tickets' })).toBeTruthy();
-    expect(screen.getByLabelText('Reply')).toBeTruthy();
+    expect(screen.getByLabelText('Reply').closest('.field__root')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download readable.txt' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Choose reply attachments'), { target: { files: [new File(['synthetic'], 'chosen.txt', { type: 'text/plain' })] } });
     const remove = screen.getByRole('button', { name: 'Remove chosen.txt' }); remove.focus(); fireEvent.click(remove);

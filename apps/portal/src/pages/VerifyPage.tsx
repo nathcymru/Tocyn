@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
@@ -81,7 +81,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
     return (
       <div className={p.authShell}>
         <div role="status" aria-live="polite" className={[p.authHeading, p.verifyLoading].join(' ')}>
-          <IconSpinner className={p.verifySpinner} />
+          <IconSpinner className={p.verifySpinner} aria-hidden="true" />
           <h2 className={p.verifyLoadingTitle}>Verifying your login...</h2>
         </div>
       </div>
@@ -103,38 +103,32 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
         </p>
       </div>
 
-      <div className={p.authCard}>
-        <div className={p.authCardBody}>
+      <ParkCard.Root>
+        <ParkCard.Body className={p.authForm}>
           {error && (
-            <div id="portal-verify-error" role="alert" aria-atomic="true" className={p.authError}>
-              {error}
-            </div>
+            <ParkAlert.Root id="portal-verify-error" role="alert" aria-atomic="true" status="error" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>
           )}
 
           <form aria-busy={loading} className={p.authForm} onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="code" className={p.authLabel}>
-                Authentication Code
-              </label>
-              <div className={p.verifyInput}>
-                <ParkInput
-                  id="code"
-                  ref={codeInput}
-                  name="code"
-                  inputMode="numeric"
-                  aria-describedby={error ? "portal-verify-error" : undefined}
-                  type="text"
-                  required
-                  value={code}
-                  onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
-                  className={[p.formControl, p.formControlCode].join(' ')}
-                  placeholder="123456"
-                  maxLength={6}
-                  disabled={loading}
-                  autoComplete="one-time-code"
-                />
-              </div>
-            </div>
+            <ParkField label="Authentication Code">
+              <ParkInput
+                ref={codeInput}
+                name="code"
+                inputMode="numeric"
+                aria-describedby={error ? "portal-verify-error" : undefined}
+                type="text"
+                required
+                value={code}
+                onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
+                className={[p.formControl, p.formControlCode].join(' ')}
+                placeholder="123456"
+                maxLength={6}
+                disabled={loading}
+                autoComplete="one-time-code"
+              />
+            </ParkField>
 
             <div>
               <ParkButton
@@ -142,7 +136,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
                 aria-disabled={loading || code.length !== 6}
                 variant="solid" className={p.authSubmit}
               >
-                {loading ? <IconSpinner className={p.authSpinner} /> : <IconCircleCheck className={p.authIcon} />}
+                {loading ? <IconSpinner className={p.authSpinner} aria-hidden="true" /> : <IconCircleCheck className={p.authIcon} aria-hidden="true" />}
                 {loading ? 'Verifying...' : 'Verify Code'}
               </ParkButton>
             </div>
@@ -153,13 +147,13 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
             <ParkButton
               onClick={() => { if (!loading) { if (onBack) onBack(); else { const key = getWidgetKey(); navigate('/login' + (key ? '?key=' + encodeURIComponent(key) : '')); } } }}
               disabled={loading}
-              className={p.verifyRequest}
+              variant="plain"
             >
               Request a new code
             </ParkButton>
           </div>
-        </div>
-      </div>
+        </ParkCard.Body>
+      </ParkCard.Root>
     </div>
   );
 }

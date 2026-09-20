@@ -56,8 +56,6 @@ export const p = {
   authLegend: label,
   authMethods: css({ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '2' }),
   authMethod: full,
-  authMethodActive: css({ borderColor: 'border.focus', bg: 'bg.subtle', fontWeight: 'semibold' }),
-  authMethodInactive: css({ color: 'text.muted' }),
   authTurnstile: css({ display: 'flex', justifyContent: 'center' }),
   authSubmit: css({ w: 'full', justifyContent: 'center' }),
   authIcon: buttonIcon,

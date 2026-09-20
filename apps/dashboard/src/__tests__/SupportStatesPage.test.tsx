@@ -34,6 +34,7 @@ it('keeps labels distinct, retains failed input, and requires an explicit safe r
   }));
   renderPage();
   expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
+  expect(screen.getByText('Waiting on customer').closest('[class*="card__root"]')).toBeInTheDocument();
   expect(screen.getByText('Customer label: We need your reply · Legacy lifecycle: pending')).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('State ID'), { target: { value: 'awaiting-customer' } });
   fireEvent.change(screen.getByLabelText('Internal label'), { target: { value: 'Still waiting' } });
@@ -48,6 +49,23 @@ it('keeps labels distinct, retains failed input, and requires an explicit safe r
   await userEvent.click(await screen.findByRole('option', { name: 'Open (open)' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remap and deactivate' }));
   await waitFor(() => expect(requests).toContainEqual({ path: '/api/support-states/awaiting-customer/deactivate', body: { replacementId: 'legacy-open' } }));
+});
+
+it('uses a retryable empty state when initial definitions fail to load', async () => {
+  let attempts = 0;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states' && options.method === 'GET') {
+      attempts += 1;
+      if (attempts === 1) throw new Error('synthetic initial failure');
+      return json(states);
+    }
+    return json({});
+  }));
+  renderPage();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Support states could not be loaded');
+  expect(screen.queryByRole('button', { name: 'Create state' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading support states' }));
+  expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
 });
 
 it('does not expose state administration to an agent', () => {

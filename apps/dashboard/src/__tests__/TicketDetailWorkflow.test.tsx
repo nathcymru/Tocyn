@@ -62,8 +62,9 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
   }));
 }
 function showDetail(onRender?: ProfilerOnRenderCallback){
-  const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> }], { initialEntries: ['/tickets/workflow-ticket'] });
+  const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> },{path:'/settings',element:<h1>General settings</h1>}], { initialEntries: ['/tickets/workflow-ticket'] });
   render(<QueryClientProvider client={client}><CollaborationProvider><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></CollaborationProvider></QueryClientProvider>);
+  return router;
 }
 const selectLabels: Record<string, Record<string, string>> = {
   Status: { open: 'Open', pending: 'Pending', resolved: 'Resolved', closed: 'Closed' },
@@ -82,6 +83,17 @@ beforeEach(()=>{
   useAuthStore.getState().setAuth('synthetic-operator-session',{id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
+
+it('lets an untouched conversation navigate after its selection preference is acknowledged',async()=>{
+  transport(()=>json(ticket));
+  const router=showDetail();
+  await screen.findByText('Customer question');
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/workspace/drafts/workflow-ticket')).toBe(true));
+  await act(async()=>{void router.navigate('/settings');});
+  expect(await screen.findByRole('heading',{name:'General settings'})).toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT')).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/drafts/workflow-ticket'&&options?.method==='PUT')).toBe(false);
+});
 
 it.each([
   [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
@@ -580,8 +592,8 @@ it('preserves a rejected reply draft and recovers once, refreshing both detail a
   expect(document.activeElement).toBe(screen.getByRole('button',{name:'Send Reply'}));
   fireEvent.change(composer,{target:{value:'Ignored pending edit'}});
   expect(composer).toHaveValue('Synthetic public reply');
-  fireEvent.click(screen.getByRole('button',{name:'Internal Note'}));
-  expect(screen.getByRole('button',{name:'Public Reply'})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('tab',{name:'Internal Note'}));
+  expect(screen.getByRole('tab',{name:'Public Reply'})).toHaveAttribute('aria-selected','true');
   fireEvent.submit(composer.closest('form')!);expect(posts).toBe(1);
   pending.resolve(json({error:'Reply temporarily unavailable'},503));
   expect(await screen.findByRole('alert')).toHaveTextContent('Reply temporarily unavailable');
@@ -601,7 +613,12 @@ it('does not expose or send mention fields when the route has not advertised dur
     return json(ticket);
   });
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  const publicTab = screen.getByRole('tab', { name: 'Public Reply' });
+  publicTab.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Internal Note' })).toHaveFocus());
+  await userEvent.keyboard('{Enter}');
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Internal Note' })).toHaveAttribute('aria-selected', 'true'));
   expect(screen.queryByRole('group', { name: 'Mention colleagues' })).not.toBeInTheDocument();
   fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Legacy private note' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
@@ -650,7 +667,7 @@ it('keeps the bounded roster discoverable beyond sixteen while limiting selected
   vi.mocked(fetch).mockImplementation(async (url, options) => new URL(String(url), 'http://localhost').pathname === '/api/users/agents'
     ? json(roster) : original(url, options));
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Internal Note' }));
   const late = await screen.findByRole('checkbox', { name: 'Late colleague' });
   late.focus(); expect(late).toHaveFocus(); fireEvent.click(late);
   expect(late).toBeChecked();
@@ -670,7 +687,7 @@ it('keeps a selected internal mention through recipient denial and retries the s
     return json(ticket);
   }, [], undefined, undefined, true);
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Internal Note' }));
   const mention = await screen.findByRole('checkbox', { name: 'Assigned agent' });
   mention.focus(); expect(mention).toHaveFocus(); fireEvent.click(mention);
   expect(mention).toBeChecked();
@@ -811,8 +828,8 @@ it('retains uploaded attachments after a rejected internal note and reuses them 
     return json(ticket);
   });
   showDetail();await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button',{name:'Internal Note'}));
-  expect(screen.getByRole('button',{name:'Internal Note'})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('tab',{name:'Internal Note'}));
+  await waitFor(() => expect(screen.getByRole('tab',{name:'Internal Note'})).toHaveAttribute('aria-selected','true'));
   fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['synthetic attachment'],'note.txt',{type:'text/plain'})]}});
   await waitFor(()=>expect(screen.queryByText('Uploading…')).not.toBeInTheDocument());
   expect(screen.getByRole('button',{name:'Add Note'})).toHaveAttribute('aria-disabled','true');

@@ -1,5 +1,5 @@
 import { w } from '../widgetStyles';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkInput, ParkScrollArea } from '@luminatick/ui/park';
 import { IconPaperPlane } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState, useRef, useEffect } from 'react';
@@ -99,7 +99,9 @@ const AiChat: React.FC<Props> = ({ config }) => {
 
   return (
     <div className={w.aiChat}>
-      <div role="log" aria-label="AI conversation" aria-relevant="additions" className={w.aiMessages}>
+      <ParkScrollArea.Root className={w.aiMessages}>
+        <ParkScrollArea.Viewport role="log" aria-label="AI conversation" aria-relevant="additions" tabIndex={0} className={w.aiMessagesViewport}>
+          <ParkScrollArea.Content className={w.aiMessagesContent}>
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -123,10 +125,15 @@ const AiChat: React.FC<Props> = ({ config }) => {
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
-      </div>
+            <div ref={messagesEndRef} />
+          </ParkScrollArea.Content>
+        </ParkScrollArea.Viewport>
+        <ParkScrollArea.Scrollbar orientation="vertical" />
+      </ParkScrollArea.Root>
 
-      {error && <p role="alert" className={w.aiError}>{error}</p>}
+      {error && <ParkAlert.Root role="alert" status="error" variant="surface">
+        <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+      </ParkAlert.Root>}
       <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className={w.aiComposer}>
         <ParkInput
           ref={inputRef}
@@ -142,6 +149,7 @@ const AiChat: React.FC<Props> = ({ config }) => {
           aria-label="Send question"
           type="submit"
           disabled={isLoading || !input.trim()}
+          variant="solid"
           className={w.aiSend}
         >
           <IconPaperPlane className={w.aiSendIcon} aria-hidden="true" />

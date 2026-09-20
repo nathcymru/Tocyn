@@ -1,8 +1,8 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCheckbox, ParkInput } from '@luminatick/ui/park';
-import { ParkEmptyState } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
+import { Badge } from '@luminatick/ui/components';
 import React, { useEffect, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { AutomationRule, AutomationCondition, WebhookConfig, RetentionConfig } from '../types';
@@ -13,9 +13,7 @@ import {
   IconToggleOn,
   IconPenToSquare,
   IconFloppyDisk,
-  IconXmark,
-  IconCircleExclamation,
-  IconCircleCheck
+  IconXmark
 } from '@luminatick/ui/icons';
 
 const EVENT_TYPES = [
@@ -46,6 +44,11 @@ const OPERATORS = [
   { value: 'regex', label: 'Matches Regex' },
 ];
 
+function conditionCount(value: string | null | undefined) {
+  try { const parsed: unknown = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed.length : 0; }
+  catch { return 0; }
+}
+
 export const AutomationPage: React.FC = () => {
   const heading = React.useRef<HTMLHeadingElement>(null);
   const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
@@ -57,6 +60,7 @@ export const AutomationPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState('');
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<AutomationRule>>({});
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +75,9 @@ export const AutomationPage: React.FC = () => {
       setLoading(true);
       const data = await dashboardApi.get<AutomationRule[]>('/automations');
       setRules(data);
+      setLoadError(false);
     } catch (error) {
-      setError('Failed to fetch rules');
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -180,52 +185,43 @@ export const AutomationPage: React.FC = () => {
     setEditForm({ ...editForm, action_config: JSON.stringify(config) });
   };
 
-  if (loading) return <ParkEmptyState title="Loading automations…" className={css({"py":"6"})} aria-busy="true" />;
+  if (loading) return <section role="status" aria-label="Loading automations" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}><span className={css({ srOnly: true })}>Loading automations…</span><ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} /></section>;
 
   return (
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Automation Rules</h1>
-          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Manage event-driven workflows and data retention.</p>
+          <h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Automation Rules</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Manage event-driven workflows and data retention.</p>
         </div>
         {!isEditing && (
-          <ParkButton
+          <ParkButton type="button"
             onClick={startCreate}
             variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            <IconPlus size={20} />
+            <IconPlus aria-hidden="true" size={20} />
             Create Rule
           </ParkButton>
         )}
       </div>
 
-      {error && (
-        <div role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>
-          <IconCircleExclamation size={20} />
-          {error}
-        </div>
-      )}
+      {error && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
 
-      {success && (
-        <div role="status" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>
-          <IconCircleCheck size={20} />
-          {success}
-        </div>
-      )}
+      {success && <ParkAlert.Root role="status" status="success"><ParkAlert.Content><ParkAlert.Description>{success}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
 
       <div className={css({"minW":0})}>
         {isEditing && (
-          <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-              <h2 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+          <ParkCard.Root variant="outline">
+            <ParkCard.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+              <ParkCard.Title asChild><h2>
                 {isEditing === 'new' ? 'Create New Automation Rule' : 'Edit Automation Rule'}
-              </h2>
-              <ParkButton aria-label="Close automation editor" onClick={() => setIsEditing(null)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
-                <IconXmark size={24} />
+              </h2></ParkCard.Title>
+              <ParkButton type="button" variant="plain" aria-label="Close automation editor" onClick={() => setIsEditing(null)}>
+                <IconXmark aria-hidden="true" size={24} />
               </ParkButton>
-            </div>
+            </ParkCard.Header>
 
+            <ParkCard.Body className={css({ display: 'grid', gap: '5' })}>
             <div className={css({"display":"grid","gap":"4"})}>
               <div className={css({"minW":0})}>
                 <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
@@ -250,18 +246,17 @@ export const AutomationPage: React.FC = () => {
                   <DashboardSelect id="automation-action" aria-label="Action Type" value={editForm.action_type ?? ''} onValueChange={value => setEditForm({ ...editForm, action_type: value as typeof editForm.action_type })} options={ACTION_TYPES} />
                 </div>
                 <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                  <label>Status</label>
-                  <div className={css({"w":"full"})}>
-                    <ParkButton
-                      type="button"
+                  <span className={css({ textStyle: 'label' })}>Status</span>
+                  <div>
+                    <ParkButton type="button" variant="outline"
                       aria-label="Rule status"
                       aria-pressed={editForm.is_active}
                       onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
                       className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                     >
-                      {editForm.is_active ? <IconToggleOn className={css({"w":"4","h":"4","flexShrink":0,"color":"text.default"})} size={40} /> : <IconToggleOff className={css({"w":"4","h":"4","flexShrink":0})} size={40} />}
+                      {editForm.is_active ? <IconToggleOn aria-hidden="true" size={20} /> : <IconToggleOff aria-hidden="true" size={20} />}
+                      {editForm.is_active ? 'Active' : 'Paused'}
                     </ParkButton>
-                    <span className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>{editForm.is_active ? 'Active' : 'Paused'}</span>
                   </div>
                 </div>
               </div>
@@ -269,29 +264,29 @@ export const AutomationPage: React.FC = () => {
 
             <div className={css({"minW":0})}>
               <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Conditions</h3>
+                <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"fg.default"})}>Conditions</h3>
                 <ParkButton
                   onClick={addCondition}
                   className={css({"minW":0})}
                 >
-                  <IconPlus size={16} /> Add Condition
+                  <IconPlus aria-hidden="true" size={16} /> Add Condition
                 </ParkButton>
               </div>
               <div className={css({"display":"grid","gap":"4"})}>
                 {JSON.parse(editForm.conditions || '[]').map((cond: AutomationCondition, idx: number) => (
-                  <div key={idx} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                  <div key={idx} className={css({ display: 'grid', gap: '2', gridTemplateColumns: { base: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr)) auto' }, alignItems: 'end' })}>
                     <DashboardSelect aria-label={`Condition ${idx + 1} field`} value={cond.field} onValueChange={value => changeCondition(idx, 'field', value)} options={FIELDS} />
                     <DashboardSelect aria-label={`Condition ${idx + 1} operator`} value={cond.operator} onValueChange={value => changeCondition(idx, 'operator', value as typeof cond.operator)} options={OPERATORS} />
                     <ParkInput
                       type="text"
-                      className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm","minW":0})}
+                      className={css({ w: 'full', minW: '0' })}
                       placeholder="Value..."
                       aria-label={`Condition ${idx + 1} value`}
                       value={cond.value}
                       onChange={e => changeCondition(idx, 'value', e.target.value)}
                     />
-                    <ParkButton aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
-                      <IconTrash size={18} />
+                    <ParkButton type="button" variant="outline" aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}>
+                      <IconTrash aria-hidden="true" size={18} />
                     </ParkButton>
                   </div>
                 ))}
@@ -304,9 +299,9 @@ export const AutomationPage: React.FC = () => {
             </div>
 
             <div className={css({"minW":0})}>
-              <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Action Configuration</h3>
+              <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"fg.default"})}>Action Configuration</h3>
               {editForm.action_type === 'webhook' ? (
-                <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+                <ParkCard.Root variant="outline"><ParkCard.Body className={css({ display: 'grid', gap: '4' })}>
                   <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                     <label htmlFor="automation-webhook-url">Webhook URL</label>
                     <ParkInput
@@ -324,9 +319,9 @@ export const AutomationPage: React.FC = () => {
                       <DashboardSelect id="automation-webhook-method" aria-label="HTTP Method" value={getActionConfig().method || 'POST'} onValueChange={value => updateActionConfig({ ...getActionConfig(), method: value })} options={[{ value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }]} />
                     </div>
                   </div>
-                </div>
+                </ParkCard.Body></ParkCard.Root>
               ) : (
-                <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+                <ParkCard.Root variant="outline"><ParkCard.Body>
                   <div className={css({"display":"grid","gap":"4"})}>
                     <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                       <label htmlFor="automation-retention-days">Retention Period (Days)</label>
@@ -345,29 +340,30 @@ export const AutomationPage: React.FC = () => {
                       <ParkCheckbox.Label>Delete R2 Attachments</ParkCheckbox.Label>
                     </ParkCheckbox.Root>
                   </div>
-                </div>
+                </ParkCard.Body></ParkCard.Root>
               )}
             </div>
 
-            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+            </ParkCard.Body>
+            <ParkCard.Footer asChild><div className={css({ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3', flexWrap: 'wrap' })}>
               <ParkButton
-                onClick={() => setIsEditing(null)}
+                type="button" variant="outline" onClick={() => setIsEditing(null)}
                 className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 Cancel
               </ParkButton>
               <ParkButton
-                onClick={handleSave}
+                type="button" onClick={handleSave}
                 className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
-                <IconFloppyDisk size={20} />
+                <IconFloppyDisk aria-hidden="true" size={20} />
                 Save Automation Rule
               </ParkButton>
-            </div>
-          </div>
+            </div></ParkCard.Footer>
+          </ParkCard.Root>
         )}
 
-        {rules.length === 0 && !isEditing ? (
+        {loadError && rules.length === 0 && !isEditing ? <ParkEmptyState role="alert" title="Automation rules could not be loaded" description="Retry before editing rule definitions." action={<ParkButton type="button" onClick={() => void fetchRules()}>Retry automations</ParkButton>} /> : rules.length === 0 && !isEditing ? (
           <ParkEmptyState
             title="No automation rules yet"
             description="Create rules to automate your ticket workflows, notify external systems, or manage data retention."
@@ -381,50 +377,42 @@ export const AutomationPage: React.FC = () => {
           />
         ) : (
           !isEditing && rules.map(rule => (
-            <div key={rule.id} className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-              <div className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
-                <ParkButton aria-label={`Status of ${rule.name}`} aria-pressed={Boolean(rule.is_active)} onClick={() => handleToggle(rule.id, rule.is_active)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
+            <ParkCard.Root key={rule.id} variant="outline"><ParkCard.Body className={css({ display: 'grid', gap: '4' })}>
+              <div className={css({ display: 'flex', alignItems: 'center', gap: '3', flexWrap: 'wrap', color: 'fg.muted', textStyle: 'sm' })}>
+                <ParkButton type="button" variant="plain" aria-label={`Status of ${rule.name}`} aria-pressed={Boolean(rule.is_active)} onClick={() => handleToggle(rule.id, rule.is_active)}>
                   {rule.is_active ? (
-                    <IconToggleOn className={css({"w":"4","h":"4","flexShrink":0,"color":"text.default"})} size={36} />
+                    <IconToggleOn aria-hidden="true" size={24} />
                   ) : (
-                    <IconToggleOff className={css({"w":"4","h":"4","flexShrink":0})} size={36} />
+                    <IconToggleOff aria-hidden="true" size={24} />
                   )}
                 </ParkButton>
                 <div className={css({"minW":0})}>
-                  <h3 className={css({"fontWeight":"medium","color":"text.default"})}>{rule.name}</h3>
-                  <div className={css({"minW":0})}>
-                    <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted","minW":0})}>
-                      {rule.event_type}
-                    </span>
-                    <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted","gap":"2"})}>
-                      {rule.action_type}
-                    </span>
-                    {rule.conditions && JSON.parse(rule.conditions).length > 0 && (
-                      <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted","minW":0})}>
-                        {JSON.parse(rule.conditions).length} Conditions
-                      </span>
-                    )}
+                  <h3 className={css({ m: '0', fontWeight: 'medium', color: 'fg.default' })}>{rule.name}</h3>
+                  <div className={css({ display: 'flex', flexWrap: 'wrap', gap: '2', mt: '2' })}>
+                    <Badge>{rule.event_type}</Badge>
+                    <Badge>{rule.action_type}</Badge>
+                    {conditionCount(rule.conditions) > 0 && <Badge>{conditionCount(rule.conditions)} Conditions</Badge>}
                   </div>
                 </div>
               </div>
 
-              <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
-                <ParkButton
+              <div className={css({ display: 'flex', alignItems: 'center', gap: '2', flexWrap: 'wrap' })}>
+                <ParkButton type="button" variant="outline" aria-label={`Edit ${rule.name}`}
                   onClick={() => startEdit(rule)}
                   className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                   title="Edit Rule"
                 >
-                  <IconPenToSquare size={20} />
+                  <IconPenToSquare aria-hidden="true" size={20} />
                 </ParkButton>
-                <ParkButton
+                <ParkButton type="button" variant="outline"
                   aria-label={`Delete ${rule.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(rule); setDeleteError(''); setDeleteOpen(true); }}
                   className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                   title="Delete Rule"
                 >
-                  <IconTrash size={20} />
+                  <IconTrash aria-hidden="true" size={20} />
                 </ParkButton>
               </div>
-            </div>
+            </ParkCard.Body></ParkCard.Root>
           ))
         )}
       </div>

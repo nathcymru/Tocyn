@@ -64,3 +64,11 @@ it('announces saved configuration without claiming provider delivery and returns
  await waitFor(()=>expect(screen.getByRole('button',{name:'Add Email'})).toHaveFocus());
  expect(screen.getByRole('status')).toHaveTextContent('Provider delivery has not been verified');
 });
+it('renders loaded email addresses with Park card and badge anatomy',async()=>{
+ api.get.mockImplementation(async(path:string)=>path==='/settings'?{RESEND_API_KEY:'••••••••',RESEND_FROM_EMAIL:'support@example.invalid'}:[{id:'email-a',email_address:'team@example.invalid',name:'Team',group_id:'group-a',is_default:true}]);
+ open();
+ const address=await screen.findByText('team@example.invalid');
+ expect(address.closest('[class*="card__root"]')).toBeInTheDocument();
+ expect(screen.getByText('Default').closest('[class*="badge"]')).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Remove team@example.invalid'})).toBeInTheDocument();
+});

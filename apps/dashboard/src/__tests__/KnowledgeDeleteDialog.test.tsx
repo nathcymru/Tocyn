@@ -56,3 +56,26 @@ it.each([
  fireEvent.keyDown(input,{key:'Escape'});
  await waitFor(()=>expect(screen.queryByRole('textbox',{name:inputName})).not.toBeInTheDocument());
 });
+
+it('shows Park loading and a retryable failure before the article table is empty', async () => {
+ let fail = true;
+ api.get.mockImplementation(async (path: string) => {
+   if (fail) throw new Error('Synthetic knowledge outage');
+   return path.endsWith('categories') ? [] : [];
+ });
+ render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
+ const outage = await screen.findByRole('alert');
+ expect(outage).toHaveTextContent('Synthetic knowledge outage');
+ expect(screen.queryByText('No articles found')).not.toBeInTheDocument();
+ fail = false;
+ fireEvent.click(screen.getByRole('button',{name:'Retry knowledge'}));
+ expect(screen.getByRole('status',{name:'Loading knowledge articles'})).toBeInTheDocument();
+ expect(await screen.findByText('No articles found')).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Create article'})).toBeInTheDocument();
+});
+
+it('uses a named Park button to open an article from the table', async () => {
+ render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
+ const edit = await screen.findByRole('button',{name:'Edit Synthetic article'});
+ expect(edit).toBeInTheDocument();
+});

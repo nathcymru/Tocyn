@@ -1,6 +1,5 @@
 import { p } from '../portalStyles';
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
@@ -132,85 +131,80 @@ export function TicketListPage() {
           onClick={() => { setCreateError(null); setIsCreating(true); }}
           variant="solid" className={p.ticketListCreate}
         >
-          <IconPlus className={p.ticketListIcon} />
+          <IconPlus className={p.ticketListIcon} aria-hidden="true" />
           New Ticket
         </ParkButton>
       </div>
 
       <p role="status" aria-live="polite" className={p.ticketListStatus}>{createStatus}</p>
-      <TocynDialog open={isCreating} onOpenChange={setIsCreating} busy={creatingTicket}
-          labelledBy="create-ticket-heading" initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
-          className={p.ticketDialog}>
-          <h2 id="create-ticket-heading" className={p.ticketDialogTitle}>Create New Ticket</h2>
-          {createError && <p id="create-ticket-error" role="alert" className={p.ticketDialogError}>{createError}</p>}
-          <p role="status" aria-live="polite" className={p.ticketDialogStatus}>{creatingTicket ? 'Creating ticket…' : ''}</p>
-          <form aria-busy={creatingTicket} onSubmit={handleCreate} className={p.ticketForm}>
-            <div className={p.ticketField}>
-              <label htmlFor="create-ticket-subject" className={p.ticketFieldLabel}>Subject</label>
-              <ParkInput
-                id="create-ticket-subject"
-                ref={subjectInput}
-                readOnly={creatingTicket}
-                aria-describedby={createError ? "create-ticket-error" : undefined}
-                type="text"
-                required
-                value={newSubject}
-                onChange={(e) => { if (!creatingTicket) setNewSubject(e.target.value); }}
-                className={p.ticketFieldInput}
-                placeholder="What do you need help with?"
-              />
-            </div>
-            <div className={p.ticketField}>
-              <label htmlFor="create-ticket-message" className={p.ticketFieldLabel}>Message</label>
-              <ParkTextarea
-                id="create-ticket-message"
-                readOnly={creatingTicket}
-                aria-describedby={createError ? "create-ticket-error" : undefined}
-                required
-                rows={4}
-                value={newMessage}
-                onChange={(e) => { if (!creatingTicket) setNewMessage(e.target.value); }}
-                className={p.ticketFieldInput}
-                placeholder="Describe your issue in detail..."
-              />
-            </div>
-            <div className={p.ticketActions}>
-              {turnstileSiteKey && (
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={turnstileSiteKey}
-                  options={{ size: 'invisible', execution: 'execute' }}
-                  onSuccess={(token) => submitTicket(token)}
-                  onError={() => {
-                    setCreateError('Security check failed. Please try again.');
-                    setCreatingTicket(false);
-                    turnstileRef.current?.reset();
-                  }}
-                />
-              )}
-              <ParkButton
-                type="button"
-                aria-disabled={creatingTicket}
-                onClick={() => { if (!creatingTicket) setIsCreating(false); }}
-                className={p.ticketCancel}
-              >
-                Cancel
-              </ParkButton>
-              <ParkButton
-                type="submit"
-                aria-disabled={creatingTicket}
-                variant="solid" className={p.ticketSubmit}
-              >
-                {creatingTicket && <IconSpinner className={p.ticketSpinner} />}
-                Create Ticket
-              </ParkButton>
-            </div>
-          </form>
-      </TocynDialog>
+      <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!creatingTicket) setIsCreating(open); }}
+        initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
+        closeOnEscape={!creatingTicket} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby="create-ticket-heading" className={p.ticketDialog}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id="create-ticket-heading" className={p.ticketDialogTitle}>Create New Ticket</ParkDialog.Title>
+            </ParkDialog.Header>
+            <ParkDialog.Body>
+              <form aria-busy={creatingTicket} onSubmit={handleCreate} className={[p.ticketForm, p.ticketFieldInput].join(' ')}>
+                {createError && <p id="create-ticket-error" role="alert" className={p.ticketDialogError}>{createError}</p>}
+                <p role="status" aria-live="polite" className={p.ticketDialogStatus}>{creatingTicket ? 'Creating ticket…' : ''}</p>
+                <ParkField label="Subject" className={p.ticketField}>
+                  <ParkInput
+                    ref={subjectInput}
+                    readOnly={creatingTicket}
+                    aria-describedby={createError ? 'create-ticket-error' : undefined}
+                    type="text"
+                    required
+                    value={newSubject}
+                    onChange={(e) => { if (!creatingTicket) setNewSubject(e.target.value); }}
+                    className={p.ticketFieldInput}
+                    placeholder="What do you need help with?"
+                  />
+                </ParkField>
+                <ParkField label="Message" className={p.ticketField}>
+                  <ParkTextarea
+                    readOnly={creatingTicket}
+                    aria-describedby={createError ? 'create-ticket-error' : undefined}
+                    required
+                    rows={4}
+                    value={newMessage}
+                    onChange={(e) => { if (!creatingTicket) setNewMessage(e.target.value); }}
+                    className={p.ticketFieldInput}
+                    placeholder="Describe your issue in detail..."
+                  />
+                </ParkField>
+                <div className={p.ticketActions}>
+                  {turnstileSiteKey && (
+                    <Turnstile
+                      ref={turnstileRef}
+                      siteKey={turnstileSiteKey}
+                      options={{ size: 'invisible', execution: 'execute' }}
+                      onSuccess={(token) => submitTicket(token)}
+                      onError={() => {
+                        setCreateError('Security check failed. Please try again.');
+                        setCreatingTicket(false);
+                        turnstileRef.current?.reset();
+                      }}
+                    />
+                  )}
+                  <ParkButton type="button" variant="outline" aria-disabled={creatingTicket}
+                    onClick={() => { if (!creatingTicket) setIsCreating(false); }} className={p.ticketCancel}>Cancel</ParkButton>
+                  <ParkButton type="submit" aria-disabled={creatingTicket} variant="solid" className={p.ticketSubmit}>
+                    {creatingTicket && <IconSpinner className={p.ticketSpinner} aria-hidden="true" />}
+                    Create Ticket
+                  </ParkButton>
+                </div>
+              </form>
+            </ParkDialog.Body>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
 
       <div className={p.surface}>
         {tickets.length === 0 ? (
-          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} variant="solid" className={p.ticketEmptyCreate}> <IconPlus className={p.ticketListIcon} /> New Ticket</ParkButton>} className={p.ticketEmpty} />
+          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} variant="solid" className={p.ticketEmptyCreate}> <IconPlus className={p.ticketListIcon} aria-hidden="true" /> New Ticket</ParkButton>} className={p.ticketEmpty} />
         ) : (
           <ul className={p.ticketListItems}>
             {tickets.map((ticket) => (

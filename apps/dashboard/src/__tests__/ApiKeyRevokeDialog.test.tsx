@@ -9,7 +9,9 @@ beforeEach(()=>{api.get.mockResolvedValue([key]);vi.spyOn(HTMLElement.prototype,
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks();if(originalClipboard)Object.defineProperty(navigator,'clipboard',originalClipboard);else Reflect.deleteProperty(navigator,'clipboard');});
 async function confirm(name='Synthetic key'){
  const opener=await screen.findByRole('button',{name:`Revoke ${name}`});opener.focus();fireEvent.click(opener);
- const dialog=await screen.findByRole('dialog',{name:`Revoke API key: ${name}`});await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());return{opener,dialog};
+ const dialog=await screen.findByRole('dialog',{name:`Revoke API key: ${name}`});
+ expect(dialog).toHaveClass('dialog__content');expect(dialog.querySelector('.dialog__footer')).toBeInTheDocument();
+ await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());return{opener,dialog};
 }
 it('cancels revocation and returns focus without sending a mutation',async()=>{
  render(<ApiKeyPage/>);const {opener}=await confirm();fireEvent.keyDown(document.activeElement!,{key:'Escape'});
@@ -19,7 +21,7 @@ it('retains a failed target, blocks duplicate/pending dismissal, and removes onl
  let reject!:(error:Error)=>void;api.delete.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
  render(<ApiKeyPage/>);const {dialog}=await confirm();const revoke=within(dialog).getByRole('button',{name:'Revoke key'});fireEvent.click(revoke);fireEvent.click(revoke);expect(api.delete).toHaveBeenCalledTimes(1);
  expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
- await act(async()=>reject(new Error('synthetic untrusted failure text')));expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');expect(screen.queryByText('synthetic untrusted failure text')).not.toBeInTheDocument();
+ await act(async()=>reject(new Error('synthetic untrusted failure text')));const failure=await screen.findByRole('alert');expect(failure).toHaveClass('alert__root');expect(failure).toHaveTextContent('could not be confirmed');expect(screen.queryByText('synthetic untrusted failure text')).not.toBeInTheDocument();
  fireEvent.click(within(dialog).getByRole('button',{name:'Revoke key'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(api.delete).toHaveBeenLastCalledWith('/api-keys/key-a');expect(screen.queryByRole('button',{name:'Revoke Synthetic key'})).not.toBeInTheDocument();expect(screen.getByRole('status')).toHaveTextContent('API key revoked.');
  await waitFor(()=>expect(screen.getByRole('heading',{name:'API Keys'})).toHaveFocus());
@@ -42,10 +44,10 @@ it('does not resurrect a revoked row when an earlier list refresh resolves late'
 it('guards creation and retains the name after an uncertain result before an explicit retry',async()=>{
  let reject!:(error:Error)=>void;api.post.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({id:'key-b',name:'Draft',apiKey:'synthetic-one-time-value'});
  render(<ApiKeyPage/>);fireEvent.click(screen.getByRole('button',{name:'Create New Key'}));const dialog=await screen.findByRole('dialog',{name:'Create New API Key'});
- const name=within(dialog).getByRole('textbox',{name:'Key Name'});await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'Draft'}});const form=within(dialog).getByRole('form');
+ expect(dialog).toHaveClass('dialog__content');const name=within(dialog).getByRole('textbox',{name:'Key Name'});expect(name.closest('.field__root')).toBeInTheDocument();await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'Draft'}});const form=within(dialog).getByRole('form');
  fireEvent.submit(form);fireEvent.submit(form);expect(api.post).toHaveBeenCalledTimes(1);expect(name).toBeDisabled();expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
- await act(async()=>reject(new Error('synthetic uncertain response')));expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');expect(name).toHaveValue('Draft');
+ await act(async()=>reject(new Error('synthetic uncertain response')));const failure=await screen.findByRole('alert');expect(failure).toHaveClass('alert__root');expect(failure).toHaveTextContent('could not be confirmed');expect(name).toHaveValue('Draft');
  expect(api.get).toHaveBeenCalledTimes(2);fireEvent.submit(form);await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  const firstHeaders=new Headers(api.post.mock.calls[0][2]?.headers);const retryHeaders=new Headers(api.post.mock.calls[1][2]?.headers);
  expect(firstHeaders.get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/);expect(retryHeaders.get('Idempotency-Key')).toBe(firstHeaders.get('Idempotency-Key'));
@@ -73,8 +75,11 @@ it('reports clipboard success only after resolution and keeps copy failures reco
 });
 
 it('reports unavailable key metadata instead of claiming an empty key list',async()=>{
- api.get.mockRejectedValue(new Error('synthetic list failure'));render(<ApiKeyPage/>);
+ api.get.mockRejectedValueOnce(new Error('synthetic list failure')).mockResolvedValueOnce([key]);render(<ApiKeyPage/>);
  expect(await screen.findByRole('alert')).toHaveTextContent('could not be refreshed');expect(screen.getByText('API key list unavailable.')).toBeInTheDocument();expect(screen.queryByText('No API keys found.')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Retry loading keys'}));
+ const row=await screen.findByRole('row',{name:/Synthetic key fixture/});
+ expect(within(row).getAllByRole('cell')).toHaveLength(5);
 });
 
 it('restores keyboard focus to retry when an uncertain creation is reopened',async()=>{

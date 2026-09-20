@@ -1,6 +1,7 @@
 import { w, widgetBrandColor } from './widgetStyles';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
-import { ParkButton, ParkTabs } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkScrollArea, ParkTabs } from '@luminatick/ui/park';
+import { Link } from '@luminatick/ui/components';
 import React, { useState, useEffect, useRef, useId } from 'react';
 import TicketForm from './components/TicketForm';
 import AiChat from './components/AiChat';
@@ -47,7 +48,7 @@ const App: React.FC = () => {
         <div id={`${widgetId}-panel`} role="region" aria-labelledby={`${widgetId}-title`} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeWidget(); } }} className={w.panel}>
           <div className={w.panelHeader}>
             <h2 id={`${widgetId}-title`} className={w.panelTitle}>{config.title}</h2>
-            <ParkButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className={w.close}>
+            <ParkButton ref={closeButton} aria-label="Close support" onClick={closeWidget} variant="plain" className={w.close}>
               <IconXmark className={w.closeIcon} aria-hidden="true" />
             </ParkButton>
           </div>
@@ -62,11 +63,20 @@ const App: React.FC = () => {
             )}
           </ParkTabs.List>
 
-          <div className={w.panelBody}>
-            {!session && <p className={w.signIn}>Sign in through the support portal to use chat or submit a ticket. {config.portalUrl && <a className={w.portalLink} href={config.portalUrl} target="_blank" rel="noopener noreferrer">Open support portal</a>}</p>}
-            {config.features.aiChat && <ParkTabs.Content value="chat">{session && <AiChat key={session.email} config={config} />}</ParkTabs.Content>}
-            {config.features.ticketForm && <ParkTabs.Content value="ticket">{session && <TicketForm key={session.email} userEmail={session.email} />}</ParkTabs.Content>}
-          </div>
+          <ParkScrollArea.Root className={w.panelBody}>
+            <ParkScrollArea.Viewport role="region" aria-label="Support content" tabIndex={0} className={w.panelViewport}>
+              <ParkScrollArea.Content className={w.panelContent}>
+                {!session && <ParkAlert.Root status="info" variant="surface">
+                  <ParkAlert.Content><ParkAlert.Description>
+                    Sign in through the support portal to use chat or submit a ticket. {config.portalUrl && <Link href={config.portalUrl} target="_blank" rel="noopener noreferrer">Open support portal</Link>}
+                  </ParkAlert.Description></ParkAlert.Content>
+                </ParkAlert.Root>}
+                {config.features.aiChat && <ParkTabs.Content value="chat">{session && <AiChat key={session.email} config={config} />}</ParkTabs.Content>}
+                {config.features.ticketForm && <ParkTabs.Content value="ticket">{session && <TicketForm key={session.email} userEmail={session.email} />}</ParkTabs.Content>}
+              </ParkScrollArea.Content>
+            </ParkScrollArea.Viewport>
+            <ParkScrollArea.Scrollbar orientation="vertical" />
+          </ParkScrollArea.Root>
 
           </ParkTabs.Root>
           <div data-product-attribution className={w.attribution}>
@@ -78,6 +88,7 @@ const App: React.FC = () => {
       <ParkButton
         ref={launcher} aria-label={isOpen ? 'Close support' : 'Open support'} aria-expanded={isOpen} aria-controls={`${widgetId}-panel`}
         onClick={toggleWidget}
+        variant="solid"
         className={w.launcher}
       >
         {isOpen ? (

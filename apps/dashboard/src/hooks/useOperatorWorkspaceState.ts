@@ -43,6 +43,10 @@ function saveInput(value: WorkspacePreference) {
   return { expectedRevision: value.revision, view: value.view, sort: value.sort, filters: value.filters,
     listQuery: value.listQuery, listAnchor: value.listAnchor, selectedTicketId: value.selectedTicketId, panel: value.panel, splitterRatio: value.splitterRatio };
 }
+function editablePatch(value: WorkspacePreference): WorkspacePreferencePatch {
+  return { view: value.view, sort: value.sort, filters: value.filters, listQuery: value.listQuery,
+    listAnchor: value.listAnchor, selectedTicketId: value.selectedTicketId, panel: value.panel, splitterRatio: value.splitterRatio };
+}
 
 /** One authenticated operator owns a restore gate and one serialized preference-save lane. */
 function createController(identity: string | null) {
@@ -168,7 +172,28 @@ function createController(identity: string | null) {
     subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); },
     getSnapshot: () => state,
     hasUnsavedChanges: () => dirty,
-    start: () => { active = true; epoch++; void restore(); return () => { active = false; epoch++; cancel(); }; },
+    start: () => {
+      active = true; epoch++;
+      // StrictMode immediately cleans up and restarts layout effects. The old
+      // restore is epoch-fenced, but its finally cannot clear this controller's
+      // restoring flag after the restart. Open a fresh restore lane here.
+      restoring = false;
+      if (saving) {
+        // An earlier write may still commit after cleanup. Keep every local
+        // field, wait for that write, then read its authoritative CAS revision.
+        if (dirty) pendingPatch = mergePatch(editablePatch(state), pendingPatch);
+        known = false; restoring = true;
+        replace({ ...state, status: 'loading', error: null });
+        const inFlightSave = saving;
+        const resumedEpoch = epoch;
+        void inFlightSave.finally(() => {
+          if (!current(resumedEpoch)) return;
+          saving = null; restoring = false;
+          void restore();
+        });
+      } else void restore();
+      return () => { active = false; epoch++; cancel(); };
+    },
     update, saveNow, flushBeforeNavigation,
     retrySave: () => { if (!known) void restore(); else if (state.status === 'conflict') void restore(true); else void saveNow(); },
     retryRestore: () => { if (!known) void restore(); },

@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkTable } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -22,6 +22,7 @@ export const KnowledgePage: React.FC = () => {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [isAddingCategory, setIsAddingCategory] = useState<{ parentId: string | null } | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -46,6 +47,8 @@ export const KnowledgePage: React.FC = () => {
   const pageStyles = ParkPage('knowledge');
 
   const fetchData = async () => {
+    setLoadState('loading');
+    setError(null);
     try {
       const [cats, articles] = await Promise.all([
         dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories'),
@@ -70,8 +73,10 @@ export const KnowledgePage: React.FC = () => {
 
       setCategories(roots);
       setDocs(articles);
+      setLoadState('ready');
     } catch (err: any) {
       setError(err.message);
+      setLoadState('error');
     }
   };
 
@@ -168,7 +173,7 @@ export const KnowledgePage: React.FC = () => {
                 aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
                
               >
-                {isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+                {isExpanded ? <IconChevronDown size={14} aria-hidden="true" /> : <IconChevronRight size={14} aria-hidden="true" />}
               </ParkButton>
             ) : (
               <span className={pageStyles.knowledgeCategorySpacer}></span>
@@ -188,7 +193,7 @@ export const KnowledgePage: React.FC = () => {
              
               title="Add Subcategory" aria-label={`Add subcategory to ${node.name}`}
             >
-              <IconPlus size={14} />
+              <IconPlus size={14} aria-hidden="true" />
             </ParkButton>
             <ParkButton
               onClick={(e) => {
@@ -198,7 +203,7 @@ export const KnowledgePage: React.FC = () => {
              
               title="Delete Category" aria-label={`Delete category ${node.name}`}
             >
-              <IconTrash size={14} />
+              <IconTrash size={14} aria-hidden="true" />
             </ParkButton>
           </div>
         </div>
@@ -244,16 +249,13 @@ export const KnowledgePage: React.FC = () => {
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
           variant="solid"
         >
-          <IconPlus size={16} />
+          <IconPlus size={16} aria-hidden="true" />
           New Article
         </ParkButton>
       </header>
 
-      {error && (
-        <div role="alert">
-          {error}
-        </div>
-      )}
+      {error && <ParkEmptyState role="alert" title="Knowledge could not be loaded" description={error} headingLevel={false}
+        action={<ParkButton onClick={() => void fetchData()}>Retry knowledge</ParkButton>} />}
 
       <div className={pageStyles.knowledgeWorkspace}>
         {/* Sidebar */}
@@ -262,10 +264,10 @@ export const KnowledgePage: React.FC = () => {
             <h2>Categories</h2>
             <ParkButton
               onClick={() => setIsAddingCategory({ parentId: null })}
-             
-              title="Add Root Category"
+              variant="plain"
+              title="Add Root Category" aria-label="Add Root Category"
             >
-              <IconPlus size={16} />
+              <IconPlus size={16} aria-hidden="true" />
             </ParkButton>
           </ParkCard.Header>
 
@@ -274,7 +276,7 @@ export const KnowledgePage: React.FC = () => {
               className={pageStyles.knowledgeCategoryButton}
               onClick={() => setSelectedCategoryId(null)}
             >
-              <IconFileLines size={16} />
+              <IconFileLines size={16} aria-hidden="true" />
               <span>All Articles</span>
             </ParkButton>
 
@@ -313,13 +315,19 @@ export const KnowledgePage: React.FC = () => {
                 </ParkTable.Row>
               </ParkTable.Head>
               <ParkTable.Body>
-                {filteredDocs.map((doc) => (
+                {loadState === 'loading' && <ParkTable.Row><ParkTable.Cell colSpan={5}>
+                  <div role="status" aria-label="Loading knowledge articles">
+                    <ParkSkeleton height="8" width="full" />
+                    <ParkSkeleton height="8" width="full" />
+                    <ParkSkeleton height="8" width="full" />
+                  </div>
+                </ParkTable.Cell></ParkTable.Row>}
+                {loadState === 'ready' && filteredDocs.map((doc) => (
                   <ParkTable.Row
                     key={doc.id}
                     className={pageStyles.knowledgeRow}
-                    onClick={() => navigate(`/knowledge/edit/${doc.id}`)}
                   >
-                    <ParkTable.Cell>{doc.title}</ParkTable.Cell>
+                    <ParkTable.Cell><ParkButton variant="plain" onClick={() => navigate(`/knowledge/edit/${doc.id}`)} aria-label={`Edit ${doc.title}`}>{doc.title}</ParkButton></ParkTable.Cell>
                     <ParkTable.Cell>
                       <span className={pageStyles.knowledgeStatusBadge} data-status={doc.status}>
                         {doc.status}
@@ -343,10 +351,11 @@ export const KnowledgePage: React.FC = () => {
                     </ParkTable.Cell>
                   </ParkTable.Row>
                 ))}
-                {filteredDocs.length === 0 && (
+                {loadState === 'ready' && filteredDocs.length === 0 && (
                   <ParkTable.Row>
                     <ParkTable.Cell colSpan={5}>
-                      <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false} />
+                      <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false}
+                        action={<ParkButton onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}>Create article</ParkButton>} />
                     </ParkTable.Cell>
                   </ParkTable.Row>
                 )}

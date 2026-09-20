@@ -97,6 +97,27 @@ it('does not apply a stale article response after the route changes', async () =
   expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
 });
 
+it('shows a loading skeleton and retries a failed article read without enabling a blank editor', async () => {
+  mocks.route.id = 'article-a';
+  let contentReads = 0;
+  mocks.get.mockImplementation((path: string) => {
+    if (path === '/knowledge/categories') return Promise.resolve([]);
+    if (path.endsWith('/content')) {
+      contentReads += 1;
+      return contentReads === 1 ? Promise.reject(new Error('Synthetic read failure')) : Promise.resolve({ content: 'Recovered article content' });
+    }
+    return Promise.resolve({ title: 'Recovered article', category_id: '', tier: 'answer' });
+  });
+  render(<KnowledgeEditorPage />);
+  expect(screen.getByRole('status', { name: 'Loading article' })).toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Synthetic read failure');
+  expect(screen.getByRole('button', { name: 'Save Article' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry article' }));
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title *' })).toHaveValue('Recovered article'));
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Recovered article content');
+  expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
+});
+
 it('does not navigate when an old save resolves after the route changes', async () => {
   let resolve!: (value: unknown) => void;
   mocks.post.mockImplementationOnce(() => new Promise(done => { resolve = done; }));

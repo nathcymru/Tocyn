@@ -26,6 +26,22 @@ const defaultNaturalFilters:NaturalFilters={owner:'All tickets',created:'anytime
 function ownerForView(view:string):NaturalFilters['owner']{return view==='mine'?'My tickets':view==='unassigned'?'Unassigned':'All tickets';}
 const naturalSortOptions:Readonly<Record<NaturalFilters['sort'],string>>={updated_desc:'recently updated',updated_asc:'least recently updated',created_desc:'newest first',created_asc:'oldest first',priority_desc:'highest impact',priority_asc:'lowest impact',sla_priority:'contract SLA'};
 function naturalSortLabel(sort:NaturalFilters['sort']){return naturalSortOptions[sort];}
+function createdAfterFor(period:NaturalFilters['created']):string|undefined{
+  if(period==='anytime')return undefined;
+  const now=Date.now();
+  if(period==='hour'||period==='day'||period==='week'){
+    const duration={hour:3600000,day:86400000,week:604800000}[period];
+    return new Date(now-duration).toISOString();
+  }
+  // A rolling calendar month must not turn February into an arbitrary 30-day period.
+  const cutoff=new Date(now);
+  const day=cutoff.getUTCDate();
+  cutoff.setUTCDate(1);
+  cutoff.setUTCMonth(cutoff.getUTCMonth()-(period==='quarter'?3:1));
+  const lastDay=new Date(Date.UTC(cutoff.getUTCFullYear(),cutoff.getUTCMonth()+1,0)).getUTCDate();
+  cutoff.setUTCDate(Math.min(day,lastDay));
+  return cutoff.toISOString();
+}
 type QueueView=keyof typeof queueViews;
 function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts'||value==='mine'||value==='unassigned'||value==='mentions';}
 function pageFromAnchor(anchor:string){const match=/^page:([1-9]\d*)$/.exec(anchor);const page=match?Number(match[1]):1;return Number.isSafeInteger(page)?page:1;}
@@ -184,8 +200,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       setStatus(`Quick view ${saved.name} saved.`);
     }catch{setQuickViewError('Could not save the quick view. Your filter choices are still here; try again.');}
   };
-  const createdAfter = useMemo(() => semanticFilters.created === 'anytime' ? undefined
-    : new Date(Date.now() - ({ hour: 3600000, day: 86400000, week: 604800000, month: 2592000000, quarter: 7776000000 } as Record<string, number>)[semanticFilters.created]).toISOString(), [semanticFilters.created]);
+  const createdAfter = useMemo(() => createdAfterFor(semanticFilters.created), [semanticFilters.created]);
   const query=useTickets({page:String(currentPage),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{}),...(semanticFilters.customer==='anyone'||filterId?{}:{customer_email:semanticFilters.customer}),...(createdAfter?{created_after:createdAfter}:{})});
   const tickets=query.data?.data??[];
   const meta=query.data?.meta??{page:1,limit:20,total:0,total_pages:1};
@@ -279,9 +294,10 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
 
   const pageStyles = ParkPage('inbox');
   const moveFocus=(index:number)=>{const next=Math.max(0,Math.min(tickets.length-1,index));setFocusedIndex(next);rowRefs.current[next]?.focus();};
-  const changeView=(id:string,sort?:WorkspacePreference['sort'])=>{
+  const changeView=(id:string,sort?:WorkspacePreference['sort'],preserveFilters=false)=>{
     setFilterOpen(false);setStatsOpen(false);setNamingQuickView(false);
-    setSemanticFilters({...defaultNaturalFilters,owner:ownerForView(id),sort:sort??workspace.sort,search:workspace.listQuery});
+    setSemanticFilters(current=>({...(preserveFilters?current:defaultNaturalFilters),owner:ownerForView(id),sort:sort??workspace.sort,search:workspace.listQuery}));
+    if(preserveFilters&&activeView!==id)preserveNextFilterRoute.current=id;
     workspace.update({...(sort?{sort}:{}),listAnchor:'page:1'});
     navigate(`/inbox/${id}`);
   };
@@ -300,9 +316,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       <h1 ref={heading} tabIndex={-1} className={pageStyles.inboxHiddenHeading}>Support Inbox</h1>
       <div className={css({ display: 'flex', minH: '14', alignItems: 'center', justifyContent: 'space-between', gap: '2', px: '4' })}>
         <ParkMenu.Root positioning={{ placement: 'bottom-start' }}><ParkMenu.Trigger asChild><ParkButton type="button" variant="plain" aria-label="Inbox views" className={css({ gap: '1', fontWeight: 'semibold', minW: 0, maxW: 'full' })}><span className={css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{selectedViewLabel}</span><ChevronDown aria-hidden="true" /></ParkButton></ParkMenu.Trigger><ParkMenu.Positioner><ParkMenu.Content aria-label="Inbox views" className={css({ zIndex: 20, minW: '56', maxH: '80', overflowY: 'auto' })}>
-          <ParkMenu.Item value="attention" onClick={()=>changeView('actionable','updated_desc')}>Needs Attention</ParkMenu.Item>
-          <ParkMenu.Item value="impact" onClick={()=>changeView('all','priority_desc')}>Highest Impact</ParkMenu.Item>
-          <ParkMenu.Item value="sla" onClick={()=>changeView('all','sla_priority')}>Contract SLAs</ParkMenu.Item>
+          <ParkMenu.Item value="attention" onClick={()=>changeView('actionable','updated_desc',true)}>Needs Attention</ParkMenu.Item>
+          <ParkMenu.Item value="impact" onClick={()=>changeView('all','priority_desc',true)}>Highest Impact</ParkMenu.Item>
+          <ParkMenu.Item value="sla" onClick={()=>changeView('all','sla_priority',true)}>Contract SLAs</ParkMenu.Item>
           <ParkMenu.Separator />
           <ParkMenu.Item value="all" onClick={()=>changeView('all')}>All tickets</ParkMenu.Item>
           {queueOrder.filter(id=>id!=='actionable').map(id=><ParkMenu.Item key={id} value={id} onClick={()=>changeView(id)}>{queueViews[id].label}{queueCounts.data?.[id]!==undefined&&<span aria-hidden="true" className={css({ ml: 'auto', color: 'fg.muted', fontSize: 'xs' })}>{queueCounts.data[id]}</span>}</ParkMenu.Item>)}
@@ -325,7 +341,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         </div>
         {namingQuickView&&<div className={css({ mt: '3', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2' })}><ParkInput aria-label="Quick view name" placeholder="Name this quick view" maxLength={100} value={quickViewName} onChange={event=>setQuickViewName(event.target.value)} className={css({ flex: '1 1 12rem', minW: 0 })} /><ParkButton type="button" disabled={createFilter.isPending||!quickViewRepresentable} onClick={()=>void saveQuickView()}>Save quick view</ParkButton></div>}
         {namingQuickView&&!quickViewRepresentable&&<p role="status" className={css({ mt: '2', color: 'fg.muted', fontSize: 'sm' })}>Quick views can currently save All tickets with an optional exact customer email. Apply these filters to use the other choices now.</p>}
-        {quickViewError&&<p role="alert" className={css({ mt: '2', color: 'fg.error', fontSize: 'sm' })}>{quickViewError}</p>}
+        {quickViewError&&<p role="alert" className={css({ mt: '2', color: 'critical', fontSize: 'sm' })}>{quickViewError}</p>}
       </section>}
       {statsOpen&&<section id="inbox-quick-statistics" role="region" aria-label="Quick statistics" className={css({ borderTop: '1px solid', borderColor: 'border.default', bg: 'bg.subtle', p: '4' })}>
         <dl className={css({ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '2' })}>

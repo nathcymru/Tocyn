@@ -23,10 +23,31 @@ it('associates automation labels, exposes status state, and swaps conditional ac
  await userEvent.click(action);await userEvent.click(await screen.findByRole('option',{name:/Retention/i}));await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'Retention Period (Days)'})).toBeInTheDocument());expect(screen.queryByRole('textbox',{name:'Webhook URL'})).not.toBeInTheDocument();
 });
 
+it('shows a retryable Park empty state after an initial automation load failure',async()=>{
+ api.get.mockRejectedValueOnce(new Error('Synthetic rules outage')).mockResolvedValueOnce([{id:'rule-a',name:'Synthetic rule',event_type:'ticket.created',action_type:'webhook',conditions:'malformed legacy conditions',action_config:'{}',is_active:true}]);
+ render(<AutomationPage/>);
+ expect(screen.getByRole('status',{name:'Loading automations'})).toHaveAttribute('aria-busy','true');
+ expect(await screen.findByRole('alert')).toHaveTextContent('Automation rules could not be loaded');
+ fireEvent.click(screen.getByRole('button',{name:'Retry automations'}));
+ const name=await screen.findByText('Synthetic rule');
+ expect(name.closest('[class*="card__root"]')).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Edit Synthetic rule'})).toBeInTheDocument();
+});
+
 it('names usage credential inputs when the local API reports missing configuration', async () => {
  api.get.mockRejectedValue(new ApiError('Synthetic credentials required',400));
  render(<UsagePage/>);
  expect(await screen.findByRole('textbox',{name:'Cloudflare Account ID'})).toBeInTheDocument();
  expect(screen.getByLabelText('Cloudflare API Token')).toHaveAttribute('type','password');
  expect(api.post).not.toHaveBeenCalled();
+});
+
+it('shows Park skeletons during restore and a retryable empty state after a failed load', async () => {
+ api.get.mockRejectedValueOnce(new Error('Synthetic usage outage')).mockResolvedValueOnce({});
+ render(<UsagePage/>);
+ expect(screen.getByLabelText('Loading usage data')).toHaveAttribute('aria-busy', 'true');
+ expect(document.querySelector('.skeleton')).toBeInTheDocument();
+ expect(await screen.findByText('Error loading usage data')).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+ await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
 });

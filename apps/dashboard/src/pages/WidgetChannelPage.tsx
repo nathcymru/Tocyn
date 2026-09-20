@@ -1,5 +1,5 @@
 import { css } from '@luminatick/ui/styled-system/css';
-import { ParkButton, ParkCard, ParkCheckbox, ParkEmptyState } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi } from '../api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export function WidgetChannelPage() {
   const queryClient = useQueryClient();
 
-  const { data: config, isLoading, isError } = useQuery({
+  const { data: config, isLoading, isError, refetch } = useQuery({
     queryKey: ['settings'],
     queryFn: () => dashboardApi.get<Record<string, string>>('/settings'),
   });
@@ -70,52 +70,44 @@ export function WidgetChannelPage() {
   return (
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
       <div className={css({ display: 'grid', gap: '1' })}>
-        <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Widget Channel</h1>
-        <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Configure your embeddable customer support widget.</p>
+        <h1 className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Widget Channel</h1>
+        <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Configure your embeddable customer support widget.</p>
       </div>
 
       <div className={css({ display: 'grid', gridTemplateColumns: { base: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' }, alignItems: 'start', gap: '6' })}>
-        <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', gap: '4' })}>
-          <ParkCard.Title>Features</ParkCard.Title>
+        <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Header><ParkCard.Title asChild><h2>Features</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', gap: '4' })}>
 
-          {isError && <p role="alert" className={css({"color":"text.default","fontSize":"sm","lineHeight":"relaxed","p":"3","rounded":"md","bg":"bg.subtle"})}>Widget settings could not be loaded. Reload this page before saving.</p>}
-          {saveError && <p role="alert" className={css({"color":"text.default","fontSize":"sm","lineHeight":"relaxed","p":"3","rounded":"md","bg":"bg.subtle"})}>{saveError}</p>}
-          {saveStatus && <p role="status" className={css({"color":"text.default","fontSize":"sm","lineHeight":"relaxed"})}>{saveStatus}</p>}
+          {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          {saveStatus && <p role="status" className={css({ color: 'fg.default', textStyle: 'sm' })}>{saveStatus}</p>}
           {isLoading ? (
-            <ParkEmptyState title="Loading widget settings…" headingLevel={false} aria-busy="true" className={css({"py":"6"})} />
+            <div role="status" aria-label="Loading widget settings" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading widget settings…</span><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /></div>
+          ) : isError ? (
+            <ParkEmptyState role="alert" title="Widget settings could not be loaded" description="Retry loading the settings before saving." action={<ParkButton type="button" onClick={() => void refetch()}>Retry widget settings</ParkButton>} />
           ) : (
             <div className={css({"display":"grid","gap":"4"})}>
               <div className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
-                <div className={css({"display":"flex","alignItems":"center"})}>
+                <div className={css({ minW: '0' })}>
                   <ParkCheckbox.Root checked={chatEnabled} disabled={isSaving || isError || !config}
                     onCheckedChange={({ checked }) => { dirty.current = true; setSaveStatus(''); setChatEnabled(checked === true); }}>
                     <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
                     <ParkCheckbox.HiddenInput id={chatId} aria-describedby={`${chatId}-help`} />
+                    <ParkCheckbox.Label>Chat Enabled</ParkCheckbox.Label>
                   </ParkCheckbox.Root>
-                </div>
-                <div className={css({"minW":0})}>
-                  <label htmlFor={chatId} className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
-                    Chat Enabled
-                  </label>
-                  <p id={`${chatId}-help`} className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                  <p id={`${chatId}-help`} className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>
                     Allow customers to chat with the AI support agent.
                   </p>
                 </div>
               </div>
 
               <div className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
-                <div className={css({"display":"flex","alignItems":"center"})}>
+                <div className={css({ minW: '0' })}>
                   <ParkCheckbox.Root checked={formEnabled} disabled={isSaving || isError || !config}
                     onCheckedChange={({ checked }) => { dirty.current = true; setSaveStatus(''); setFormEnabled(checked === true); }}>
                     <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
                     <ParkCheckbox.HiddenInput id={formId} aria-describedby={`${formId}-help`} />
+                    <ParkCheckbox.Label>Web Form Enabled</ParkCheckbox.Label>
                   </ParkCheckbox.Root>
-                </div>
-                <div className={css({"minW":0})}>
-                  <label htmlFor={formId} className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
-                    Web Form Enabled
-                  </label>
-                  <p id={`${formId}-help`} className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                  <p id={`${formId}-help`} className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>
                     Allow customers to submit a ticket via a form.
                   </p>
                 </div>
@@ -123,37 +115,35 @@ export function WidgetChannelPage() {
             </div>
           )}
 
-          <ParkButton
+          <ParkButton type="button"
             onClick={handleSave}
-            disabled={isSaving || isLoading || isError || !config}
+            disabled={isLoading || isError || !config} loading={isSaving} loadingText="Saving widget settings…"
             variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            Save Changes
           </ParkButton>
         </ParkCard.Body></ParkCard.Root>
 
         <div className={css({ display: 'grid', gap: '4', alignContent: 'start', minW: 0 })}>
-          <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', minW: 0, gap: '3' })}>
-            <ParkCard.Title>Embed Snippet</ParkCard.Title>
-            <p className={css({ m: 0, color: 'text.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>
+          <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Header><ParkCard.Title asChild><h2>Embed Snippet</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', minW: 0, gap: '3' })}>
+            <p className={css({ m: 0, color: 'fg.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>
               Integration example: replace the public widget key and host the widget build configured for your API. Customer sign-in must be configured separately. Place the script before the closing <code>&lt;/body&gt;</code> tag.
             </p>
-            <pre className={css({ minW: 0, maxW: 'full', m: 0, overflowX: 'auto', rounded: 'md', bg: 'bg.muted', p: '3', fontFamily: 'mono', fontSize: 'sm', whiteSpace: 'pre' })}>
+            <pre className={css({ minW: 0, maxW: 'full', m: 0, overflowX: 'auto', rounded: 'md', bg: 'bg.subtle', p: '3', fontFamily: 'tabular', fontSize: 'sm', whiteSpace: 'pre', fontVariantNumeric: 'tabular-nums' })}>
               {snippet}
             </pre>
-            <ParkButton
-              disabled={copying} onClick={copySnippet}
+            <ParkButton type="button"
+              loading={copying} loadingText="Copying snippet…" onClick={copySnippet}
               className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
-              {copying ? 'Copying...' : 'Copy Snippet'}
+              Copy Snippet
             </ParkButton>
-            {copyError && <p role="alert">{copyError}</p>}
+            {copyError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{copyError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             {copyStatus && <p role="status">{copyStatus}</p>}
           </ParkCard.Body></ParkCard.Root>
 
-          <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', minW: 0, gap: '2' })}>
-            <ParkCard.Title>Shadow DOM</ParkCard.Title>
-            <p className={css({ m: 0, color: 'text.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>
+          <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Header><ParkCard.Title asChild><h2>Shadow DOM</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', minW: 0, gap: '2' })}>
+            <p className={css({ m: 0, color: 'fg.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>
               The widget uses Shadow DOM to limit accidental styling conflicts. Test it with your website’s styles; the host page still controls its placement, visibility and scripts.
             </p>
           </ParkCard.Body></ParkCard.Root>

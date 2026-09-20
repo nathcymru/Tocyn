@@ -32,16 +32,23 @@ describe('customer login accessibility', () => {
     expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456', challengeId: undefined });
   });
 
-  it('names the login-method group and exposes which native button is selected', () => {
+  it('names the login-method group and uses Park variants for the selected method', () => {
     vi.mocked(portalApi.get).mockResolvedValue({});
     mount(LoginPage);
     expect(screen.getByRole('group', { name: 'Login method' })).toBeTruthy();
     const magic = screen.getByRole('button', { name: 'Magic Link' });
     const code = screen.getByRole('button', { name: 'Code (OTP)' });
+    const email = screen.getByLabelText('Email address');
+    expect(email.closest('.field__root')).toBeInTheDocument();
+    expect(email.closest('.card__root')).toBeInTheDocument();
     expect(magic.getAttribute('aria-pressed')).toBe('true');
+    expect(magic).toHaveClass('button--variant_surface');
+    expect(code).toHaveClass('button--variant_outline');
     fireEvent.click(code);
     expect(magic.getAttribute('aria-pressed')).toBe('false');
     expect(code.getAttribute('aria-pressed')).toBe('true');
+    expect(magic).toHaveClass('button--variant_outline');
+    expect(code).toHaveClass('button--variant_surface');
   });
 
   it('announces sending/failure and preserves a focusable submit control with no repeated request', async () => {
@@ -58,6 +65,8 @@ describe('customer login accessibility', () => {
     fireEvent.click(button); expect(portalApi.post).toHaveBeenCalledTimes(1);
     reject(new Error('Login instructions unavailable'));
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Login instructions unavailable');
     expect(email.getAttribute('aria-describedby')).toBe(alert.id);
     expect(document.activeElement).toBe(button);
   });
@@ -110,15 +119,21 @@ describe('customer login accessibility', () => {
     vi.mocked(portalApi.post).mockRejectedValue(new Error('Code expired. Request a new code.'));
     mount(VerifyPage);
     const code = screen.getByLabelText('Authentication Code');
+    expect(code.closest('.field__root')).toBeInTheDocument();
+    expect(code.closest('.card__root')).toBeInTheDocument();
     expect(code.getAttribute('inputmode')).toBe('numeric');
     fireEvent.change(code, { target: { value: '123456' } });
     const button = screen.getByRole('button', { name: 'Verify Code' });
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Verifying code');
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Code expired. Request a new code.');
     expect(code.getAttribute('aria-describedby')).toBe(alert.id);
     expect(document.activeElement).toBe(button);
-    expect(screen.getByRole('button', { name: 'Request a new code' }).hasAttribute('disabled')).toBe(false);
+    const retry = screen.getByRole('button', { name: 'Request a new code' });
+    expect(retry.hasAttribute('disabled')).toBe(false);
+    expect(retry).toHaveClass('button--variant_plain');
     expect(portalApi.post).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,7 +1,8 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCheckbox, ParkEmptyState, ParkInput, ParkTicketFields, ParkTable } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
+import { Badge } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -11,18 +12,16 @@ import {
   IconList,
   IconSquareCheck,
   IconAlignLeft,
-  IconFont,
-  IconToggleOff
+  IconFont
 } from '@luminatick/ui/icons';
 import { useTicketFields } from '../hooks/useTicketFields';
 
 export function TicketFieldsPage() {
-  const styles = ParkTicketFields();
   const queryClient = useQueryClient();
   const opener = React.useRef<HTMLButtonElement | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const { data: fields, isLoading } = useTicketFields();
+  const { data: fields, isLoading, isError, refetch } = useTicketFields();
 
   const getIconForType = (type: string) => {
     switch (type) {
@@ -35,30 +34,31 @@ export function TicketFieldsPage() {
   };
 
   return (
-    <div className={styles.page}>
-      <div className={styles.header}>
+    <div className={css({ display: 'grid', gap: '6', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })}>
+      <div className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3', flexWrap: 'wrap' })}>
         <div>
-          <h1 className={styles.title}>Custom Ticket Fields</h1>
-          <p className={styles.description}>Manage extra attributes for your tickets.</p>
+          <h1 className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Custom Ticket Fields</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Manage extra attributes for your tickets.</p>
         </div>
-        <ParkButton
+        <ParkButton type="button"
           onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
-          className={styles.create}
         >
-          <IconPlus aria-hidden="true" className={styles.createIcon} />
+          <IconPlus aria-hidden="true" className={css({ w: '4', h: '4' })} />
           Create Field
         </ParkButton>
       </div>
 
-      <div className={styles.tableShell}>
+      <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
         {isLoading ? (
-          <ParkEmptyState title="Loading fields..." headingLevel={false} aria-busy="true" className={css({"py":"6"})} />
+          <section role="status" aria-label="Loading ticket fields" aria-busy="true" className={css({ display: 'grid', gap: '3' })}><span className={css({ srOnly: true })}>Loading fields...</span><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /></section>
+        ) : isError ? (
+          <ParkEmptyState role="alert" title="Ticket fields could not be loaded" description="Retry before managing field definitions." action={<ParkButton type="button" onClick={() => void refetch()}>Retry ticket fields</ParkButton>} />
         ) : fields?.length === 0 ? (
           <ParkEmptyState
             title="No custom fields"
             description="Create fields to collect specific information on tickets."
             className={css({"py":"6"})}
-            action={<ParkButton
+            action={<ParkButton type="button"
               onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
               className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
@@ -66,9 +66,9 @@ export function TicketFieldsPage() {
             </ParkButton>}
           />
         ) : (
-          <ParkTable.Root className={styles.table}>
-            <ParkTable.Head className={styles.tableHead}>
-              <ParkTable.Row className={styles.tableRow}>
+          <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
+            <ParkTable.Head>
+              <ParkTable.Row>
                 <ParkTable.Header>Label</ParkTable.Header>
                 <ParkTable.Header>Key Name</ParkTable.Header>
                 <ParkTable.Header>Type</ParkTable.Header>
@@ -78,29 +78,29 @@ export function TicketFieldsPage() {
             </ParkTable.Head>
             <ParkTable.Body>
               {fields?.map((field) => (
-                <ParkTable.Row key={field.id} className={styles.tableRow}>
+                <ParkTable.Row key={field.id}>
                   <ParkTable.Cell>{field.label}</ParkTable.Cell>
                   <ParkTable.Cell>{field.name}</ParkTable.Cell>
                   <ParkTable.Cell>
-                    <div className={styles.fieldType}>
+                    <div className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}>
                       {getIconForType(field.field_type)}
-                      <span className="capitalize">{field.field_type}</span>
+                      <span className={css({ textTransform: 'capitalize' })}>{field.field_type}</span>
                     </div>
                   </ParkTable.Cell>
                   <ParkTable.Cell>
                     {field.options || '-'}
                   </ParkTable.Cell>
                   <ParkTable.Cell>
-                    <span className={[styles.fieldStatus, field.is_active ? styles.fieldStatusActive : styles.fieldStatusInactive].join(' ')}>
+                    <Badge colorPalette={field.is_active ? 'green' : 'gray'}>
                       {field.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                    </Badge>
                   </ParkTable.Cell>
                 </ParkTable.Row>
               ))}
             </ParkTable.Body>
           </ParkTable.Root>
         )}
-      </div>
+      </ParkCard.Body></ParkCard.Root>
 
         <CreateFieldModal open={isModalOpen} finalFocusEl={() => opener.current}
           onClose={() => setIsModalOpen(false)}
@@ -114,7 +114,6 @@ export function TicketFieldsPage() {
 }
 
 function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: boolean, finalFocusEl: () => HTMLElement | null, onClose: () => void, onSuccess: () => void }) {
-  const styles = ParkTicketFields();
   const titleId = React.useId();
   const initialFocus = React.useRef<HTMLInputElement>(null);
   const savingGuard = React.useRef(false);
@@ -166,85 +165,81 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
   return (
     <TocynDialog open={open} busy={mutation.isPending} onOpenChange={next => { if (!next) close(); }}
       labelledBy={titleId} initialFocusEl={() => initialFocus.current} finalFocusEl={finalFocusEl}>
-      <div className={styles.dialog}>
-        <div className={styles.dialogHeader}>
-          <h2 id={titleId} className={styles.dialogTitle}>Create Ticket Field</h2>
-          <ParkButton type="button" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close} className={styles.dialogClose}>
-            <IconXmark aria-hidden="true" className={styles.dialogCloseIcon} />
+        <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+          <ParkDialog.Title id={titleId}>Create Ticket Field</ParkDialog.Title>
+          <ParkButton type="button" variant="plain" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close}>
+            <IconXmark aria-hidden="true" className={css({ w: '4', h: '4' })} />
           </ParkButton>
-        </div>
+        </ParkDialog.Header>
 
-        <form onSubmit={handleSubmit} aria-labelledby={titleId} className={styles.dialogForm}>
-          {saveError && <p role="alert" className={styles.dialogError}>{saveError}</p>}
-          <fieldset disabled={mutation.isPending} className={styles.dialogFields}>
-          <div>
-            <label htmlFor={`${titleId}-label`} className={styles.dialogLabel}>Display Label</label>
+        <ParkDialog.Body><form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
+          {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          <fieldset disabled={mutation.isPending} className={css({ display: 'grid', gap: '4' })}>
+          <div className={css({ display: 'grid', gap: '1.5' })}>
+            <label htmlFor={`${titleId}-label`} className={css({ textStyle: 'label' })}>Display Label</label>
             <ParkInput
               required
               type="text"
               id={`${titleId}-label`} ref={initialFocus} value={formData.label}
               onChange={handleLabelChange}
               placeholder="e.g., Device Model"
-              className={styles.dialogControl}
+              className={css({ w: 'full' })}
             />
           </div>
 
-          <div>
-            <label htmlFor={`${titleId}-name`} className={styles.dialogLabel}>Key Name</label>
+          <div className={css({ display: 'grid', gap: '1.5' })}>
+            <label htmlFor={`${titleId}-name`} className={css({ textStyle: 'label' })}>Key Name</label>
             <ParkInput
               required
               type="text"
               id={`${titleId}-name`} value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., device_model"
-              className={styles.dialogControl}
+              className={css({ w: 'full' })}
             />
-            <p className={styles.dialogHelp}>The JSON key used internally and via API.</p>
+            <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>The JSON key used internally and via API.</p>
           </div>
 
-          <div>
-            <label htmlFor={`${titleId}-type`} className={styles.dialogLabel}>Field Type</label>
-            <DashboardSelect id={`${titleId}-type`} aria-label="Field Type" value={formData.field_type} onValueChange={value => setFormData({ ...formData, field_type: value })} className={styles.dialogControl} options={[{ value: 'text', label: 'Text (Single line)' }, { value: 'textarea', label: 'Textarea (Multi-line)' }, { value: 'select', label: 'Dropdown (Select)' }, { value: 'checkbox', label: 'Checkbox' }]} />
+          <div className={css({ display: 'grid', gap: '1.5' })}>
+            <label htmlFor={`${titleId}-type`} className={css({ textStyle: 'label' })}>Field Type</label>
+            <DashboardSelect id={`${titleId}-type`} aria-label="Field Type" value={formData.field_type} onValueChange={value => setFormData({ ...formData, field_type: value })} options={[{ value: 'text', label: 'Text (Single line)' }, { value: 'textarea', label: 'Textarea (Multi-line)' }, { value: 'select', label: 'Dropdown (Select)' }, { value: 'checkbox', label: 'Checkbox' }]} />
           </div>
 
           {formData.field_type === 'select' && (
-            <div className={styles.optionsReveal}>
-              <label htmlFor={`${titleId}-options`} className={styles.dialogLabel}>Options</label>
+            <div className={css({ display: 'grid', gap: '1.5' })}>
+              <label htmlFor={`${titleId}-options`} className={css({ textStyle: 'label' })}>Options</label>
               <ParkInput
                 required
                 type="text"
                 id={`${titleId}-options`} value={formData.options}
                 onChange={(e) => setFormData({ ...formData, options: e.target.value })}
                 placeholder="Comma-separated (e.g. Option 1, Option 2)"
-                className={styles.dialogControl}
+                className={css({ w: 'full' })}
               />
             </div>
           )}
 
-          <ParkCheckbox.Root checked={formData.is_active} onCheckedChange={({ checked }) => setFormData({ ...formData, is_active: checked === true })} className={styles.checkbox}>
+          <ParkCheckbox.Root checked={formData.is_active} onCheckedChange={({ checked }) => setFormData({ ...formData, is_active: checked === true })}>
             <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
             <ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Active</ParkCheckbox.Label>
           </ParkCheckbox.Root>
 
-          <div className={styles.dialogActions}>
+          <ParkDialog.Footer>
             <ParkButton
-              type="button"
+              type="button" variant="outline"
               onClick={close}
-              className={styles.dialogCancel}
             >
               Cancel
             </ParkButton>
             <ParkButton
               type="submit"
-              disabled={mutation.isPending}
-              className={styles.dialogSubmit}
+              loading={mutation.isPending} loadingText="Creating field…"
             >
-              {mutation.isPending ? 'Creating...' : 'Create Field'}
+              Create Field
             </ParkButton>
-          </div>
+          </ParkDialog.Footer>
           </fieldset>
-        </form>
-      </div>
+        </form></ParkDialog.Body>
     </TocynDialog>
   );
 }

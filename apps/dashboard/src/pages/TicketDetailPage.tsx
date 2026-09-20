@@ -5,7 +5,7 @@ import { TicketAssignmentActions } from '../components/TicketAssignmentActions';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
-import { ParkButton, ParkCheckbox, ParkEmptyState, ParkInput, ParkTextarea, ParkTicketDetail } from '@luminatick/ui/park';
+import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCheckbox, ParkEmptyState, ParkInput, ParkScrollArea, ParkSkeleton, ParkTabs, ParkTextarea, ParkTicketDetail } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
@@ -33,6 +33,7 @@ import { ApiError, dashboardApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  Check,
   Send,
   User,
   ShieldCheck,
@@ -793,7 +794,13 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   };
 
   const detailStyles = ParkTicketDetail();
-  if (isLoading) return <div role="status" className={detailStyles.loading}>Loading ticket...</div>;
+  if (isLoading) return <div role="status" aria-label="Loading conversation" className={css({ display: 'grid', gap: '4', minH: '64', p: '5' })}>
+    <span className={css({ srOnly: true })}>Loading conversation…</span>
+    <ParkSkeleton aria-hidden="true" height="8" width="60%" />
+    <ParkSkeleton aria-hidden="true" height="20" width="100%" />
+    <ParkSkeleton aria-hidden="true" height="20" width="86%" />
+    <ParkSkeleton aria-hidden="true" height="24" width="100%" />
+  </div>;
   if (!ticket) return <ParkEmptyState
     role="alert" className={detailStyles.unavailable} title={error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}
     description="The conversation could not be displayed. Retry loading it or return to the list."
@@ -862,14 +869,14 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
         <ParkCollapsible.Root open={showSupportState} onOpenChange={({ open }) => setShowSupportState(open)} className={css({ mb: '2' })}>
           <ParkCollapsible.Trigger asChild><ParkButton type="button" variant="plain" className={css({ minH: '9' })}>Manage support state</ParkButton></ParkCollapsible.Trigger>
           <ParkCollapsible.Content>
-            {showSupportState && supportState.isLoading && <p role="status" className={detailStyles.status}>Loading current support state…</p>}
+            {showSupportState && supportState.isLoading && <div role="status" aria-label="Loading current support state" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading current support state…</span><ParkSkeleton aria-hidden="true" height="4" width="70%" /><ParkSkeleton aria-hidden="true" height="4" width="90%" /></div>}
             {showSupportState && supportState.data && typeof supportState.data.definition_id === 'string' && <form onSubmit={submitSupportState} className={detailStyles.supportStateForm} aria-label="Support state">
           <div className={detailStyles.supportStateHeader}><h2 className={detailStyles.contextFieldLabel}>Support state</h2><p className={detailStyles.supportStateHelp}>Internal state and waiting facts are visible to staff only. Customer-facing label: {supportState.data.public_label}</p></div>
           <label className={detailStyles.contextField}>State
             <DashboardSelect triggerRef={supportStateSelect} aria-label="Support state" value={supportStateDraft.definitionId} disabled={isSupportStateSubmitting || isLoadingSupportStates} onValueChange={definitionId => updateSupportStateDraft({ definitionId })} className={css({ w: 'full' })}
               options={supportStateOptions} />
           </label>
-          {isLoadingSupportStates && <p role="status" className={css({ color: 'text.muted', fontSize: 'sm' })}>Loading support-state definitions…</p>}
+          {isLoadingSupportStates && <div role="status" aria-label="Loading support-state definitions" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading support-state definitions…</span><ParkSkeleton aria-hidden="true" height="4" width="75%" /></div>}
           <div className={detailStyles.supportStateFields}>
             <label className={detailStyles.contextField}>Waiting reason{selectedSupportStateDefinition ? selectedSupportStateDefinition.waiting_reason_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Waiting reason" aria-required={Boolean(selectedSupportStateDefinition?.waiting_reason_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.waitingReason} onChange={event => updateSupportStateDraft({ waitingReason: event.target.value })} maxLength={512} className={css({ w: 'full' })} /></label>
             <label className={detailStyles.contextField}>Next action{selectedSupportStateDefinition ? selectedSupportStateDefinition.next_action_required ? ' (required)' : ' (optional)' : ' (state details loading)'}<ParkInput aria-label="Next action" aria-required={Boolean(selectedSupportStateDefinition?.next_action_required)} disabled={isSupportStateSubmitting} value={supportStateDraft.nextAction} onChange={event => updateSupportStateDraft({ nextAction: event.target.value })} maxLength={512} className={css({ w: 'full' })} /></label>
@@ -893,7 +900,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </ParkCollapsible.Content>
         </ParkCollapsible.Root>
 
-        <div className={detailStyles.card}>
+        <div className={`${detailStyles.card} ${css({ minH: '42rem', flexShrink: 0 })}`}>
           <div className={detailStyles.header}>
             <div className={detailStyles.heading}>
               <div className={detailStyles.titleStack}>
@@ -919,18 +926,18 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   <div className={detailStyles.viewers}>
                     <div aria-hidden="true" className={detailStyles.avatars}>
                       {viewers.slice(0, 3).map((viewer, i) => (
-                        <div
+                        <ParkAvatar
                           key={i}
-                          className={detailStyles.avatar}
+                          size="sm"
                           title={`${viewer.name} is viewing this ticket`}
                         >
-                          {viewer.name[0]}
-                        </div>
+                          <ParkAvatarFallback name={viewer.name} />
+                        </ParkAvatar>
                       ))}
                       {viewers.length > 3 && (
-                        <div className={detailStyles.avatar}>
+                        <span className={css({ color: 'fg.muted', fontSize: 'xs' })}>
                           +{viewers.length - 3}
-                        </div>
+                        </span>
                       )}
                     </div>
                     <span className={css({ position: 'absolute', w: '1px', h: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' })}>Viewing this ticket: {viewers.map(viewer => viewer.name).join(', ')}</span>
@@ -949,15 +956,17 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             </div>
           </div>
 
-          <div id="conversation-messages" className={detailStyles.messages}>
+          <ParkScrollArea.Root id="conversation-messages" className={css({ minW: 0, minH: '12rem', flex: '1 1 12rem', bg: 'bg.canvas' })}>
+            <ParkScrollArea.Viewport className={css({ minH: 0, flex: '1', h: 'full' })}>
+              <ParkScrollArea.Content className={css({ display: 'flex', minW: 0, flexDirection: 'column', gap: '4', p: { base: '4', md: '5' } })}>
             {ticket.articles.map((article) => (
               <div
                 key={article.id}
                 className={detailStyles.timelineRow}
               >
-                <div data-sender={article.sender_type} data-internal={article.is_internal ? 'true' : 'false'} className={detailStyles.timelineAvatar}>
-                  {article.sender_type === 'agent' ? 'A' : article.sender_type === 'system' ? 'S' : 'C'}
-                </div>
+                <ParkAvatar size="md" aria-label={article.sender_type === 'agent' ? article.is_internal ? 'Private internal note' : 'Public operator reply' : article.sender_type === 'system' ? 'System event' : 'Customer message'}>
+                  <ParkAvatarFallback name={article.sender_type === 'agent' ? 'Operator' : article.sender_type === 'system' ? 'System' : ticket.customer_email} />
+                </ParkAvatar>
                 <div data-sender={article.sender_type} data-internal={article.is_internal ? 'true' : 'false'} className={detailStyles.timelineBubble}>
                   <div className={detailStyles.timelineMeta}>
                     <span className={detailStyles.timelineLabel}>
@@ -1033,14 +1042,14 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'sop' ? null : 'sop')}
                         className={clsx(detailStyles.qaButton, article.qa_type === 'sop' ? detailStyles.qaButtonActive : detailStyles.qaButtonInactive)}
                       >
-                        {article.qa_type === 'sop' ? '✓ SOP (internal)' : 'Mark as SOP (internal)'}
+                        {article.qa_type === 'sop' && <Check aria-hidden="true" />}{article.qa_type === 'sop' ? 'SOP (internal)' : 'Mark as SOP (internal)'}
                       </ParkButton>
                       <ParkButton
                         aria-label="Mark as answer" aria-pressed={article.qa_type === 'answer'} disabled={qaPending || article.qa_type === 'question'}
                         onClick={() => handleToggleQa(article.id, article.qa_type === 'answer' ? null : 'answer')}
                         className={clsx(detailStyles.qaButton, article.qa_type === 'answer' ? detailStyles.qaButtonActive : detailStyles.qaButtonInactive)}
                       >
-                        {article.qa_type === 'answer' ? '✓ Answer' : 'Mark as Answer'}
+                        {article.qa_type === 'answer' && <Check aria-hidden="true" />}{article.qa_type === 'answer' ? 'Answer' : 'Mark as Answer'}
                       </ParkButton>
                     </div>
                     {article.qa_type && (
@@ -1053,7 +1062,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 </div>
               </div>
             ))}
-          </div>
+              </ParkScrollArea.Content>
+            </ParkScrollArea.Viewport>
+            <ParkScrollArea.Scrollbar orientation="vertical" />
+          </ParkScrollArea.Root>
 
           {ticket.pagination && <div className={detailStyles.pagination}>
             <ParkButton type="button" onClick={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage({ cancelRefetch: false }); }} aria-disabled={!hasNextPage || isFetchingNextPage}
@@ -1092,24 +1104,19 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             <form onSubmit={handleSubmitReply} className={detailStyles.composerForm}>
               {sentDraftVersion && <p role="status">This reply was sent. Draft cleanup is still pending. <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void retrySentDraftCleanup()}>Retry sent-draft cleanup</ParkButton></p>}
               <div className={detailStyles.modeRow}>
-                <div className={detailStyles.modeGroup}>
-                  <ParkButton
-                    type="button"
-                    aria-disabled={isSubmitting} aria-pressed={!isInternal}
-                    onClick={() => { if (!submission.current) updateDraft({ mode: 'public', mentionedUserIds: [] }); }}
-                    className={clsx(detailStyles.modeButton, !isInternal ? detailStyles.modeButtonActive : detailStyles.modeButtonInactive)}
-                  >
-                    Public Reply
-                  </ParkButton>
-                  <ParkButton
-                    type="button"
-                    aria-disabled={isSubmitting} aria-pressed={isInternal}
-                    onClick={() => { if (!submission.current) updateDraft({ mode: 'internal' }); }}
-                    className={clsx(detailStyles.modeButton, isInternal ? detailStyles.modeButtonActive : detailStyles.modeButtonInactive)}
-                  >
-                    Internal Note
-                  </ParkButton>
-                </div>
+                <ParkTabs.Root value={isInternal ? 'internal' : 'public'} onValueChange={({ value }) => {
+                  if (submission.current || isSubmitting) return;
+                  if (value === 'public') updateDraft({ mode: 'public', mentionedUserIds: [] });
+                  else if (value === 'internal') updateDraft({ mode: 'internal' });
+                }}>
+                  <ParkTabs.List aria-label="Reply mode">
+                    <ParkTabs.Trigger value="public" disabled={isSubmitting}>Public Reply</ParkTabs.Trigger>
+                    <ParkTabs.Trigger value="internal" disabled={isSubmitting}>Internal Note</ParkTabs.Trigger>
+                    <ParkTabs.Indicator />
+                  </ParkTabs.List>
+                  <ParkTabs.Content value="public" className={css({ srOnly: true })}>Public replies are visible to the customer.</ParkTabs.Content>
+                  <ParkTabs.Content value="internal" className={css({ srOnly: true })}>Internal notes are private to staff.</ParkTabs.Content>
+                </ParkTabs.Root>
 
                 <ParkButton
                   type="button"
@@ -1161,7 +1168,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               )}
 
               {!replyCapability ? <div role="status" className={detailStyles.replyCapability}>
-                {replyCapabilities.isLoading ? 'Loading reply options…' : 'Reply options are unavailable.'}
+                {replyCapabilities.isLoading ? <><span className={css({ srOnly: true })}>Loading reply options…</span><ParkSkeleton aria-hidden="true" height="4" width="70%" /></> : 'Reply options are unavailable.'}
                 {replyCapabilities.isError && <ParkButton
                   type="button"
                   className={css({ minH: '8', px: '1', ml: '2', color: 'accent.primary' })}
@@ -1319,17 +1326,11 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               <p className={css({ color: 'text.muted', fontSize: 'xs' })}>Loaded from this tenant-scoped conversation.</p>
             </div>
             {customerHistory.isLoading ? (
-              <p role="status" className={css({ p: '3', rounded: 'md', bg: 'bg.subtle', color: 'text.muted', fontSize: 'sm' })}>
-                Loading customer history...
-              </p>
+              <div role="status" aria-label="Loading customer history" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading customer history…</span><ParkSkeleton aria-hidden="true" height="4" width="80%" /><ParkSkeleton aria-hidden="true" height="4" width="60%" /></div>
             ) : customerHistory.isError ? (
-              <p role="status" className={css({ p: '3', rounded: 'md', bg: 'bg.subtle', color: 'text.muted', fontSize: 'sm' })}>
-                Customer history is unavailable for this conversation. {customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'}
-              </p>
+              <ParkEmptyState headingLevel={3} title="Customer history unavailable" description={customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'} action={<ParkButton type="button" onClick={() => void customerHistory.refetch()}>Retry customer history</ParkButton>} />
             ) : customerHistoryEvents.length === 0 ? (
-              <p role="status" className={css({ p: '3', rounded: 'md', bg: 'bg.subtle', color: 'text.muted', fontSize: 'sm' })}>
-                Customer history is unavailable for this conversation. No cross-channel identity match was made.
-              </p>
+              <ParkEmptyState headingLevel={3} title="No linked customer history" description="No cross-channel identity match was made for this conversation." />
             ) : (
               <ul className={css({ display: 'grid', gap: '2', p: 0, listStyle: 'none' })}>
                 {customerHistoryEvents.map((historyEvent) => (
@@ -1465,9 +1466,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           <ParkCollapsible.Trigger className={css({ cursor: 'pointer', color: 'text.primary', fontSize: 'sm', fontWeight: 'bold', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus' } })}>
             <span className={css({ display: 'flex', alignItems: 'center', gap: '2' })}><Activity className={css({ w: '4', h: '4', color: 'text.muted' })} />Operational context</span>
           </ParkCollapsible.Trigger>
-          <ParkCollapsible.Content><p role="status" className={css({ mt: '4', p: '3', rounded: 'md', borderWidth: '1px', borderColor: 'border.default', bg: 'bg.subtle', color: 'text.muted', fontSize: 'xs' })}>
-            No operational source is connected for this ticket. Live SLA and routing details remain unavailable.
-          </p></ParkCollapsible.Content>
+          <ParkCollapsible.Content><ParkEmptyState headingLevel={3} title="Operational context unavailable" description="No operational source is connected for this ticket. Live SLA and routing details remain unavailable." /></ParkCollapsible.Content>
         </ParkCollapsible.Root>
 
         <ParkCollapsible.Root defaultOpen className={css({ mt: '4', p: '5', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'xl', boxShadow: 'sm' })}>
@@ -1475,10 +1474,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             <span className={css({ display: 'flex', alignItems: 'center', gap: '2' })}><MessageSquare className={css({ w: '4', h: '4', color: 'text.muted' })} />Knowledge</span>
           </ParkCollapsible.Trigger>
           <ParkCollapsible.Content><div className={css({ display: 'grid', gap: '3', mt: '4' })}>
-            <p id="knowledge-insert-help" role="status" className={css({ p: '3', rounded: 'md', borderWidth: '1px', borderColor: 'border.default', bg: 'bg.subtle', color: 'text.muted', fontSize: 'xs' })}>
-              {knowledgeLoading ? 'Loading tenant knowledge…' : knowledgeError ? 'Knowledge is temporarily unavailable. No content was inserted.' : knowledgeArticles.length ? 'Select an article to append its verified content to the reply.' : 'No eligible internal knowledge articles are available.'}
-            </p>
-            {knowledgeError && <ParkButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)} className={css({ fontSize: 'sm' })}>Retry knowledge</ParkButton>}
+            {knowledgeLoading ? <div role="status" aria-label="Loading tenant knowledge" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading tenant knowledge…</span><ParkSkeleton aria-hidden="true" height="4" width="80%" /><ParkSkeleton aria-hidden="true" height="4" width="60%" /></div>
+              : knowledgeError ? <ParkEmptyState headingLevel={3} title="Knowledge temporarily unavailable" description="No content was inserted." action={<ParkButton type="button" onClick={() => setKnowledgeAttempt(attempt => attempt + 1)}>Retry knowledge</ParkButton>} />
+              : knowledgeArticles.length === 0 ? <ParkEmptyState headingLevel={3} title="No eligible knowledge" description="No eligible internal knowledge articles are available." />
+              : <p id="knowledge-insert-help" className={css({ color: 'fg.muted', fontSize: 'sm' })}>Select an article to append its verified content to the reply.</p>}
             {workspace.panel === 'details' && knowledgeArticles.length > 0 && <KnowledgeBrowser articles={knowledgeArticles} insertingId={knowledgeInserting}
               disabled={Boolean(knowledgeInserting) || isSubmitting || draft.status === 'loading'} onInsert={article => void insertKnowledgeArticle(article)} />}
           </div></ParkCollapsible.Content>
@@ -1492,9 +1491,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             {viewers.length > 0 ? <div className={css({ display: 'grid', gap: '3' })}>
               {viewers.map((viewer, i) => (
                 <div key={i} className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
-                  <div className={css({ display: 'flex', w: '8', h: '8', alignItems: 'center', justifyContent: 'center', rounded: 'full', bg: 'info.surface', color: 'info.text', fontSize: 'xs', fontWeight: 'bold', borderWidth: '1px', borderColor: 'border.default' })}>
-                    {viewer.name[0]}
-                  </div>
+                  <ParkAvatar size="sm"><ParkAvatarFallback name={viewer.name} /></ParkAvatar>
                   <div>
                     <p className={css({ color: 'text.primary', fontSize: 'xs', fontWeight: 'bold' })}>{viewer.name}</p>
                     <p className={css({ display: 'flex', alignItems: 'center', gap: '1', color: 'text.muted', fontSize: 'xs', fontWeight: 'medium' })}>
@@ -1504,7 +1501,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   </div>
                 </div>
               ))}
-            </div> : <p role="status" className={css({ mt: '4', p: '3', rounded: 'md', borderWidth: '1px', borderColor: 'border.default', bg: 'bg.subtle', color: 'text.muted', fontSize: 'xs' })}>No collaborators are viewing this ticket.</p>}
+            </div> : <ParkEmptyState headingLevel={3} title="No current viewers" description="No collaborators are viewing this ticket." />}
             </ParkCollapsible.Content>
         </ParkCollapsible.Root>
       </aside>
@@ -1532,7 +1529,7 @@ function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={handleBlur}
-        className={css({ w: 'full', px: '3', py: '1.5', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'md', boxShadow: 'sm', fontSize: 'sm', fontWeight: 'medium', resize: 'vertical', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus' } })}
+        className={css({ w: 'full', resize: 'vertical' })}
         rows={3}
       />
     );
@@ -1546,7 +1543,7 @@ function CustomFieldInput({ id, field, value, onSave }: { id: string, field: any
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
-      className={css({ w: 'full', px: '3', py: '1.5', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'md', boxShadow: 'sm', fontSize: 'sm', fontWeight: 'medium', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus' } })}
+      className={css({ w: 'full' })}
     />
   );
 }

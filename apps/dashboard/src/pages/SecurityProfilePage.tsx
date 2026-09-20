@@ -1,5 +1,6 @@
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCard, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput } from '@luminatick/ui/park';
+import { Badge } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -8,8 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import {
   IconShieldHalved,
   IconShield,
-  IconKey,
-  IconTriangleExclamation
+  IconKey
 } from '@luminatick/ui/icons';
 
 interface SetupResponse {
@@ -17,29 +17,21 @@ interface SetupResponse {
 }
 
 const securityStyles = {
-  page: css({ width: '100%', maxWidth: '48rem', marginInline: 'auto', padding: '2rem 1rem', display: 'grid', gap: '1.5rem', color: 'text.primary' }),
-  title: css({ margin: '0', fontSize: '1.75rem', lineHeight: '1.2' }),
-  description: css({ marginTop: '0.375rem', color: 'text.muted' }),
-  success: css({ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.input', color: 'text.primary' }),
-  error: css({ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'critical.border', borderRadius: 'l2', background: 'critical.surface', color: 'critical' }),
-  statusInner: css({ display: 'flex', alignItems: 'center', gap: '0.75rem' }),
+  page: css({ width: '100%', maxWidth: '48rem', marginInline: 'auto', padding: '2rem 1rem', display: 'grid', gap: '1.5rem', color: 'fg.default' }),
+  title: css({ margin: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' }),
+  description: css({ marginTop: '0.375rem', color: 'fg.muted' }),
   statusIcon: css({ width: '1.5rem', height: '1.5rem', flexShrink: '0' }),
-  card: css({ width: '100%' }),
-  cardBody: css({ display: 'grid', gap: '1.25rem', padding: 'clamp(1.25rem, 4vw, 2rem)' }),
-  cardTitle: css({ display: 'flex', alignItems: 'center', gap: '0.625rem', margin: '0', fontSize: '1.25rem' }),
-  cardDescription: css({ color: 'text.muted', '& p': { margin: '0' } }),
+  cardBody: css({ display: 'grid', gap: '1.25rem' }),
   stack: css({ display: 'grid', justifyItems: 'start', gap: '1rem' }),
-  enabled: css({ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'text.primary', fontWeight: '600' }),
-  note: css({ margin: '0', color: 'text.muted' }),
+  note: css({ margin: '0', color: 'fg.muted' }),
   setup: css({ display: 'grid', gap: '1.5rem', minWidth: '0' }),
   step: css({ display: 'grid', gap: '0.75rem', minWidth: '0' }),
   stepTitle: css({ margin: '0', fontSize: '1rem', fontWeight: '600' }),
-  stepCopy: css({ margin: '0', color: 'text.muted' }),
-  qr: css({ justifySelf: 'start', maxWidth: '100%', padding: '0.75rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.input', '& svg': { maxWidth: '100%', height: 'auto' } }),
-  secret: css({ display: 'inline-block', marginTop: '0.5rem', padding: '0.375rem 0.625rem', borderRadius: 'l1', background: 'bg.input', color: 'text.primary', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', userSelect: 'all' }),
+  stepCopy: css({ margin: '0', color: 'fg.muted' }),
+  qr: css({ justifySelf: 'start', maxWidth: '100%', padding: '0.75rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.subtle', '& svg': { maxWidth: '100%', height: 'auto' } }),
+  secret: css({ display: 'inline-block', marginTop: '0.5rem', padding: '0.375rem 0.625rem', borderRadius: 'l1', background: 'bg.subtle', color: 'fg.default', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', userSelect: 'all' }),
   verifyForm: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '0.75rem' }),
   codeField: css({ display: 'grid', gap: '0.375rem', minWidth: '12rem', flex: '1' }),
-  codeLabel: css({ fontWeight: '600' }),
   codeInput: css({ maxWidth: '14rem', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' }),
 };
 
@@ -144,50 +136,35 @@ export function SecurityProfilePage() {
       </div>
 
       {successMessage && (
-        <div role="status" className={securityStyles.success}>
-          <div className={securityStyles.statusInner}>
-            <div className={securityStyles.statusInner}>
-              <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
-            </div>
-            <div >
-              <p>{successMessage}</p>
-            </div>
-          </div>
-        </div>
+        <ParkAlert.Root role="status" status="success">
+          <ParkAlert.Content><ParkAlert.Description>{successMessage}</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>
       )}
 
       {error && !disableOpen && (
-        <div role="alert" className={securityStyles.error}>
-          <div className={securityStyles.statusInner}>
-            <div className={securityStyles.statusInner}>
-              <IconTriangleExclamation className={securityStyles.statusIcon} aria-hidden="true" />
-            </div>
-            <div >
-              <p>{error}</p>
-            </div>
-          </div>
-        </div>
+        <ParkAlert.Root role="alert" status="error">
+          <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>
       )}
 
-      <ParkCard.Root className={securityStyles.card}>
-        <ParkCard.Body className={securityStyles.cardBody}>
-          <ParkCard.Title className={securityStyles.cardTitle}>
+      <ParkCard.Root variant="outline">
+        <ParkCard.Header>
+          <ParkCard.Title asChild><h2 className={css({ display: 'flex', alignItems: 'center', gap: '2' })}>
             <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
             Two-Factor Authentication (2FA)
-          </ParkCard.Title>
-          <div className={securityStyles.cardDescription}>
-            <p>
-              Add an additional layer of security to your account by requiring more than just a password to sign in.
-            </p>
-          </div>
-
-          <div >
+          </h2></ParkCard.Title>
+          <ParkCard.Description>
+            Add an additional layer of security to your account by requiring more than just a password to sign in.
+          </ParkCard.Description>
+        </ParkCard.Header>
+        <ParkCard.Body className={securityStyles.cardBody}>
+          <div>
             {user.mfa_enabled ? (
               <div className={securityStyles.stack}>
-                <div className={securityStyles.enabled}>
+                <Badge colorPalette="green">
                   <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
                   2FA is currently enabled
-                </div>
+                </Badge>
                 {(user.role === 'admin' || user.role === 'agent') ? (
                   <p className={securityStyles.note}>
                     Two-Factor Authentication is mandatory for your role and cannot be disabled.
@@ -237,13 +214,10 @@ export function SecurityProfilePage() {
                     <div className={securityStyles.step}>
                       <h4 className={securityStyles.stepTitle}>Step 2: Verify Code</h4>
                       <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className={securityStyles.verifyForm}>
-                        <div className={securityStyles.codeField}>
-                          <label htmlFor="code" className={securityStyles.codeLabel}>
-                            Authentication Code
-                          </label>
+                        <ParkField label={<span id="security-code-label">Authentication Code</span>} className={securityStyles.codeField}>
                           <ParkInput
                             type="text"
-                            id="code" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
+                            id="code" aria-labelledby="security-code-label" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
                             value={code}
                             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                             className={securityStyles.codeInput}
@@ -251,7 +225,7 @@ export function SecurityProfilePage() {
                             maxLength={6}
                             required
                           />
-                        </div>
+                        </ParkField>
                         <ParkButton
                           type="submit"
                           disabled={isLoading || code.length !== 6}

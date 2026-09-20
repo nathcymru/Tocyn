@@ -1,5 +1,5 @@
 import { w } from '../widgetStyles';
-import { ParkButton, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { IconCircleCheck } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
@@ -16,11 +16,10 @@ const TicketForm: React.FC<Props> = ({ userEmail }) => {
     subject: '',
     message: ''
   });
-  const formId = React.useId();
   const submitting = React.useRef(false);
   const nameInput = React.useRef<HTMLInputElement>(null);
   const successHeading = React.useRef<HTMLHeadingElement>(null);
-  const errorMessage = React.useRef<HTMLParagraphElement>(null);
+  const errorMessage = React.useRef<HTMLDivElement>(null);
   const focusNewDraft = React.useRef(false);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
@@ -62,6 +61,7 @@ const TicketForm: React.FC<Props> = ({ userEmail }) => {
         <p role="status" className={w.successCopy}>We've received your request and will get back to you soon.</p>
         <ParkButton
           onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
+          variant="outline"
           className={w.successAction}
         >
           Submit another ticket
@@ -73,58 +73,57 @@ const TicketForm: React.FC<Props> = ({ userEmail }) => {
   return (
     <form onSubmit={handleSubmit} aria-label="Submit a support ticket" aria-busy={status === 'submitting'} className={w.form}>
       <fieldset disabled={status === 'submitting'} className={w.form}>
-      <div>
-        <label htmlFor={`${formId}-name`} className={w.label}>Your Name</label>
+      <ParkField label="Your Name">
         <ParkInput
           type="text"
           required
           className={w.formControl}
           placeholder="John Doe"
-          id={`${formId}-name`} ref={nameInput} value={formData.name}
+          ref={nameInput} value={formData.name}
           onChange={e => setFormData({ ...formData, name: e.target.value })}
         />
-      </div>
-      <div>
-        <label htmlFor={`${formId}-email`} className={w.label}>Email Address</label>
+      </ParkField>
+      <ParkField label="Email Address">
         <ParkInput
           type="email"
           required
           className={w.formControl}
           placeholder="john@example.com"
-          id={`${formId}-email`} value={formData.email}
+          value={formData.email}
           readOnly
         />
-      </div>
-      <div>
-        <label htmlFor={`${formId}-subject`} className={w.label}>Subject</label>
+      </ParkField>
+      <ParkField label="Subject">
         <ParkInput
           type="text"
           required
           className={w.formControl}
           placeholder="How can we help?"
-          id={`${formId}-subject`} value={formData.subject}
+          value={formData.subject}
           onChange={e => setFormData({ ...formData, subject: e.target.value })}
         />
-      </div>
-      <div>
-        <label htmlFor={`${formId}-message`} className={w.label}>Message</label>
+      </ParkField>
+      <ParkField label="Message">
         <ParkTextarea
           required
           rows={3}
           className={[w.formControl, w.textarea].join(' ')}
           placeholder="Tell us more about your issue..."
-          id={`${formId}-message`} value={formData.message}
+          value={formData.message}
           onChange={e => setFormData({ ...formData, message: e.target.value })}
         />
-      </div>
+      </ParkField>
       </fieldset>
       {status === 'submitting' && <p role="status">Submitting your ticket...</p>}
       {status === 'error' && (
-        <p ref={errorMessage} tabIndex={-1} role="alert" className={w.error}>Submission could not be confirmed. Your message has been kept; try again.</p>
+        <ParkAlert.Root ref={errorMessage} tabIndex={-1} role="alert" status="error" variant="surface">
+          <ParkAlert.Content><ParkAlert.Description>Submission could not be confirmed. Your message has been kept; try again.</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>
       )}
       <ParkButton
         type="submit"
         disabled={status === 'submitting'}
+        variant="solid"
         className={w.submit}
       >
         {status === 'submitting' ? 'Submitting...' : 'Send Message'}

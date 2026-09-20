@@ -7,7 +7,7 @@ beforeEach(()=>{
   vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected && !this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});
 });
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
-it.each([['Edit Profile','Edit User Profile'],['View Activity','User Activity Log']])('opens %s with a named modal and returns focus on Escape',async(triggerName,title)=>{
+it.each([['Profile details','User Profile'],['View Activity','User Activity Log']])('opens %s with a named modal and returns focus on Escape',async(triggerName,title)=>{
   render(<UsersPage/>);
   const opener=screen.getByRole('button',{name:triggerName});opener.focus();fireEvent.click(opener);
   const dialog=await screen.findByRole('dialog',{name:title});

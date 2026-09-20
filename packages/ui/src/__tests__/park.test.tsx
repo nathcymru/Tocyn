@@ -152,8 +152,10 @@ describe('installed Park UI components', () => {
     </ParkDialog.Root>);
     const trigger = screen.getByRole('button', { name: 'Open details' });
     await user.click(trigger);
-    expect(await screen.findByRole('dialog', { name: 'Details' })).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: 'Details' });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
