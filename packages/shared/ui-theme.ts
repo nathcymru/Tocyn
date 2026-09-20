@@ -67,18 +67,18 @@ export interface ResolvedTocynTheme {
 }
 
 const LIGHT_DEFAULTS: TocynThemeTokens = {
-  colorSurface: '#ffffff', colorSurfacePanel: '#f8fafc', colorSurfaceMuted: '#f1f5f9',
-  colorDivider: '#cbd5e1', colorText: '#1e293b', colorTextMuted: '#64748b',
-  colorFocus: '#3b82f6', colorSelected: '#eff6ff', colorInverse: '#0f172a', colorCritical: '#b91c1c', colorQuiet: '#64748b',
+  colorSurface: '#ffffff', colorSurfacePanel: '#fcfcfd', colorSurfaceMuted: '#f0f0f3',
+  colorDivider: '#d9d9e0', colorText: '#1c2024', colorTextMuted: '#60646c',
+  colorFocus: '#1c2024', colorSelected: '#e6f4fe', colorInverse: '#1c2024', colorCritical: '#ce2c31', colorQuiet: '#60646c',
   motionDurationFast: '120ms', motionDurationNormal: '180ms', motionDurationSlow: '240ms',
   motionEasingStandard: 'cubic-bezier(0.2, 0, 0, 1)', targetMin: '44px', densityComfortable: '1rem',
   typeScaleBody: '1rem', typeLineHeightBody: '1.5',
 };
 
 const DARK_DEFAULTS: TocynThemeTokens = {
-  ...LIGHT_DEFAULTS, colorSurface: '#1a1d23', colorSurfacePanel: '#0f1115', colorSurfaceMuted: '#1e293b',
-  colorDivider: '#334155', colorText: '#e2e8f0', colorTextMuted: '#94a3b8', colorFocus: '#60a5fa',
-  colorSelected: '#1e3a5f', colorInverse: '#0b1220', colorCritical: '#fca5a5', colorQuiet: '#94a3b8',
+  ...LIGHT_DEFAULTS, colorSurface: '#111113', colorSurfacePanel: '#111113', colorSurfaceMuted: '#212225',
+  colorDivider: '#363a3f', colorText: '#edeef0', colorTextMuted: '#b0b4ba', colorFocus: '#edeef0',
+  colorSelected: '#0d2847', colorInverse: '#edeef0', colorCritical: '#ff9592', colorQuiet: '#b0b4ba',
 };
 
 const tokenName = (key: string): `--tocyn-${string}` => `--tocyn-${key.replace(/[A-Z]/g, '-$&').toLowerCase()}`;
@@ -140,8 +140,6 @@ export function resolveTocynTheme(input: TocynThemeInput = {}): ResolvedTocynThe
     const textColours = surface === tokens.colorSelected
       ? [tokens.colorText, tokens.colorCritical, tokens.colorQuiet]
       : [tokens.colorText, tokens.colorTextMuted, tokens.colorCritical, tokens.colorQuiet];
-    // The approved muted Slate text (#64748b) measures 4.34:1 on the input surface;
-    // retain it as the contract's accessible softened text colour.
     if (textColours.some(text => contrast(text, surface) < 4.3)
       || contrast(tokens.colorFocus, surface) < 3) throw new TypeError('Tocyn theme colours do not meet contrast requirements');
   }

@@ -27,10 +27,10 @@ export const slate = defineSemanticTokens.colors({
   a12: { value: { _light: '#000509e3', _dark: '#fcfdffef' } },
   solid: {
     bg: {
-      DEFAULT: { value: { _light: '#334155', _dark: '#cbd5e1' } },
-      hover: { value: { _light: '{colors.gray.12}', _dark: '{colors.gray.12}' } },
+      DEFAULT: { value: { _light: '{colors.gray.12}', _dark: '{colors.gray.12}' } },
+      hover: { value: { _light: '{colors.gray.11}', _dark: '{colors.gray.11}' } },
     },
-    fg: { DEFAULT: { value: { _light: '#f8fafc', _dark: '#0f1115' } } },
+    fg: { DEFAULT: { value: { _light: '{colors.gray.1}', _dark: '{colors.gray.1}' } } },
   },
   subtle: {
     bg: {

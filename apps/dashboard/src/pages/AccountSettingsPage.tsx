@@ -13,7 +13,7 @@ export function AccountSettingsPage() {
     <header className={page.header}>
       <div>
         <p className={css({ color: 'text.muted', fontSize: 'sm', fontWeight: 'medium', textTransform: 'uppercase', letterSpacing: 'wide' })}>Account</p>
-        <h1>Account settings</h1>
+        <h1 className={css({ m: '0', color: 'fg.default', textStyle: '2xl', fontWeight: 'semibold' })}>Account settings</h1>
         <p>Manage your operator identity, appearance, workspace preferences and current work.</p>
       </div>
       <ParkButton type="button" onClick={() => navigate('/profile/security')}>Security profile</ParkButton>
@@ -27,11 +27,14 @@ export function AccountSettingsPage() {
     </ParkCard.Root>
     <div className={page.accountGrid}>
       <ParkCard.Root variant="outline"><ParkCard.Body><OperatorThemeControl /></ParkCard.Body></ParkCard.Root>
-      <ParkCard.Root variant="outline"><ParkCard.Body><OperatorPreferencesControl /></ParkCard.Body></ParkCard.Root>
+      <ParkCard.Root variant="outline"><ParkCard.Body className={css({
+        '& [data-tocyn-preferences] fieldset > label': { display: 'grid', gap: '1', minW: '0' },
+        '& [data-tocyn-preferences] fieldset > label > [data-scope="select"]': { minW: '0', w: 'full' },
+      })}><OperatorPreferencesControl /></ParkCard.Body></ParkCard.Root>
     </div>
     <ParkCard.Root variant="outline" aria-labelledby="account-capacity-title">
       <ParkCard.Header><ParkCard.Title id="account-capacity-title">Current work</ParkCard.Title><ParkCard.Description>Set your availability and workload limits for assignments.</ParkCard.Description></ParkCard.Header>
-      <ParkCard.Body>{user?.id && <OperatorCapacityPanel userId={user.id} />}<ParkButton type="button" disabled>Changes are saved automatically</ParkButton></ParkCard.Body>
+      <ParkCard.Body>{user?.id && <OperatorCapacityPanel userId={user.id} />}</ParkCard.Body>
     </ParkCard.Root>
   </div>;
 }

@@ -96,9 +96,13 @@ it('constrains the inbox shell to the viewport while keeping the shared header v
 it('names account/connection disclosures and restores focus when their child actions close', async () => {
   const result=await renderReady();
   const account = screen.getByRole('button', { name: 'Account options' });
+  expect(account.querySelector('.avatar__root')).toBeInTheDocument();
+  expect(account.querySelector('.avatar__fallback')).toHaveTextContent('O');
+  expect(account.querySelector('.shell__personaStatus')).toHaveAttribute('aria-hidden', 'true');
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
   const accountItem = await screen.findByRole('menuitem', { name: 'Account' });
   expect(accountItem).toBeVisible();
+  expect(accountItem.closest('.menu__itemGroup')).toBeInTheDocument();
   // Ark moves focus into the menu after it mounts. Wait for that transition
   // before sending Escape so the test exercises the open menu, not its trigger.
   await waitFor(() => expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true));
@@ -121,8 +125,9 @@ it('names account/connection disclosures and restores focus when their child act
 it('keeps search and workspace navigation visible and keyboard reachable when focus mode is enabled', async () => {
   await renderReady();
   document.documentElement.dataset.tocynFocusMode = 'true';
-  const sidebar = document.querySelector('aside[data-tocyn-inverse]');
+  const sidebar = document.querySelector('aside.shell__sidebarDesktop');
   expect(sidebar).toBeInTheDocument();
+  expect(sidebar).not.toHaveAttribute('data-tocyn-inverse');
   expect(screen.getByRole('button', { name: 'Account options' })).toBeInTheDocument();
   const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   const inbox = within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' });
@@ -169,7 +174,26 @@ it('uses realtime only to refresh an already-open durable activity panel', async
   expect(trigger).toHaveClass('popover__trigger');
   expect(await screen.findByText('No current activity.')).toBeInTheDocument();
   expect(screen.getByText('No current activity.').closest('.popover__content')).toBeInTheDocument();
+  expect(screen.getByText('No current activity.').closest('.emptyState__root')).toBeInTheDocument();
   expect(dashboardApi.get).toHaveBeenCalledWith('/activities?limit=20');
+});
+
+it('uses a Park skeleton while activity loads and a Park scroll area for loaded items', async () => {
+  let resolveActivity!: (value: unknown) => void;
+  const original = vi.mocked(dashboardApi.get).getMockImplementation()!;
+  vi.mocked(dashboardApi.get).mockImplementation((path: string) => path === '/activities?limit=20'
+    ? new Promise(resolve => { resolveActivity = resolve; })
+    : original(path));
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  const loading = await screen.findByRole('status', { name: 'Loading activity' });
+  expect(loading).toHaveAttribute('aria-busy', 'true');
+  expect(loading.querySelector('.skeleton')).toBeInTheDocument();
+  resolveActivity({ page: { items: [{ id: 'activity-one', ticketId: 'ticket-one', ticketSubject: 'Synthetic ticket', kind: 'customer_reply', facts: {}, revision: 1, createdAt: '2026-09-12T09:00:00.000Z', readAt: null, dismissedAt: null }], next: null }, unread: { status: 'available', count: 1 } });
+  const item = await screen.findByRole('button', { name: 'Open customer reply activity for Synthetic ticket' });
+  expect(item.closest('.scroll-area__content')).toBeInTheDocument();
+  expect(item.closest('.scroll-area__root')?.querySelector('.scroll-area__viewport')).toBeInTheDocument();
+  expect(screen.queryByRole('status', { name: 'Loading activity' })).not.toBeInTheDocument();
 });
 
 it('identifies the authorized ticket and marks durable activity read before opening it', async () => {

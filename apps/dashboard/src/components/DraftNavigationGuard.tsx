@@ -20,17 +20,16 @@ export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your dr
     return () => window.removeEventListener('beforeunload', warn);
   }, [pending]);
   useEffect(() => {
-    if (blocker.state !== 'blocked') return;
+    if (blocker.state !== 'blocked' || failed) return;
     let current = true;
-    setFailed(false);
     void flushRef.current().then(saved => {
       if (!current) return;
       if (saved) blocker.proceed();
-      else { setFailed(true); blocker.reset(); }
+      else setFailed(true);
     }, () => {
-      if (current) { setFailed(true); blocker.reset(); }
+      if (current) setFailed(true);
     });
     return () => { current = false; };
-  }, [blocker]);
-  return failed ? <p role="alert" className={alertStyle}><span>{failureMessage}</span>{' '}<ParkButton type="button" variant="outline" onClick={() => { setFailed(false); void flushRef.current().then(saved => { if (!saved) setFailed(true); }, () => setFailed(true)); }}>{retryLabel}</ParkButton></p> : null;
+  }, [blocker, failed]);
+  return failed ? <p role="alert" className={alertStyle}><span>{failureMessage}</span>{' '}<ParkButton type="button" variant="outline" onClick={() => { void flushRef.current().then(saved => { if (saved && blocker.state === 'blocked') blocker.proceed(); else setFailed(true); }, () => setFailed(true)); }}>{retryLabel}</ParkButton></p> : null;
 }

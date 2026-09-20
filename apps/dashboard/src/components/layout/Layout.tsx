@@ -1,7 +1,8 @@
 import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu, ParkPopover, ParkShell, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { IconButton as ParkIconButton } from '@luminatick/ui/components';
 import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
@@ -64,22 +65,24 @@ function UserMenu({ onNavigate }: SidebarProps) {
   return <>
   <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
     <ParkMenu.Trigger asChild>
-      <ParkButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
+      <ParkIconButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
         <ParkAvatar shape="square" className={shellStyles.personaAvatar}>
-          <ParkAvatarFallback>{user?.full_name?.slice(0, 2).toUpperCase() || 'OP'}</ParkAvatarFallback>
+          <ParkAvatarFallback name={user?.full_name || 'Operator'} />
+          <span className={shellStyles.personaStatus} aria-hidden="true" />
         </ParkAvatar>
-        <span className={shellStyles.personaStatus} aria-label="Online" />
-      </ParkButton>
+      </ParkIconButton>
     </ParkMenu.Trigger>
     <ParkMenu.Positioner>
       <ParkMenu.Content aria-label="Account menu" className={shellStyles.accountMenu}>
-        <div className={shellStyles.accountSummary}>
-          <strong className={shellStyles.accountSummaryName}>{user?.full_name || 'Operator'}</strong>
-          <span className={shellStyles.accountSummaryEmail}>{user?.email || 'No email available'}</span>
-        </div>
-        <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className={shellStyles.menuItem}>Account</ParkMenu.Item>
-        <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className={shellStyles.menuItem}>Settings</ParkMenu.Item>
-        <ParkMenu.Item value="logout" data-tone="critical" onClick={() => { setLogoutCountdown(10); setLogoutOpen(true); }} className={shellStyles.menuItem}>Log out</ParkMenu.Item>
+        <ParkMenu.ItemGroup>
+          <ParkMenu.ItemGroupLabel className={shellStyles.accountSummary}>
+            <strong className={shellStyles.accountSummaryName}>{user?.full_name || 'Operator'}</strong>
+            <span className={shellStyles.accountSummaryEmail}>{user?.email || 'No email available'}</span>
+          </ParkMenu.ItemGroupLabel>
+          <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className={shellStyles.menuItem}>Account</ParkMenu.Item>
+          <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className={shellStyles.menuItem}>Settings</ParkMenu.Item>
+          <ParkMenu.Item value="logout" data-tone="critical" onClick={() => { setLogoutCountdown(10); setLogoutOpen(true); }} className={shellStyles.menuItem}>Log out</ParkMenu.Item>
+        </ParkMenu.ItemGroup>
       </ParkMenu.Content>
     </ParkMenu.Positioner>
   </ParkMenu.Root>
@@ -260,13 +263,13 @@ function LayoutContent() {
 
   return (
       <div className={cn(shellStyles.root, isInboxRoute ? shellStyles.rootInbox : shellStyles.rootStandard)}>
-      <aside data-tocyn-inverse="" className={shellStyles.sidebarDesktop}>
+      <aside className={shellStyles.sidebarDesktop}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
         <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
           labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
-          data-tocyn-dialog-edge="" data-tocyn-inverse=""
+          data-tocyn-dialog-edge=""
           className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
           <ParkVisuallyHidden id={`${mobileDialogId}-title`}>Navigation</ParkVisuallyHidden>
           <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
@@ -296,29 +299,41 @@ function LayoutContent() {
 
           <ParkPopover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
             <ParkPopover.Trigger asChild>
-              <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className={shellStyles.activityTrigger}>
+              <ParkIconButton ref={activityTrigger} type="button" variant="plain" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className={shellStyles.activityTrigger}>
                 <Bell className={shellStyles.icon} />
                 {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className={shellStyles.activityBadge}>{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
-              </ParkButton>
+              </ParkIconButton>
             </ParkPopover.Trigger>
             <ParkPopover.Positioner>
               <ParkPopover.Content aria-label="Activity" className={shellStyles.activityPopover}>
                 <ParkPopover.Header className={shellStyles.activityHeader}><ParkPopover.Title className={shellStyles.activityTitle}>Activity</ParkPopover.Title><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className={shellStyles.activityRefresh}>Refresh</ParkButton></ParkPopover.Header>
                 {activityUpdatesAvailable && <p role="status" className={shellStyles.activityMessage}>Updates available. Refresh to load current activity.</p>}
                 {activityError && <div role="alert" className={shellStyles.activityWarning}><p>{activityError}</p><ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className={shellStyles.activityRetry}>Retry loading activity</ParkButton></div>}
-                {activityLoading && !activity && <p role="status" className={shellStyles.activityMessage}>Loading durable activity…</p>}
+                {activityLoading && !activity && <section role="status" aria-label="Loading activity" aria-busy="true" className={shellStyles.activityLoading}>
+                  <ParkSkeleton height="4" width="70%" />
+                  <ParkSkeleton height="4" width="90%" />
+                  <ParkSkeleton height="4" width="55%" />
+                  <ParkVisuallyHidden>Loading durable activity…</ParkVisuallyHidden>
+                </section>}
                 {activity?.unread.status === 'unavailable' && <p role="status" className={shellStyles.activityWarning}>Unread count is temporarily unavailable. Your activity remains available below.</p>}
-                {activity && visibleActivityItems.length === 0 && <p className={shellStyles.activityMessage}>{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
-                <ul aria-label="Durable activity" className={shellStyles.activityList}>
-                  {visibleActivityItems.map(item => <li key={item.id} className={shellStyles.activityRow}>
-                    <ParkButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className={shellStyles.activityItem}>
-                      <p>{item.kind.replace(/_/g, ' ')}</p>
-                      <p className={shellStyles.activitySubject}>{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
-                      <p>Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
-                    </ParkButton>
-                    <ParkButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className={shellStyles.activityDismiss}><X className={shellStyles.dismissIcon} /></ParkButton>
-                  </li>)}
-                </ul>
+                {activity && visibleActivityItems.length === 0 && <ParkEmptyState title={activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'} headingLevel={false} className={shellStyles.activityEmpty} />}
+                {visibleActivityItems.length > 0 && <ParkScrollArea.Root className={shellStyles.activityScroll}>
+                  <ParkScrollArea.Viewport>
+                    <ParkScrollArea.Content>
+                      <ul aria-label="Durable activity" className={shellStyles.activityList}>
+                        {visibleActivityItems.map(item => <li key={item.id} className={shellStyles.activityRow}>
+                          <ParkButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className={shellStyles.activityItem}>
+                            <span>{item.kind.replace(/_/g, ' ')}</span>
+                            <span className={shellStyles.activitySubject}>{item.ticketSubject ?? `Ticket ${item.ticketId}`}</span>
+                            <span>Ticket activity saved {new Date(item.createdAt).toLocaleString()}</span>
+                          </ParkButton>
+                          <ParkIconButton type="button" variant="plain" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className={shellStyles.activityDismiss}><X className={shellStyles.dismissIcon} /></ParkIconButton>
+                        </li>)}
+                      </ul>
+                    </ParkScrollArea.Content>
+                  </ParkScrollArea.Viewport>
+                  <ParkScrollArea.Scrollbar orientation="vertical" />
+                </ParkScrollArea.Root>}
                 {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
                 {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className={shellStyles.activityMoreWrap}><ParkButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className={shellStyles.activityMore}>{activityLoading ? 'Loading more activity…' : 'Load more activity'}</ParkButton></div>}
                 {activity && !activityLoading && visibleActivityItems.length > 0 && <ParkVisuallyHidden role="status">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</ParkVisuallyHidden>}

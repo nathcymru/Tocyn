@@ -25,6 +25,17 @@ describe('Park UI foundation', () => {
     expect(css).not.toMatch(/\bcolorPalette\.[\w.]+/);
   });
 
+  it('resets native inset and outset control borders without forcing a second focus outline', () => {
+    const config = read('panda.config.ts');
+    const css = read('src/styles/panda.css');
+    expect(config).toContain('preflight: true');
+    expect(config).not.toContain('outlineWidth: \'2px !important\'');
+    expect(css).toContain('@layer reset{');
+    expect(css).toMatch(/\*,::before,::after,::backdrop,::file-selector-button\s*\{[^}]*border-width: 0px/);
+    expect(css).toMatch(/button,input,optgroup,select,textarea,::file-selector-button\s*\{[^}]*font: inherit/);
+    expect(css).not.toMatch(/:focus-visible\s*\{[^}]*outline-width: 2px !important/);
+  });
+
   it('reserves indicator space in every Select size without overriding the logical end inset', () => {
     const css = read('src/styles/panda.css');
     const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)\\s*\\.${selector}\\s*\\{([^}]+)\\}`))?.[1] ?? '';

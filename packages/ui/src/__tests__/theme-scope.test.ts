@@ -36,7 +36,7 @@ describe('instance-scoped theme application', () => {
     const scope = createTocynThemeScope(element, { mode: 'light' });
     scope.apply({ mode: 'dark' });
     expect(element.getAttribute('data-tocyn-theme-mode')).toBe('dark');
-    expect(element.style.getPropertyValue('--tocyn-color-text')).toBe('#e2e8f0');
+    expect(element.style.getPropertyValue('--tocyn-color-text')).toBe('#edeef0');
     scope.remove();
     expect(element.getAttribute('data-tocyn-theme-mode')).toBe('light');
     expect(element.style.getPropertyValue('--tocyn-color-text')).toBe('#0f172a');

@@ -1,9 +1,9 @@
 import primitiveStyles from '@luminatick/ui/styles.css?inline';
-import '@fontsource/atkinson-hyperlegible/400.css';
-import '@fontsource/atkinson-hyperlegible/700.css';
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
-import '@fontsource/inter/600.css';
+import atkinsonRegular from '@fontsource/atkinson-hyperlegible/400.css?inline';
+import atkinsonBold from '@fontsource/atkinson-hyperlegible/700.css?inline';
+import interRegular from '@fontsource/inter/400.css?inline';
+import interMedium from '@fontsource/inter/500.css?inline';
+import interSemibold from '@fontsource/inter/600.css?inline';
 import { EnvironmentProvider } from '@luminatick/ui/ark';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -30,7 +30,12 @@ import { w } from './widgetStyles';
   root.classList.add('light');
   shadow.appendChild(root);
   const primitiveStyleElement = document.createElement('style');
-  primitiveStyleElement.textContent = primitiveStyles;
+  // The IIFE is the widget's only required host asset. Keep font faces with
+  // Park/Panda rules inside the ShadowRoot instead of emitting a host CSS file.
+  primitiveStyleElement.textContent = [
+    atkinsonRegular, atkinsonBold, interRegular, interMedium, interSemibold,
+    primitiveStyles,
+  ].join('\n');
   shadow.appendChild(primitiveStyleElement);
   ReactDOM.createRoot(root).render(
     <React.StrictMode>

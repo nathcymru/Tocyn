@@ -341,7 +341,7 @@ function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName,
     ['fixture-tenant-b', 'beta2-article-b-email', 'beta2-b-email', 'fixture-customer', 'customer', 'Tenant B email body.', 'plain', 0, 'email', 'beta2-b-email-raw'],
   ] as const;
   for (const [tenantId,id,ticketId,senderId,senderType,body,bodyFormat,isInternal,intakeSource,rawEmailId] of articles) {
-    rows.push(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,body_format,is_internal,intake_source,raw_email_id,created_at) VALUES (${[tenantId,id,ticketId,senderId,senderType,body,bodyFormat,isInternal,intakeSource,rawEmailId,'2026-09-10T09:15:00.000Z'].map(literal).join(',')});`);
+    rows.push(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,snippet,body_format,is_internal,intake_source,raw_email_id,created_at) VALUES (${[tenantId,id,ticketId,senderId,senderType,body,body.substring(0, 250),bodyFormat,isInternal,intakeSource,rawEmailId,'2026-09-10T09:15:00.000Z'].map(literal).join(',')});`);
   }
   rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-a','beta2-attachment-pdf','beta2-article-internal','order-summary.pdf',24576,'application/pdf','fixture-tenant-a/beta2-internal-attachment/order-summary.pdf','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
   rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-b','beta2-attachment-image','beta2-article-b-email','invoice.png',8192,'image/png','fixture-tenant-b/beta2-b-email/invoice.png','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
@@ -414,9 +414,9 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
   ] as const;
   for (const [tenantId, id, ticketId, senderId, senderType, body, bodyFormat, isInternal, intakeSource, rawEmailId] of articles) {
     await db.prepare(`INSERT INTO articles
-      (tenant_id, id, ticket_id, sender_id, sender_type, body, body_format, is_internal, intake_source, raw_email_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(tenantId, id, ticketId, senderId, senderType, body, bodyFormat, isInternal, intakeSource, rawEmailId,
+      (tenant_id, id, ticket_id, sender_id, sender_type, body, snippet, body_format, is_internal, intake_source, raw_email_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(tenantId, id, ticketId, senderId, senderType, body, body.substring(0, 250), bodyFormat, isInternal, intakeSource, rawEmailId,
         '2026-09-10T09:15:00.000Z').run();
   }
 

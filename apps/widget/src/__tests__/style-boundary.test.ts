@@ -39,4 +39,17 @@ describe('shared stylesheet entry boundaries', () => {
     expect(widgetMain.toLowerCase()).not.toContain('tailwind');
     expect(widgetMain).not.toContain('document.head.appendChild');
   });
+
+  it('injects bundled Atkinson and Inter font faces with the ShadowRoot sheet', async () => {
+    const widgetMain = await source('../main.tsx');
+    for (const font of [
+      '@fontsource/atkinson-hyperlegible/400.css?inline',
+      '@fontsource/atkinson-hyperlegible/700.css?inline',
+      '@fontsource/inter/400.css?inline',
+      '@fontsource/inter/500.css?inline',
+      '@fontsource/inter/600.css?inline',
+    ]) expect(widgetMain).toContain(font);
+    expect(widgetMain).toContain('primitiveStyleElement.textContent = [');
+    expect(widgetMain).not.toMatch(/import ['"]@fontsource\/[^'"?]+\.css['"]/);
+  });
 });

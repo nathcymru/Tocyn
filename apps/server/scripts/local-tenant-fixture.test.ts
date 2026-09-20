@@ -65,14 +65,41 @@ test('local beta seeds the deterministic eight-ticket queue and timeline matrix'
     assert.equal(tickets.results.find(ticket => ticket.id === 'beta2-pending-unassigned')?.assigned_to, null);
     assert.equal(tickets.results.find(ticket => ticket.id === 'beta2-email')?.source_email, 'support@synthetic.example.test');
 
-    const articles = await fixture.db.prepare(`SELECT tenant_id, ticket_id, sender_type, is_internal, intake_source, raw_email_id
+    const articles = await fixture.db.prepare(`SELECT tenant_id, ticket_id, sender_type, body, snippet, is_internal, intake_source, raw_email_id
       FROM articles WHERE id LIKE 'beta2-%' ORDER BY id`).all<{
-      tenant_id: string; ticket_id: string; sender_type: string; is_internal: number; intake_source: string; raw_email_id: string | null;
+      tenant_id: string; ticket_id: string; sender_type: string; body: string; snippet: string | null; is_internal: number; intake_source: string; raw_email_id: string | null;
     }>();
     assert.equal(articles.results.length, 8);
+    assert.ok(articles.results.every(article => article.snippet === article.body.substring(0, 250)), 'Every synthetic article has a bounded ticket-list preview');
     assert.deepEqual(articles.results.filter(article => article.is_internal === 1).map(article => article.ticket_id), ['beta2-internal-attachment']);
     assert.equal(articles.results.filter(article => article.intake_source === 'email').length, 2);
     assert.equal(articles.results.find(article => article.ticket_id === 'beta2-email')?.raw_email_id, 'beta2-email-raw');
+    assert.equal(articles.results.find(article => article.ticket_id === 'beta2-email')?.snippet, 'Email body\n\nThank you for checking this.');
+    assert.equal(articles.results.find(article => article.ticket_id === 'beta2-internal-attachment')?.snippet, 'Internal handoff note for the synthetic case.');
+
+    const listFor = async (principal: 'operatorA' | 'operatorB') => {
+      const login = await fixture.login(principal);
+      assert.equal(login.status, 200);
+      const challenge = await login.json<{ token: string }>();
+      const verified = await fixture.request('/api/auth/mfa/verify', {
+        method: 'POST', token: challenge.token, body: { code: fixture.currentMfaCode(principal) },
+      });
+      assert.equal(verified.status, 200);
+      const session = await verified.json<{ token: string }>();
+      const response = await fixture.request('/api/tickets?limit=50', { token: session.token });
+      assert.equal(response.status, 200);
+      return (await response.json<{ data: Array<{ id: string; snippet: string | null }> }>()).data;
+    };
+    const tenantAList = await listFor('operatorA');
+    const tenantBList = await listFor('operatorB');
+    assert.equal(tenantAList.filter(ticket => ticket.id.startsWith('beta2-')).length, 6);
+    assert.equal(tenantBList.filter(ticket => ticket.id.startsWith('beta2-')).length, 2);
+    assert.ok(tenantAList.filter(ticket => ticket.id.startsWith('beta2-')).every(ticket => ticket.snippet));
+    assert.ok(tenantBList.filter(ticket => ticket.id.startsWith('beta2-')).every(ticket => ticket.snippet));
+    assert.equal(tenantAList.find(ticket => ticket.id === 'beta2-email')?.snippet, 'Email body\n\nThank you for checking this.');
+    assert.equal(tenantAList.find(ticket => ticket.id === 'beta2-internal-attachment')?.snippet, 'Internal handoff note for the synthetic case.');
+    assert.equal(tenantAList.some(ticket => ticket.id === 'beta2-b-email'), false);
+    assert.equal(tenantBList.some(ticket => ticket.id === 'beta2-email'), false);
 
     const attachments = await fixture.db.prepare(`SELECT tenant_id, article_id, file_name, content_type, r2_key
       FROM attachments WHERE id LIKE 'beta2-%' ORDER BY id`).all<{

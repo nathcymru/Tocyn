@@ -48,7 +48,7 @@ for(const [label,meta] of [['wrong count',{total:2,page:1,limit:20,total_pages:1
 });
 for(const variant of ['query','type','identity'] as const)it(`discards delayed metadata after ${variant} changes`,async()=>{
  let release!:(value:ReturnType<typeof response>)=>void;vi.mocked(dashboardApi.boundedBlob).mockReturnValue(new Promise(resolve=>{release=resolve;}));
- mount();await knowledge();const signal=vi.mocked(dashboardApi.boundedBlob).mock.calls[0][3]!.signal!;
+ mount();await knowledge();await waitFor(()=>expect(dashboardApi.boundedBlob).toHaveBeenCalled());const signal=vi.mocked(dashboardApi.boundedBlob).mock.calls[0][3]!.signal!;
  if(variant==='query')await userEvent.type(screen.getByRole('textbox'),'changed');
  if(variant==='type')await selectScope('customers');
  if(variant==='identity')act(()=>useAuthStore.setState({token:'synthetic-b',sessionGeneration:2}));

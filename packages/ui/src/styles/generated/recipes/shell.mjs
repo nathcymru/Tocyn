@@ -166,6 +166,18 @@ const shellSlotNames = [
     "shell__activityRetry"
   ],
   [
+    "activityLoading",
+    "shell__activityLoading"
+  ],
+  [
+    "activityEmpty",
+    "shell__activityEmpty"
+  ],
+  [
+    "activityScroll",
+    "shell__activityScroll"
+  ],
+  [
     "activityList",
     "shell__activityList"
   ],

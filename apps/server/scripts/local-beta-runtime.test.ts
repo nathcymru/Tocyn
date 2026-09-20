@@ -98,9 +98,12 @@ test('real local Wrangler observes operator revisions on warm connections and re
     const operatorVerified=await request('/api/auth/mfa/verify',{method:'POST',headers:{'Authorization':`Bearer ${operatorChallenge.token}`,'Content-Type':'application/json'},body:JSON.stringify({code:authenticator.generate()})});
     assert.equal(operatorVerified.status,200);const operatorSession=await operatorVerified.json() as {token:string};
     const operatorTickets=await request('/api/tickets?limit=50',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
-    assert.equal(operatorTickets.status,200);const operatorTicketBody=await operatorTickets.json() as {data?:Array<{id:string}>};
+    assert.equal(operatorTickets.status,200);const operatorTicketBody=await operatorTickets.json() as {data?:Array<{id:string;snippet?:string|null}>};
     assert.ok(operatorTicketBody.data?.some(ticket=>ticket.id==='beta2-open-assigned'),'Real local-beta bootstrap must expose seeded tenant-A tickets to its operator');
     assert.ok(operatorTicketBody.data?.some(ticket=>ticket.id==='beta2-email'),'Real local-beta bootstrap must expose seeded email ticket to its operator');
+    assert.ok(operatorTicketBody.data?.filter(ticket=>ticket.id.startsWith('beta2-')).every(ticket=>typeof ticket.snippet==='string'&&ticket.snippet.length>0),'Real local-beta ticket list must expose each seeded conversation preview');
+    assert.equal(operatorTicketBody.data?.find(ticket=>ticket.id==='beta2-email')?.snippet,'Email body\n\nThank you for checking this.');
+    assert.equal(operatorTicketBody.data?.find(ticket=>ticket.id==='beta2-internal-attachment')?.snippet,'Internal handoff note for the synthetic case.');
     assert.ok(!operatorTicketBody.data?.some(ticket=>ticket.id==='beta2-b-email'),'Tenant-A operator must not receive tenant-B seeded tickets');
     const emailDetail=await request('/api/tickets/beta2-email',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
     assert.equal(emailDetail.status,200);const emailBody=await emailDetail.json() as {articles?:Array<{intake_source?:string;raw_email_id?:string}>};

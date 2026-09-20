@@ -1,22 +1,16 @@
 import { DashboardSelect } from '../components/DashboardSelect';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTextarea } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import {
-  IconBuilding,
-  IconGear,
-  IconEnvelope,
   IconFloppyDisk,
-  IconSpinner,
-  IconCloud,
   IconCircleExclamation,
-  IconShieldHalved,
-  IconChartLine
 } from '@luminatick/ui/icons';
 import { ApiError } from '../api/client';
 
 export const SettingsPage: React.FC = () => {
-  const { data: settings, isLoading, error: fetchError } = useSettings();
+  const { data: settings, isLoading, error: fetchError, refetch } = useSettings();
   const updateSettings = useUpdateSettings();
 
   const [formData, setFormData] = useState<Record<string, string>>({
@@ -38,6 +32,8 @@ export const SettingsPage: React.FC = () => {
       if (fetchError.message.includes('APP_MASTER_KEY')) {
         setMasterKeyError(fetchError.message);
       }
+    } else if (!fetchError) {
+      setMasterKeyError(null);
     }
   }, [fetchError]);
 
@@ -108,8 +104,23 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return <ParkEmptyState title="Loading settings…" headingLevel={false} aria-busy="true" />;
+  if (isLoading && !settings) {
+    return <section role="status" aria-label="Loading general settings" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '56rem', mx: 'auto', p: '6' })}>
+      <span className={css({ srOnly: true })}>Loading general settings…</span>
+      <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} />
+      <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
+      <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
+    </section>;
+  }
+
+  if (!settings) {
+    return <ParkEmptyState
+      title="General settings are unavailable"
+      description={fetchError instanceof ApiError && fetchError.message.includes('APP_MASTER_KEY')
+        ? 'The server encryption key is unavailable. Ask an administrator to restore it, then retry.'
+        : 'Settings could not be loaded. Retry to restore the saved values.'}
+      action={<ParkButton type="button" onClick={() => void refetch()}>Retry settings</ParkButton>}
+    />;
   }
 
   const page = ParkPage('settings');
@@ -118,26 +129,24 @@ export const SettingsPage: React.FC = () => {
     <div className={[page.root, page.content].join(' ')}>
       <header className={page.header}>
         <div>
-          <h1>General Settings</h1>
+          <h1 className={css({ m: '0', color: 'fg.default', textStyle: '2xl', fontWeight: 'semibold' })}>General Settings</h1>
           <p>Manage your organization and system defaults.</p>
         </div>
         <ParkButton
+          type="button"
           onClick={handleSubmit}
-          disabled={updateSettings.isPending || !!masterKeyError}
-         
+          disabled={!!masterKeyError}
+          loading={updateSettings.isPending}
+          loadingText="Saving settings…"
         >
-          {updateSettings.isPending ? (
-            <IconSpinner />
-          ) : (
-            <IconFloppyDisk />
-          )}
+          <IconFloppyDisk aria-hidden="true" />
           Save Changes
         </ParkButton>
       </header>
 
       {masterKeyError && (
         <div className={page.settingsError}>
-          <IconCircleExclamation />
+          <IconCircleExclamation aria-hidden="true" />
           <div>
             <h3>Critical: Missing Encryption Key</h3>
             <p>
@@ -158,8 +167,7 @@ export const SettingsPage: React.FC = () => {
         {/* Organization Profile */}
         <ParkCard.Root variant="outline">
           <ParkCard.Header>
-            <IconBuilding />
-            <h2>Organization Profile</h2>
+            <ParkCard.Title asChild><h2>Organization Profile</h2></ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
             <div className={page.settingsField}>
@@ -198,8 +206,7 @@ export const SettingsPage: React.FC = () => {
         {/* System Defaults */}
         <ParkCard.Root variant="outline">
           <ParkCard.Header>
-            <IconGear />
-            <h2>System Defaults</h2>
+            <ParkCard.Title asChild><h2>System Defaults</h2></ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
             <div className={page.settingsField}>
@@ -239,8 +246,7 @@ export const SettingsPage: React.FC = () => {
         {/* Agent Communication */}
         <ParkCard.Root variant="outline">
           <ParkCard.Header>
-            <IconEnvelope />
-            <h2>Agent Communication</h2>
+            <ParkCard.Title asChild><h2>Agent Communication</h2></ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
             <div>
@@ -267,8 +273,7 @@ export const SettingsPage: React.FC = () => {
         {/* Cloudflare Integration */}
         <ParkCard.Root variant="outline">
           <ParkCard.Header>
-            <IconCloud />
-            <h2>Cloudflare API Credentials</h2>
+            <ParkCard.Title asChild><h2>Cloudflare API Credentials</h2></ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
             <p>
@@ -311,8 +316,7 @@ export const SettingsPage: React.FC = () => {
         {/* Security & Authentication */}
         <ParkCard.Root variant="outline">
           <ParkCard.Header>
-            <IconShieldHalved />
-            <h2>Security & Authentication</h2>
+            <ParkCard.Title asChild><h2>Security & Authentication</h2></ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
             <p>

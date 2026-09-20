@@ -43,8 +43,19 @@ function showInbox(entry='/inbox/all',globalSearch=false){
   return {...result,router};
 }
 async function chooseSort(option:string){
-  await userEvent.click(screen.getByRole('combobox',{name:'Sort conversations'}));
-  await userEvent.click(screen.getByRole('option',{name:option}));
+  openFilters();
+  await userEvent.click(screen.getByRole('button',{name:/^Sort:/}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:option}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+}
+async function chooseView(label:string){
+  await userEvent.click(screen.getByRole('button',{name:'Inbox views'}));
+  await userEvent.click(within(await screen.findByRole('menu',{name:'Inbox views'})).getByRole('menuitem',{name:label}));
+}
+async function choosePresentation(label:'List view'|'Table view'){await chooseView(label);}
+function openFilters(){
+  const trigger=screen.getByRole('button',{name:'Filter tickets'});
+  if(trigger.getAttribute('aria-expanded')!=='true')fireEvent.click(trigger);
 }
 
 beforeEach(()=>{
@@ -114,40 +125,98 @@ it('uses the authoritative actionable and snoozed queue views without losing the
   showInbox();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 
-  fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
+  await chooseView('Snoozed');
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=snoozed'))).toBe(true));
-  expect(screen.getByRole('button',{name:'Snoozed'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Snoozed');
   await waitFor(()=>expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed'));
 
-  fireEvent.click(screen.getByRole('button',{name:'Needs Action'}));
+  await chooseView('Needs Attention');
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
-  expect(screen.getByRole('button',{name:'Needs Action'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBeInTheDocument();
 });
 
-it('labels filtering as current-view, clears it with a button or Escape, and resets to page one',async()=>{
+it('stages ticket filters until Apply, clears them, and closes on Escape',async()=>{
   showInbox();
-  const input=await screen.findByRole('textbox',{name:'Filter this view'});
-  expect(input).toHaveAttribute('placeholder','Filter this view');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  openFilters();
+  const input=screen.getByRole('textbox',{name:'Search ticket text'});
+  expect(input).toHaveAttribute('placeholder','Search ticket text');
   fireEvent.change(input,{target:{value:'billing'}});
-  fireEvent.submit(input.closest('form')!);
-  await waitFor(()=>expect(input).toHaveValue('billing'));
-  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter applied.');
-  fireEvent.click(screen.getByRole('button',{name:'Clear current-view filter'}));
-  await waitFor(()=>expect(input).toHaveValue(''));
-  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter cleared.');
-  fireEvent.change(input,{target:{value:'urgent'}});
-  fireEvent.keyDown(input,{key:'Escape'});
-  expect(input).toHaveValue('');
-  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter cleared.');
+  expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('search=billing'))).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('search=billing'))).toBe(true));
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Ticket filters applied.'));
+  openFilters();
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
+  fireEvent.click(screen.getByRole('button',{name:'Clear all'}));
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Ticket filters cleared.'));
+  openFilters();
+  fireEvent.change(screen.getByRole('textbox',{name:'Search ticket text'}),{target:{value:'urgent'}});
+  fireEvent.keyDown(screen.getByRole('textbox',{name:'Search ticket text'}),{key:'Escape'});
+  expect(screen.queryByRole('region',{name:'Ticket filters'})).not.toBeInTheDocument();
+});
+
+it('applies owner, date and customer choices together after the queue route changes',async()=>{
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Ticket owner: All tickets'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'My tickets'}));
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'day'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Filter by exact customer email'}),{target:{value:'customer-1@example.invalid'}});
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all');
+  expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=mine'))).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  await waitFor(()=>expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mine'));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>{
+    if(!String(url).startsWith('/api/tickets?'))return false;
+    const query=new URL(String(url),'http://localhost').searchParams;
+    return query.get('queue')==='mine'&&query.get('customer_email')==='customer-1@example.invalid'&&Boolean(query.get('created_after'));
+  })).toBe(true));
+  openFilters();
+  expect(screen.getByRole('button',{name:'Ticket owner: My tickets'})).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Created: day'})).toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:'Filter by exact customer email'})).toHaveValue('customer-1@example.invalid');
+});
+
+it('saves only filter combinations the server can reproduce as a quick view',async()=>{
+  const fallback=fetch;
+  let saved: {id:string;name:string;conditions:unknown[]} | null=null;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/settings/filters'&&options.method==='POST'){
+      const body=JSON.parse(String(options.body));
+      saved={id:'customer-quick-view',name:body.name,conditions:body.conditions};
+      return json(saved);
+    }
+    if(url==='/api/settings/filters'&&saved)return json([{...saved,is_system:false,created_at:'2026-09-11T00:00:00Z',updated_at:'2026-09-11T00:00:00Z'}]);
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'day'}));
+  fireEvent.click(screen.getByRole('button',{name:'Add to quick view'}));
+  expect(screen.getByRole('button',{name:'Save quick view'})).toBeDisabled();
+  expect(screen.getByText(/Quick views can currently save All tickets/)).toBeInTheDocument();
+  expect(saved).toBeNull();
+
+  fireEvent.click(screen.getByRole('button',{name:'Clear all'}));
+  openFilters();
+  fireEvent.change(screen.getByRole('textbox',{name:'Filter by exact customer email'}),{target:{value:'customer-1@example.invalid'}});
+  fireEvent.click(screen.getByRole('button',{name:'Add to quick view'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Quick view name'}),{target:{value:'Customer follow-up'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save quick view'}));
+  await waitFor(()=>expect(saved).toEqual({id:'customer-quick-view',name:'Customer follow-up',conditions:[{field:'customer_email',operator:'equals',value:'customer-1@example.invalid'}]}));
+  await waitFor(()=>expect(screen.getByTestId('location')).toHaveTextContent('/inbox/customer-quick-view'));
 });
 
 it('switches to an accessible factual table with row navigation and a mobile list fallback',async()=>{
   showInbox();
-  await screen.findByRole('option',{name:/Fixture conversation 1 customer-1/});
-  const tableView=screen.getByRole('button',{name:'Table view'});
-  fireEvent.click(tableView);
-  expect(tableView).toHaveAttribute('aria-pressed','true');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await choosePresentation('Table view');
   expect(screen.getByRole('table',{name:'Tickets in the current view'})).toBeInTheDocument();
   expect(screen.getByRole('columnheader',{name:'Reference'})).toBeInTheDocument();
   expect(screen.getByRole('columnheader',{name:'Customer'})).toBeInTheDocument();
@@ -163,7 +232,7 @@ it('does not persist a view switch before an unsaved conversation draft permits 
   showInbox('/inbox/all/ticket-1');
   await screen.findByRole('heading',{name:'Conversation ticket-1'});
 
-  fireEvent.click(screen.getByRole('button',{name:'Priority follow-up'}));
+  await chooseView('Priority follow-up');
   await waitFor(()=>expect(detailNavigation.flush).toHaveBeenCalledOnce());
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
   await new Promise(resolve=>setTimeout(resolve,350));
@@ -206,7 +275,7 @@ it('keeps a confirmed conversation and draft/list visibility while workspace pre
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveAttribute('aria-selected','true');
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 
-  await chooseSort('Oldest created');
+  await chooseSort('oldest first');
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Workspace preferences changed in another session. Review before replacing them.'));
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-20');
   expect(screen.getByRole('heading',{name:'Conversation ticket-20'})).toBeInTheDocument();
@@ -261,11 +330,12 @@ it('switches all 20 fixture conversations and returns without losing the custom 
   showInbox('/inbox/priority-follow-up');
   const list=screen.getByRole('listbox',{name:'Conversation list'});
   const options=await within(list).findAllByRole('option');
-  await waitFor(()=>expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up'));
+  openFilters();
+  await waitFor(()=>expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('follow up'));
   const pane=screen.getByRole('region',{name:'Conversations'});
   pane.scrollTop=480;
-  const queryInput=screen.getByRole('textbox',{name:'Filter this view'});
-  const sortInput=screen.getByRole('combobox',{name:'Sort conversations'});
+  const queryInput=screen.getByRole('textbox',{name:'Search ticket text'});
+  const sortInput=screen.getByRole('button',{name:/^Sort:/});
   const location=screen.getByTestId('location');
 
   for(const [index,ticket] of tickets.entries()){
@@ -276,7 +346,7 @@ it('switches all 20 fixture conversations and returns without losing the custom 
     expect(pane).toBeInTheDocument();
     expect(pane.scrollTop).toBe(480);
     expect(queryInput).toHaveValue('follow up');
-    expect(sortInput).toHaveTextContent('Oldest created');
+    expect(sortInput).toHaveTextContent('oldest first');
   }
   fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
   await screen.findByRole('heading',{name:'Choose a conversation'});
@@ -310,14 +380,15 @@ it('keeps the custom list position and selected conversation when its draft refu
   expect(pane.scrollTop).toBe(640);
 
   detailNavigation.flush.mockResolvedValue(true);
-  fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
+  fireEvent.click(screen.getByRole('button',{name:'Retry saving'}));
   await screen.findByRole('heading',{name:'Choose a conversation'});
   expect(detailNavigation.flush).toHaveBeenCalledTimes(2);
   expect(screen.getByTestId('location').textContent).toBe('/inbox/priority-follow-up');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBe(list);
   expect(pane.scrollTop).toBe(640);
-  expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
-  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveTextContent('Oldest created');
+  openFilters();
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('follow up');
+  expect(screen.getByRole('button',{name:/^Sort:/})).toHaveTextContent('oldest first');
 });
 
 it('uses server Drafts queue results and reports an empty saved-draft view without implying all work is complete',async()=>{
@@ -339,13 +410,13 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   }));
   showInbox('/inbox/actionable');
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
-  fireEvent.click(screen.getByRole('button',{name:'Drafts'}));
+  await chooseView('Drafts');
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
   expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
   expect(screen.queryByLabelText('Inclusion reason: drafts')).not.toBeInTheDocument();
   release();
   await waitFor(()=>expect(within(screen.getByRole('listbox',{name:'Conversation list'})).getAllByRole('option')).toHaveLength(1));
-  expect(screen.getByRole('button',{name:'Drafts'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Drafts');
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Drafts');
   expect(screen.getByLabelText('Inclusion reason: drafts')).toBeInTheDocument();
   expect(screen.queryByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).not.toBeInTheDocument();
@@ -356,12 +427,12 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   expect(screen.queryByText(/all work complete|inbox zero/i)).not.toBeInTheDocument();
   // An empty previous result cannot establish that the newly selected queue is empty.
   pauseSnoozed=true;
-  fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
+  await chooseView('Snoozed');
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
   expect(screen.queryByText('No snoozed conversations')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Table view'}));
+  await choosePresentation('Table view');
   expect(screen.queryByText('No snoozed conversations')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'List view'}));
+  await choosePresentation('List view');
   releaseSnoozed();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 });
@@ -380,18 +451,18 @@ it('opens authoritative Mine and Unassigned views without claiming refreshed own
   }));
   showInbox('/inbox/mine');
   await screen.findByLabelText('Inclusion reason: mine');
-  expect(screen.getByRole('button',{name:'Mine'})).toHaveAttribute('aria-pressed','true');
-  expect(screen.getByText(/Current view:/)).toHaveTextContent('Current view: Mine');
-  fireEvent.click(screen.getByRole('button',{name:'Unassigned'}));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Mine');
+  expect(screen.queryByText(/Current view:/)).not.toBeInTheDocument();
+  await chooseView('Unassigned');
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
   expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
   expect(screen.queryByLabelText('Inclusion reason: unassigned')).not.toBeInTheDocument();
   expect(screen.queryByText('No unassigned conversations')).not.toBeInTheDocument();
   release();
   await screen.findByText('No unassigned conversations');
-  expect(screen.getByRole('button',{name:'Unassigned'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Unassigned');
   expect(screen.getByText('Open and pending conversations without an assignee and ready for work.')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Table view'}));
+  await choosePresentation('Table view');
   expect(within(screen.getByRole('table')).getByText('No unassigned conversations')).toBeInTheDocument();
 });
 
@@ -403,16 +474,16 @@ it('shows server standard totals separately from filtered results and retries un
     return fallback(url,options);
   }));
   showInbox('/inbox/actionable');
+  fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
   await screen.findByRole('button',{name:'Retry queue totals'});
-  expect(screen.getByRole('button',{name:'Needs Action'})).not.toHaveAttribute('aria-describedby');
   available=true;fireEvent.click(screen.getByRole('button',{name:'Retry queue totals'}));
-  await waitFor(()=>expect(screen.getByRole('button',{name:'Needs Action'})).toHaveAccessibleDescription('12 conversations in this standard queue'));
-  expect(screen.getByText('Queue totals cover standard views before search or custom filters.')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Mentions'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/tickets/queue-counts').length).toBeGreaterThan(1));
+  expect(screen.getByText('Statistics describe tickets on this page and follow the applied filters.')).toBeInTheDocument();
+  await chooseView('Mentions');
   await screen.findByLabelText('Inclusion reason: mentions');
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mentions');
-  expect(screen.getByText('1 conversations')).toBeInTheDocument();
-  expect(screen.getByRole('button',{name:'Mentions'})).toHaveAccessibleDescription('2 conversations in this standard queue');
+  expect(within(screen.getByRole('listbox',{name:'Conversation list'})).getAllByRole('option')).toHaveLength(1);
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Mentions');
 });
 
 it('starts a different queue on page one after leaving page three without changing the query or sort',async()=>{
@@ -431,13 +502,14 @@ it('starts a different queue on page one after leaving page three without changi
   showInbox('/inbox/all');
   await screen.findByText('Page 3 of 3');
   deferOld=true;const oldRefresh=client.invalidateQueries({queryKey:['tickets']});
-  fireEvent.click(screen.getByRole('button',{name:'Mine'}));
+  await chooseView('Mine');
   await waitFor(()=>expect(requests.some(params=>params.get('queue')==='mine')).toBe(true));
   expect(requests.filter(params=>params.get('queue')==='mine').every(params=>params.get('page')==='1')).toBe(true);
   await waitFor(()=>expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1));
   expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
-  expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
-  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveTextContent('Oldest created');
+  openFilters();
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('follow up');
+  expect(screen.getByRole('button',{name:/^Sort:/})).toHaveTextContent('oldest first');
   releaseOld();await oldRefresh;
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mine');
   expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1);
@@ -458,7 +530,7 @@ it.each(['List view','Table view'] as const)('recovers a shrunken last page with
   }));
   showInbox('/inbox/mine');
   await screen.findByText('Page 3 of 3');
-  fireEvent.click(screen.getByRole('button',{name:presentation}));
+  await choosePresentation(presentation);
   shrunk=true;void client.invalidateQueries({queryKey:['tickets']});
   await waitFor(()=>expect(recoveryStarted).toBe(true));
   expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
@@ -486,7 +558,7 @@ it('uses whole-view SLA ordering and same-snapshot projections, then restarts an
   await screen.findByRole('option',{name:/Fixture conversation 20/});
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
   const before=vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/ticket-sla/projections').length;
-  await chooseSort('Service level priority');
+  await chooseSort('contract SLA');
   await waitFor(()=>expect(slaRequests).toHaveLength(1));
   const list=screen.getByRole('listbox',{name:'Conversation list'});
   await waitFor(()=>expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 20'));
@@ -544,9 +616,12 @@ it.each(['filter','preference','pagination'] as const)('discards delayed advance
 it('global ticket search never enters the legacy redirect or rewrites the actual current-view filter',async()=>{
  const mounted=showInbox('/inbox/all',true);
  await screen.findAllByRole('option');
- const filter=screen.getByRole('textbox',{name:'Filter this view'});
- await userEvent.type(filter,'local-filter{Enter}');
+ openFilters();
+ await userEvent.type(screen.getByRole('textbox',{name:'Search ticket text'}),'local-filter');
+ fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT'&&JSON.parse(String(options.body)).listQuery==='local-filter')).toBe(true));
+ openFilters();
+ const filter=screen.getByRole('textbox',{name:'Search ticket text'});
  vi.mocked(fetch).mockClear();
  const global=screen.getByRole('textbox',{name:'Search all tickets (global shell)'});
  await userEvent.type(global,'Fixture{Enter}');

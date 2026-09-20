@@ -1,5 +1,5 @@
 /* eslint-disable */
-export type Token = `aspectRatios.${AspectRatioToken}` | `borders.${BorderToken}` | `easings.${EasingToken}` | `fontWeights.${FontWeightToken}` | `lineHeights.${LineHeightToken}` | `letterSpacings.${LetterSpacingToken}` | `fontSizes.${FontSizeToken}` | `blurs.${BlurToken}` | `spacing.${SpacingToken}` | `animations.${AnimationToken}` | `fonts.${FontToken}` | `radii.${RadiusToken}` | `shadows.${ShadowToken}` | `sizes.${SizeToken}` | `colors.${ColorToken}` | `durations.${DurationToken}` | `zIndex.${ZIndexToken}` | `breakpoints.${BreakpointToken}`
+export type Token = `aspectRatios.${AspectRatioToken}` | `borders.${BorderToken}` | `easings.${EasingToken}` | `fontWeights.${FontWeightToken}` | `lineHeights.${LineHeightToken}` | `letterSpacings.${LetterSpacingToken}` | `fontSizes.${FontSizeToken}` | `shadows.${ShadowToken}` | `blurs.${BlurToken}` | `spacing.${SpacingToken}` | `animations.${AnimationToken}` | `fonts.${FontToken}` | `radii.${RadiusToken}` | `sizes.${SizeToken}` | `colors.${ColorToken}` | `durations.${DurationToken}` | `zIndex.${ZIndexToken}` | `breakpoints.${BreakpointToken}`
 
 export type ColorPalette = "current" | "transparent" | "rose" | "pink" | "fuchsia" | "purple" | "violet" | "indigo" | "blue" | "sky" | "cyan" | "teal" | "emerald" | "green" | "lime" | "yellow" | "amber" | "orange" | "red" | "neutral" | "stone" | "zinc" | "gray" | "slate" | "black" | "white" | "bg.canvas" | "bg.surface" | "bg.input" | "text.primary" | "text.muted" | "border.input" | "border.focus" | "accent.primary" | "icon.primary" | "icon.muted" | "icon.disabled" | "icon.selected" | "icon.critical" | "icon.inverse" | "canvas" | "panel" | "muted" | "text" | "textMuted" | "focus" | "selected" | "divider" | "critical" | "critical.surface" | "critical.border" | "warning" | "warning.surface" | "warning.border" | "info.surface" | "info.text" | "inverse" | "bg.default" | "bg.subtle" | "fg.default" | "fg.muted" | "border.default" | "gray.solid.bg" | "gray.solid" | "gray.solid.fg" | "gray.subtle.bg" | "gray.subtle" | "gray.subtle.fg" | "gray.surface.bg" | "gray.surface" | "gray.surface.border" | "gray.surface.fg" | "gray.outline" | "gray.outline.bg" | "gray.outline.border" | "gray.outline.fg" | "gray.plain" | "gray.plain.bg" | "gray.plain.fg" | "fg" | "border" | "error" | "blue.solid.bg" | "blue.solid" | "blue.solid.fg" | "blue.subtle.bg" | "blue.subtle" | "blue.subtle.fg" | "blue.surface.bg" | "blue.surface" | "blue.surface.border" | "blue.surface.fg" | "blue.outline" | "blue.outline.bg" | "blue.outline.border" | "blue.outline.fg" | "blue.plain" | "blue.plain.bg" | "blue.plain.fg" | "red.solid.bg" | "red.solid" | "red.solid.fg" | "red.subtle.bg" | "red.subtle" | "red.subtle.fg" | "red.surface.bg" | "red.surface" | "red.surface.border" | "red.surface.fg" | "red.outline" | "red.outline.bg" | "red.outline.border" | "red.outline.fg" | "red.plain" | "red.plain.bg" | "red.plain.fg" | "green.solid.bg" | "green.solid" | "green.solid.fg" | "green.subtle.bg" | "green.subtle" | "green.subtle.fg" | "green.surface.bg" | "green.surface" | "green.surface.border" | "green.surface.fg" | "green.outline" | "green.outline.bg" | "green.outline.border" | "green.outline.fg" | "green.plain" | "green.plain.bg" | "green.plain.fg"
 
@@ -17,6 +17,8 @@ export type LetterSpacingToken = "tighter" | "tight" | "normal" | "wide" | "wide
 
 export type FontSizeToken = "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | "7xl" | "8xl" | "9xl"
 
+export type ShadowToken = "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "inset-2xs" | "inset-xs" | "inset-sm" | "inset"
+
 export type BlurToken = "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl"
 
 export type SpacingToken = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "14" | "16" | "20" | "24" | "28" | "32" | "36" | "40" | "44" | "48" | "52" | "56" | "60" | "64" | "72" | "80" | "96" | "0.5" | "1.5" | "2.5" | "3.5" | "4.5" | "5.5" | "-1" | "-2" | "-3" | "-4" | "-5" | "-6" | "-7" | "-8" | "-9" | "-10" | "-11" | "-12" | "-14" | "-16" | "-20" | "-24" | "-28" | "-32" | "-36" | "-40" | "-44" | "-48" | "-52" | "-56" | "-60" | "-64" | "-72" | "-80" | "-96" | "-0.5" | "-1.5" | "-2.5" | "-3.5" | "-4.5" | "-5.5"
@@ -26,8 +28,6 @@ export type AnimationToken = "spin" | "ping" | "pulse" | "bounce"
 export type FontToken = "sans" | "serif" | "mono" | "primary" | "tabular"
 
 export type RadiusToken = "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "full" | "l1" | "l2" | "l3" | "control" | "panel"
-
-export type ShadowToken = "2xs" | "inset-2xs" | "inset-xs" | "inset-sm" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "inset"
 
 export type SizeToken = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "14" | "16" | "20" | "24" | "28" | "32" | "36" | "40" | "44" | "48" | "52" | "56" | "60" | "64" | "72" | "80" | "96" | "0.5" | "1.5" | "2.5" | "3.5" | "4.5" | "5.5" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | "7xl" | "8xl" | "prose" | "full" | "min" | "max" | "fit" | "target" | "breakpoint-sm" | "breakpoint-md" | "breakpoint-lg" | "breakpoint-xl" | "breakpoint-2xl"
 
@@ -47,12 +47,12 @@ export type Tokens = {
 		lineHeights: LineHeightToken
 		letterSpacings: LetterSpacingToken
 		fontSizes: FontSizeToken
+		shadows: ShadowToken
 		blurs: BlurToken
 		spacing: SpacingToken
 		animations: AnimationToken
 		fonts: FontToken
 		radii: RadiusToken
-		shadows: ShadowToken
 		sizes: SizeToken
 		colors: ColorToken
 		durations: DurationToken
