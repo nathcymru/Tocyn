@@ -1,5 +1,5 @@
 import { css } from '@luminatick/ui/styled-system/css';
-import { ParkButton, ParkCard, ParkEmptyState, ParkField, ParkInput, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkField, ParkInput, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi, ApiError } from '../api/client';
 import {
@@ -107,25 +107,28 @@ export function UsagePage() {
   }, []);
 
   const renderCredentialsForm = () => (
-    <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
-      <div className={css({ display: 'flex', alignItems: 'center', gap: '3', p: '4', bg: isAuthError ? 'bg.subtle' : 'bg.surface' })}>
-        <IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} />
+    <ParkCard.Root variant="outline">
+      <ParkCard.Header className={css({ display: 'flex', alignItems: 'start', gap: '3' })}>
+        <IconCircleExclamation aria-hidden="true" className={css({ w: '5', h: '5', flexShrink: 0 })} />
         <div>
-          <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+          <ParkCard.Title asChild><h3>
             {isAuthError ? 'Cloudflare Credentials Required' : 'Update Cloudflare Credentials'}
-          </h3>
-          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>
+          </h3></ParkCard.Title>
+          <ParkCard.Description>
             {isAuthError
               ? 'To view your usage and costs, you need to provide your Cloudflare Account ID and an API Token with Account Analytics permissions.'
               : 'Update your Cloudflare Account ID or Analytics API Token. Leave the token field blank to keep your existing encrypted token.'}
-          </p>
-          <p className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
-            Note: Storing these credentials in the database allows anyone with Admin access to view them, but it makes setup easier.
-          </p>
+          </ParkCard.Description>
         </div>
-      </div>
+      </ParkCard.Header>
 
-      <div className={css({"minW":0})}>
+      <ParkCard.Body className={css({ display: 'grid', gap: '6', minW: 0 })}>
+        <ParkAlert.Root role="note" status="info" variant="surface">
+          <ParkAlert.Content><ParkAlert.Description>
+            Note: Storing these credentials in the database allows anyone with Admin access to view them, but it makes setup easier.
+          </ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>
+        <div className={css({ minW: 0 })}>
         <div>
           <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.default"})}>1. How to get your API Token:</h4>
           <ol className={css({"minW":0})}>
@@ -185,8 +188,9 @@ export function UsagePage() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+        </div>
+      </ParkCard.Body>
+    </ParkCard.Root>
   );
 
   if (loading) {

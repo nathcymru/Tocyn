@@ -23,6 +23,16 @@ describe('portal authentication bootstrap', () => {
     window.history.replaceState(null, '', '/');
   });
 
+  it('shows a Park skeleton and announced status while the protected session restores', () => {
+    vi.mocked(portalApi.get).mockImplementation(() => new Promise(() => {}));
+    window.history.replaceState(null, '', '/tickets');
+    render(<App />);
+    const loading = screen.getByRole('status', { name: 'Loading portal…' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(3);
+    expect(screen.queryByText('Loading tickets…')).not.toBeInTheDocument();
+  });
+
   it('puts the selected dark mode on html so Park outline tokens match the auth shell', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query === '(prefers-color-scheme: dark)',

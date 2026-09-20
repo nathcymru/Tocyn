@@ -10,7 +10,7 @@ import {
 import { ApiError } from '../api/client';
 
 export const SettingsPage: React.FC = () => {
-  const { data: settings, isLoading, error: fetchError, refetch } = useSettings();
+  const { data: settings, isLoading, isFetching, error: fetchError, refetch } = useSettings();
   const updateSettings = useUpdateSettings();
 
   const [formData, setFormData] = useState<Record<string, string>>({
@@ -128,6 +128,7 @@ export const SettingsPage: React.FC = () => {
   }
 
   const page = ParkPage('settings');
+  const hasRefreshError = Boolean(fetchError) && !(fetchError instanceof ApiError && fetchError.message.includes('APP_MASTER_KEY'));
 
   return (
     <div className={[page.root, page.content].join(' ')}>
@@ -166,6 +167,13 @@ export const SettingsPage: React.FC = () => {
         </ParkAlert.Root>
       )}
       {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      {hasRefreshError && <ParkAlert.Root role="alert" status="error">
+        <ParkAlert.Content>
+          <ParkAlert.Title>General settings could not be refreshed</ParkAlert.Title>
+          <ParkAlert.Description>Saved values may have changed elsewhere. Your current form is retained; retry the read before relying on these values.</ParkAlert.Description>
+          <ParkButton type="button" variant="outline" loading={isFetching} loadingText="Retrying settings…" onClick={() => void refetch()}>Retry settings refresh</ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>}
 
       <div className={page.settingsSections}>
         {/* Organization Profile */}

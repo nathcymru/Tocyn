@@ -12,6 +12,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';
+import { PortalLoadingSkeleton } from '../components/RouteContent';
 
 export function TicketListPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -114,7 +115,7 @@ export function TicketListPage() {
   };
 
   if (loading) {
-    return <ParkEmptyState role="status" title="Loading tickets…" headingLevel={false} aria-busy="true" className={p.ticketLoading} />;
+    return <PortalLoadingSkeleton label="Loading tickets…" className={p.ticketLoading} />;
   }
 
   if (error) {

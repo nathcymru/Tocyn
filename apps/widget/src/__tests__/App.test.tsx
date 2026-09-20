@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from '../App';
 import userEvent from '@testing-library/user-event';
@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
-async function open(features = { aiChat: true, ticketForm: true }, extraConfig: Record<string, unknown> = {}) {
+async function open(features: { aiChat: boolean | string; ticketForm: boolean | string } = { aiChat: true, ticketForm: true }, extraConfig: Record<string, unknown> = {}) {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ title: 'Synthetic support', primaryColor: '#123456', features, ...extraConfig }))));
   render(<App />); const launcher = await screen.findByRole('button', { name: 'Open support' });
   fireEvent.click(launcher); return launcher;
@@ -41,6 +41,19 @@ it('selects the available ticket form when AI is disabled', async () => {
   expect(screen.queryByRole('tab', { name: 'AI Chat' })).not.toBeInTheDocument();
   expect(screen.getByRole('tab', { name: 'New Ticket' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.getByRole('textbox', { name: 'Message' })).toBeVisible();
+});
+it('honours string-valued tenant feature switches and hides a widget with no enabled option', async () => {
+  await open({ aiChat: 'false', ticketForm: 'true' });
+  expect(screen.queryByRole('tab', { name: 'AI Chat' })).not.toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: 'New Ticket' })).toBeInTheDocument();
+  cleanup();
+
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    title: 'Synthetic support', features: { aiChat: 'false', ticketForm: 'false' },
+  }))));
+  await act(async () => { render(<App />); });
+  expect(fetch).toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Open support' })).not.toBeInTheDocument();
 });
 it('removes private drafts when the verified session disappears', async () => {
   await open({ aiChat: true, ticketForm: true }, { portalUrl: 'https://example.invalid/support' }); await userEvent.click(screen.getByRole('tab', { name: 'New Ticket' }));

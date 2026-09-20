@@ -1,6 +1,5 @@
 import { p } from './portalStyles';
 import { AuthLayout } from '@luminatick/ui/auth-layout';
-import { ParkEmptyState } from '@luminatick/ui/park';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useLayoutEffect } from 'react';
 import { useAuthStore } from './store/authStore';
@@ -8,7 +7,7 @@ import { portalApi } from './api/client';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { VerifyPage } from './pages/VerifyPage';
-import { RouteContent } from './components/RouteContent';
+import { PortalLoadingSkeleton, RouteContent } from './components/RouteContent';
 
 const TicketListPage = lazy(() => import('./pages/TicketListPage').then(module => ({ default: module.TicketListPage })));
 const TicketDetailPage = lazy(() => import('./pages/TicketDetailPage').then(module => ({ default: module.TicketDetailPage })));
@@ -19,7 +18,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore();
 
   if (isLoading) {
-    return <ParkEmptyState role="status" title="Loading portal…" headingLevel={false} aria-busy="true" className={p.appLoading} />;
+    return <PortalLoadingSkeleton label="Loading portal…" className={p.appLoading} />;
   }
 
   if (!isAuthenticated) {
@@ -76,7 +75,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {LocalAuthCapturePage && <Route path="/__local/auth-capture" element={<Suspense fallback={<ParkEmptyState role="status" title="Loading local capture…" headingLevel={false} aria-busy="true" className={p.routeLoading} />}><LocalAuthCapturePage /></Suspense>} />}
+        {LocalAuthCapturePage && <Route path="/__local/auth-capture" element={<Suspense fallback={<PortalLoadingSkeleton label="Loading local capture…" className={p.routeLoading} />}><LocalAuthCapturePage /></Suspense>} />}
         <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
         <Route path="/verify" element={<AuthLayout><VerifyPage /></AuthLayout>} />
         

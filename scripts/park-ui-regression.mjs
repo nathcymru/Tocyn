@@ -85,7 +85,8 @@ if (unresolved.length > 20) failures.push(`${unresolved.length - 20} more unreso
 
 // Follow only application imports reachable from app entries. Historical and
 // test-only files are deliberately outside this rendered-surface check.
-const entries = ['apps/dashboard/src/App.tsx', 'apps/portal/src/App.tsx', 'apps/widget/src/App.tsx', 'packages/ui/src/auth-layout.tsx', 'packages/ui/src/park.tsx', 'packages/ui/src/dialog.tsx', 'packages/ui/src/icons.tsx'];
+const entries = ['apps/dashboard/src/App.tsx', 'apps/portal/src/App.tsx', 'apps/widget/src/App.tsx',
+  ...fs.readdirSync(path.join(ui, 'src')).filter(name => name.endsWith('.tsx')).map(name => `packages/ui/src/${name}`)];
 const loadedCss = [css, 'packages/ui/src/styles/app-layout.css']
   .map(value => value.endsWith('.css') ? fs.readFileSync(path.join(root, value), 'utf8') : value).join('\n');
 const visited = new Set();
@@ -97,12 +98,15 @@ function visit(relative) {
   if (absolute.endsWith('.tsx')) {
     if (/data-park\s*=/.test(content)) failures.push(`Pseudo-Park marker in active application source: ${relative}`);
     if (/<ParkSelect\s*(?:>|\b(?!\.))/.test(content)) failures.push(`Callable ParkSelect remains in active application source: ${relative}`);
-    for (const element of ['button', 'input', 'textarea', 'select']) {
-      if (new RegExp(`<${element}(?:\\s|>)`, 'i').test(content)) failures.push(`Native ${element} remains in active application source: ${relative}`);
-    }
     const jsx = ts.createSourceFile(relative, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const classes = new Set();
     function inspect(node) {
+      if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+        const tag = node.tagName.getText(jsx);
+        if (['button', 'input', 'textarea', 'select'].includes(tag)) {
+          failures.push(`Native ${tag} remains in active application source: ${relative}`);
+        }
+      }
       if (ts.isCallExpression(node)) {
         const target = node.expression;
         const nativeDialog = ts.isIdentifier(target) && ['alert', 'confirm', 'prompt'].includes(target.text)

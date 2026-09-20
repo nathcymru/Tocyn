@@ -185,7 +185,7 @@ export const AutomationPage: React.FC = () => {
     setEditForm({ ...editForm, action_config: JSON.stringify(config) });
   };
 
-  if (loading) return <section role="status" aria-label="Loading automations" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}><span className={css({ srOnly: true })}>Loading automations…</span><ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} /></section>;
+  if (loading && rules.length === 0 && !loadError) return <section role="status" aria-label="Loading automations" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}><span className={css({ srOnly: true })}>Loading automations…</span><ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} /></section>;
 
   return (
     <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
@@ -194,7 +194,8 @@ export const AutomationPage: React.FC = () => {
           <h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Automation Rules</h1>
           <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Manage event-driven workflows and data retention.</p>
         </div>
-        {!isEditing && (
+        {!isEditing && <div className={css({ display: 'flex', gap: '2', flexWrap: 'wrap' })}>
+          {rules.length > 0 && <ParkButton type="button" variant="outline" loading={loading} loadingText="Refreshing automations…" onClick={() => void fetchRules()}>Refresh automations</ParkButton>}
           <ParkButton type="button"
             onClick={startCreate}
             variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
@@ -202,12 +203,19 @@ export const AutomationPage: React.FC = () => {
             <IconPlus aria-hidden="true" size={20} />
             Create Rule
           </ParkButton>
-        )}
+        </div>}
       </div>
 
       {error && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
 
       {success && <ParkAlert.Root role="status" status="success"><ParkAlert.Content><ParkAlert.Description>{success}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      {loadError && rules.length > 0 && <ParkAlert.Root role="alert" status="error">
+        <ParkAlert.Content>
+          <ParkAlert.Title>Automation rules could not be refreshed</ParkAlert.Title>
+          <ParkAlert.Description>These rules are the last loaded version and may have changed. Retry before relying on the list.</ParkAlert.Description>
+          <ParkButton type="button" variant="outline" loading={loading} loadingText="Retrying automations…" onClick={() => void fetchRules()}>Retry automations refresh</ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>}
 
       <div className={css({"minW":0})}>
         {isEditing && (

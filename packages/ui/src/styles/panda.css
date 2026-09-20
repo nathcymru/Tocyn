@@ -11707,10 +11707,6 @@
     border-radius: var(--radii-full);
 }
 
-  .bdr_lg {
-    border-radius: var(--radii-lg);
-}
-
   .bdr_l3 {
     border-radius: var(--radii-l3);
 }
@@ -11721,6 +11717,10 @@
 
   .my_8 {
     margin-block: var(--spacing-8);
+}
+
+  .bdr_lg {
+    border-radius: var(--radii-lg);
 }
 
   .my_4 {
@@ -13015,6 +13015,14 @@
     max-width: var(--sizes-48);
 }
 
+  .max-w_3xl {
+    max-width: var(--sizes-3xl);
+}
+
+  .mb_4 {
+    margin-bottom: var(--spacing-4);
+}
+
   .h_clamp\(12rem\,_40dvh\,_24rem\) {
     height: clamp(12rem, 40dvh, 24rem);
 }
@@ -13033,10 +13041,6 @@
 
   .max-h_min\(600px\,_calc\(100dvh_-_7\.5rem\)\) {
     max-height: min(600px, calc(100dvh - 7.5rem));
-}
-
-  .mb_4 {
-    margin-bottom: var(--spacing-4);
 }
 
   .bd-t-w_3px {

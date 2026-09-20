@@ -17,6 +17,7 @@ import { formatDistanceToNow, format } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';
 import { TicketSlaStatus } from '../components/TicketSlaStatus';
+import { PortalLoadingSkeleton } from '../components/RouteContent';
 
 type UploadedAttachment = { filename: string; size: number; contentType: string; storageKey: string };
 
@@ -309,7 +310,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
   };
 
   if (loading) {
-    return <ParkEmptyState role="status" title="Loading conversation…" headingLevel={false} aria-busy="true" className={p.emptyState} />;
+    return <PortalLoadingSkeleton label="Loading conversation…" className={p.emptyState} />;
   }
 
   if (error || !ticket) {

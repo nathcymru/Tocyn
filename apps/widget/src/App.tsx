@@ -39,7 +39,15 @@ const App: React.FC = () => {
 
   if (!config) return null;
 
-  const tabs = (['chat', 'ticket'] as const).filter(tab => tab === 'chat' ? config.features.aiChat : config.features.ticketForm);
+  // The tenant configuration store serializes saved switches as "true"/"false".
+  // Only an explicit enabled value may expose an optional widget feature.
+  const features = {
+    aiChat: config.features?.aiChat === true || config.features?.aiChat === 'true',
+    ticketForm: config.features?.ticketForm === true || config.features?.ticketForm === 'true',
+  };
+  if (!features.aiChat && !features.ticketForm) return null;
+
+  const tabs = (['chat', 'ticket'] as const).filter(tab => tab === 'chat' ? features.aiChat : features.ticketForm);
   const selectedTab = tabs.includes(activeTab) ? activeTab : tabs[0];
 
   return (
@@ -55,10 +63,10 @@ const App: React.FC = () => {
 
           <ParkTabs.Root className={w.tabRoot} activationMode="manual" value={selectedTab ?? null} onValueChange={({value}) => { if (value === 'chat' || value === 'ticket') setActiveTab(value); }} lazyMount={false} unmountOnExit={false}>
           <ParkTabs.List aria-label="Support options" className={w.tabs}>
-            {config.features.aiChat && (
+            {features.aiChat && (
               <ParkTabs.Trigger value="chat" className={w.tab}>AI Chat</ParkTabs.Trigger>
             )}
-            {config.features.ticketForm && (
+            {features.ticketForm && (
               <ParkTabs.Trigger value="ticket" className={w.tab}>New Ticket</ParkTabs.Trigger>
             )}
           </ParkTabs.List>
@@ -71,8 +79,8 @@ const App: React.FC = () => {
                     Sign in through the support portal to use chat or submit a ticket. {config.portalUrl && <Link href={config.portalUrl} target="_blank" rel="noopener noreferrer">Open support portal</Link>}
                   </ParkAlert.Description></ParkAlert.Content>
                 </ParkAlert.Root>}
-                {config.features.aiChat && <ParkTabs.Content value="chat">{session && <AiChat key={session.email} config={config} />}</ParkTabs.Content>}
-                {config.features.ticketForm && <ParkTabs.Content value="ticket">{session && <TicketForm key={session.email} userEmail={session.email} />}</ParkTabs.Content>}
+                {features.aiChat && <ParkTabs.Content value="chat">{session && <AiChat key={session.email} config={config} />}</ParkTabs.Content>}
+                {features.ticketForm && <ParkTabs.Content value="ticket">{session && <TicketForm key={session.email} userEmail={session.email} />}</ParkTabs.Content>}
               </ParkScrollArea.Content>
             </ParkScrollArea.Viewport>
             <ParkScrollArea.Scrollbar orientation="vertical" />

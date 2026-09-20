@@ -27,6 +27,26 @@ function setupReads() {
 }
 
 describe('portal conversation accessibility and recovery', () => {
+  it('shows Park skeleton rows while the ticket list is initially loading', () => {
+    vi.mocked(portalApi.get).mockImplementation(path => path === '/tickets'
+      ? new Promise(() => {})
+      : Promise.resolve({ TICKET_PREFIX: '#' }) as never);
+    mountList();
+    const loading = screen.getByRole('status', { name: 'Loading tickets…' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(3);
+  });
+
+  it('shows Park skeleton rows while a conversation is initially loading', () => {
+    vi.mocked(portalApi.get).mockImplementation(path => path === '/tickets/ticket'
+      ? new Promise(() => {})
+      : Promise.resolve({ TICKET_PREFIX: '#' }) as never);
+    mountDetail();
+    const loading = screen.getByRole('status', { name: 'Loading conversation…' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(3);
+  });
+
   it.each([
     [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
   ])('displays attachment size %s in truthful units', async (size, expected) => {
