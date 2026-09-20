@@ -8,7 +8,7 @@ export interface PriorityClockRow {
   started_at: string;
   active_since: string | null;
   accrued_active_ms: number;
-  stop_reason: 'waiting' | 'resolved' | null;
+  stop_reason: 'waiting' | 'snoozed' | 'resolved' | null;
   last_support_state_revision: number;
   revision: number;
   updated_at: string;
@@ -21,7 +21,7 @@ export interface PriorityClockProjection {
   elapsedActiveMs: number;
   timeRemainingHours: number;
   paused: boolean;
-  stopReason: 'waiting' | 'resolved' | null;
+  stopReason: 'waiting' | 'snoozed' | 'resolved' | null;
   supportStateRevision: number;
   clockRevision: number;
 }
