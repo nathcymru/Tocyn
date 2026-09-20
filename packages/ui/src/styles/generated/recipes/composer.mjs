@@ -26,10 +26,6 @@ const composerSlotNames = [
     "composer__toolbarButton"
   ],
   [
-    "toolbarButtonActive",
-    "composer__toolbarButtonActive"
-  ],
-  [
     "input",
     "composer__input"
   ],

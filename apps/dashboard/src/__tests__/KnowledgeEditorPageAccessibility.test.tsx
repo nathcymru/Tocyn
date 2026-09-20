@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -12,14 +13,11 @@ vi.mock('../api/client', () => ({ dashboardApi: { get: mocks.get, post: mocks.po
 
 import { KnowledgeEditorPage } from '../pages/KnowledgeEditorPage';
 
-function setEditorText(value: string) {
+async function setEditorText(value: string) {
   const editor = screen.getByRole('textbox', { name: 'Content (Markdown)' });
   editor.focus();
-  // Tiptap remains the rendered editor. Its value bridge is used only to
-  // seed a controlled test draft, then the ordinary DOM change contract is
-  // dispatched so the page's onChange path is exercised.
-  (editor as HTMLElement & { value?: string }).value = value;
-  fireEvent.change(editor);
+  await userEvent.clear(editor);
+  await userEvent.type(editor, value, { skipClick: true });
 }
 
 beforeEach(() => {
@@ -46,7 +44,7 @@ it('prevents duplicate saves, retains the draft after failure, and retries the s
   mocks.post.mockImplementationOnce(() => new Promise((_resolve, rejectSave) => { reject = rejectSave; })).mockResolvedValueOnce({});
   render(<React.StrictMode><KnowledgeEditorPage /></React.StrictMode>);
   fireEvent.change(screen.getByRole('textbox', { name: 'Title *' }), { target: { value: 'Keep this article' } });
-  setEditorText('Retained content');
+  await setEditorText('Retained content');
   const save = screen.getByRole('button', { name: 'Save Article' });
   fireEvent.click(save); fireEvent.click(save);
   await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));

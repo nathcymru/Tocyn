@@ -2,7 +2,7 @@ import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
-import { Badge } from '@luminatick/ui/components';
+import { Badge, Field } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -182,8 +182,8 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
         <ParkDialog.Body><form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
           {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           <fieldset disabled={mutation.isPending} className={css({ display: 'grid', gap: '4' })}>
-          <div className={css({ display: 'grid', gap: '1.5' })}>
-            <label htmlFor={`${titleId}-label`} className={css({ textStyle: 'label' })}>Display Label</label>
+          <Field.Root required>
+            <Field.Label htmlFor={`${titleId}-label`}>Display Label</Field.Label>
             <ParkInput
               required
               type="text"
@@ -192,29 +192,26 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
               placeholder="e.g., Device Model"
               className={css({ w: 'full' })}
             />
-          </div>
+          </Field.Root>
 
-          <div className={css({ display: 'grid', gap: '1.5' })}>
-            <label htmlFor={`${titleId}-name`} className={css({ textStyle: 'label' })}>Key Name</label>
+          <Field.Root required>
+            <Field.Label htmlFor={`${titleId}-name`}>Key Name</Field.Label>
             <ParkInput
               required
               type="text"
-              id={`${titleId}-name`} value={formData.name}
+              id={`${titleId}-name`} aria-describedby={`${titleId}-name-help`} value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., device_model"
               className={css({ w: 'full' })}
             />
-            <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>The JSON key used internally and via API.</p>
-          </div>
+            <Field.HelperText id={`${titleId}-name-help`}>The JSON key used internally and via API.</Field.HelperText>
+          </Field.Root>
 
-          <div className={css({ display: 'grid', gap: '1.5' })}>
-            <label htmlFor={`${titleId}-type`} className={css({ textStyle: 'label' })}>Field Type</label>
-            <DashboardSelect id={`${titleId}-type`} aria-label="Field Type" value={formData.field_type} onValueChange={value => setFormData({ ...formData, field_type: value })} options={[{ value: 'text', label: 'Text (Single line)' }, { value: 'textarea', label: 'Textarea (Multi-line)' }, { value: 'select', label: 'Dropdown (Select)' }, { value: 'checkbox', label: 'Checkbox' }]} />
-          </div>
+          <DashboardSelect id={`${titleId}-type`} label="Field Type" value={formData.field_type} onValueChange={value => setFormData({ ...formData, field_type: value })} options={[{ value: 'text', label: 'Text (Single line)' }, { value: 'textarea', label: 'Textarea (Multi-line)' }, { value: 'select', label: 'Dropdown (Select)' }, { value: 'checkbox', label: 'Checkbox' }]} />
 
           {formData.field_type === 'select' && (
-            <div className={css({ display: 'grid', gap: '1.5' })}>
-              <label htmlFor={`${titleId}-options`} className={css({ textStyle: 'label' })}>Options</label>
+            <Field.Root required>
+              <Field.Label htmlFor={`${titleId}-options`}>Options</Field.Label>
               <ParkInput
                 required
                 type="text"
@@ -223,7 +220,7 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
                 placeholder="Comma-separated (e.g. Option 1, Option 2)"
                 className={css({ w: 'full' })}
               />
-            </div>
+            </Field.Root>
           )}
 
           <ParkCheckbox.Root checked={formData.is_active} onCheckedChange={({ checked }) => setFormData({ ...formData, is_active: checked === true })}>

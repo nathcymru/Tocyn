@@ -19,11 +19,23 @@ async function openEditor(){
 it('preserves generated and overridden names, options and active state in the submitted payload',async()=>{
  vi.mocked(dashboardApi.post).mockResolvedValue({});const invalidate=vi.spyOn(client,'invalidateQueries');
  const {opener,dialog,label}=await openEditor();fireEvent.change(label,{target:{value:'Device Model'}});
+ for(const name of ['Display Label','Key Name']){
+  const input=within(dialog).getByRole('textbox',{name});
+  const field=input.closest('[data-scope="field"][data-part="root"]');
+  expect(field).toHaveClass('field__root');
+  expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent(name);
+ }
  const key=within(dialog).getByRole('textbox',{name:'Key Name'});expect(key).toHaveValue('device_model');
+ expect(document.getElementById(key.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
  fireEvent.change(key,{target:{value:'custom_key'}});fireEvent.change(label,{target:{value:'Model Name'}});expect(key).toHaveValue('custom_key');
- await userEvent.click(within(dialog).getByRole('combobox',{name:'Field Type'}));
+ const type=within(dialog).getByRole('combobox',{name:'Field Type'});
+ expect(type.closest('[data-scope="select"][data-part="root"]')).toHaveClass('select__root');
+ expect(type.closest('[data-scope="select"][data-part="root"]')?.querySelector('[data-part="label"]')).toHaveClass('select__label');
+ await userEvent.click(type);
  await userEvent.click(await within(dialog).findByRole('option',{name:'Dropdown (Select)'}));
- fireEvent.change(within(dialog).getByRole('textbox',{name:'Options'}),{target:{value:'One, Two'}});
+ const options=within(dialog).getByRole('textbox',{name:'Options'});
+ expect(options.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
+ fireEvent.change(options,{target:{value:'One, Two'}});
  await userEvent.click(within(dialog).getByText('Active'));
  expect(within(dialog).getByRole('checkbox',{name:'Active'})).not.toBeChecked();
  fireEvent.submit(within(dialog).getByRole('form'));

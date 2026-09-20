@@ -10,7 +10,7 @@ type ComposerVariantMap = {
   [key in keyof ComposerVariant]: Array<ComposerVariant[key]>
 }
 
-type ComposerSlot = "root" | "formatHelp" | "markdown" | "toolbar" | "toolbarButton" | "toolbarButtonActive" | "input" | "editor" | "autocomplete" | "autocompleteOption" | "dropHelp" | "preview" | "previewSummary" | "previewBody"
+type ComposerSlot = "root" | "formatHelp" | "markdown" | "toolbar" | "toolbarButton" | "input" | "editor" | "autocomplete" | "autocompleteOption" | "dropHelp" | "preview" | "previewSummary" | "previewBody"
 
 export type ComposerVariantProps = {
   [key in keyof ComposerVariant]?: ConditionalValue<ComposerVariant[key]> | undefined

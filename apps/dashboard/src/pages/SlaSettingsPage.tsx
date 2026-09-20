@@ -1,4 +1,5 @@
 import { DashboardSelect } from '../components/DashboardSelect';
+import { Field } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useEffect, useState } from 'react';
 import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkSkeleton, ParkTextarea } from '@luminatick/ui/park';
@@ -37,7 +38,6 @@ export function SlaSettingsPage() {
     <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
   </section>;
   if (!data) return <ParkEmptyState title="SLA policy could not be loaded." description="Retry loading the policy before editing it." headingLevel={false} className={css({"py":"6"})} action={<ParkButton type="button" onClick={() => void refetch()}>Retry</ParkButton>} role="alert" />;
-  const field = css({ display: 'grid', minW: '0', gap: '1.5', textStyle: 'label' });
   const pair = css({ display: 'grid', gridTemplateColumns: { base: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: '4' });
   return <form onSubmit={submit} className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })} aria-label="SLA policy settings">
     <header className={css({ display: 'grid', gap: '1', mb: '2' })}>
@@ -57,20 +57,24 @@ export function SlaSettingsPage() {
     {message && <ParkAlert.Root role={message.startsWith('Saved.') ? 'status' : 'alert'} status={message.startsWith('Saved.') ? 'success' : 'error'}><ParkAlert.Content><ParkAlert.Description>{message}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
     <ParkCard.Root variant="outline">
       <ParkCard.Header><ParkCard.Title asChild><h2>Working calendar</h2></ParkCard.Title><ParkCard.Description>Set the calendar used by future clocks.</ParkCard.Description></ParkCard.Header>
-      <ParkCard.Body><label className={field}>Calendar JSON<ParkTextarea value={calendarText} onChange={e => { setCalendarText(e.target.value); setDirty(true); }} rows={16} className={css({ w: 'full' })} /></label></ParkCard.Body>
+      <ParkCard.Body><Field.Root className={css({ minW: '0' })}>
+        <Field.Label htmlFor="sla-calendar-json">Calendar JSON</Field.Label>
+        <ParkTextarea id="sla-calendar-json" aria-describedby="sla-calendar-help" value={calendarText} onChange={e => { setCalendarText(e.target.value); setDirty(true); }} rows={16} className={css({ w: 'full' })} />
+        <Field.HelperText id="sla-calendar-help">Set the calendar used by future clocks.</Field.HelperText>
+      </Field.Root></ParkCard.Body>
     </ParkCard.Root>
     <ParkCard.Root variant="outline">
       <ParkCard.Header><ParkCard.Title asChild><h2>Targets</h2></ParkCard.Title></ParkCard.Header>
       <ParkCard.Body className={pair}>
-        <label className={field}>Response target (minutes, optional)<ParkInput className={css({ w: 'full' })} inputMode="numeric" value={response} onChange={e => { setResponse(e.target.value); setDirty(true); }} /></label>
-        <label className={field}>Resolution target (minutes, optional)<ParkInput className={css({ w: 'full' })} inputMode="numeric" value={resolution} onChange={e => { setResolution(e.target.value); setDirty(true); }} /></label>
+        <Field.Root className={css({ minW: '0' })}><Field.Label htmlFor="sla-response-target">Response target (minutes, optional)</Field.Label><ParkInput id="sla-response-target" aria-describedby="sla-response-help" className={css({ w: 'full' })} inputMode="numeric" value={response} onChange={e => { setResponse(e.target.value); setDirty(true); }} /><Field.HelperText id="sla-response-help">Enter whole minutes of at least one, or leave blank.</Field.HelperText></Field.Root>
+        <Field.Root className={css({ minW: '0' })}><Field.Label htmlFor="sla-resolution-target">Resolution target (minutes, optional)</Field.Label><ParkInput id="sla-resolution-target" aria-describedby="sla-resolution-help" className={css({ w: 'full' })} inputMode="numeric" value={resolution} onChange={e => { setResolution(e.target.value); setDirty(true); }} /><Field.HelperText id="sla-resolution-help">Enter whole minutes of at least one, or leave blank.</Field.HelperText></Field.Root>
       </ParkCard.Body>
     </ParkCard.Root>
     <ParkCard.Root variant="outline">
       <ParkCard.Header><ParkCard.Title asChild><h2>Reopened conversations</h2></ParkCard.Title></ParkCard.Header>
       <ParkCard.Body className={pair}>
-        <label className={field}>Response after reopen<DashboardSelect aria-label="Response after reopen" value={responseReopen} onValueChange={value => { setResponseReopen(value as 'continue'|'restart'); setDirty(true); }} options={[{ value: 'continue', label: 'Continue original clock' }, { value: 'restart', label: 'Restart clock' }]} /></label>
-        <label className={field}>Resolution after reopen<DashboardSelect aria-label="Resolution after reopen" value={resolutionReopen} onValueChange={value => { setResolutionReopen(value as 'continue'|'restart'); setDirty(true); }} options={[{ value: 'continue', label: 'Continue original clock' }, { value: 'restart', label: 'Restart clock' }]} /></label>
+        <DashboardSelect label="Response after reopen" value={responseReopen} onValueChange={value => { setResponseReopen(value as 'continue'|'restart'); setDirty(true); }} options={[{ value: 'continue', label: 'Continue original clock' }, { value: 'restart', label: 'Restart clock' }]} />
+        <DashboardSelect label="Resolution after reopen" value={resolutionReopen} onValueChange={value => { setResolutionReopen(value as 'continue'|'restart'); setDirty(true); }} options={[{ value: 'continue', label: 'Continue original clock' }, { value: 'restart', label: 'Restart clock' }]} />
       </ParkCard.Body>
     </ParkCard.Root>
     <ParkButton type="submit" disabled={Boolean(error) || revisionChanged || editingRevision === null} loading={update.isPending} loadingText="Saving SLA policy…" className={css({ justifySelf: 'start' })}>Save SLA policy</ParkButton>

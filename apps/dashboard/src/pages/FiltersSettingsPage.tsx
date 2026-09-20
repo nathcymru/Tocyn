@@ -2,7 +2,7 @@ import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog, TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
-import { Badge } from '@luminatick/ui/components';
+import { Badge, Field as ParkField } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
 import {
@@ -232,8 +232,8 @@ export function FiltersSettingsPage() {
           <ParkDialog.Body><form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
               {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
               <fieldset disabled={saving} className={css({"display":"grid","gap":"4"})}>
-              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                <label htmlFor={nameId}>Filter Name</label>
+              <ParkField.Root required className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
+                <ParkField.Label htmlFor={nameId}>Filter Name<ParkField.RequiredIndicator /></ParkField.Label>
                 <ParkInput id={nameId} ref={nameInput}
                   type="text"
                   required
@@ -242,7 +242,8 @@ export function FiltersSettingsPage() {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., My Open Tickets"
                 />
-              </div>
+                <ParkField.HelperText>Give this saved view a name your team can recognise.</ParkField.HelperText>
+              </ParkField.Root>
 
               <div>
                 <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
@@ -259,15 +260,18 @@ export function FiltersSettingsPage() {
                 <div className={css({"display":"grid","gap":"4"})}>
                   {formData.conditions.map((cond, idx) => (
                     <div key={idx} className={css({ display: 'grid', gap: '2', gridTemplateColumns: { base: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr)) auto' }, alignItems: 'end' })}>
-                      <DashboardSelect aria-label={`Condition ${idx + 1} field`} value={cond.field} onValueChange={value => changeCondition(idx, 'field', value)} options={FIELDS} />
-                      <DashboardSelect aria-label={`Condition ${idx + 1} operator`} value={cond.operator} onValueChange={value => changeCondition(idx, 'operator', value)} options={OPERATORS} />
-                      <ParkInput
-                        type="text"
-                        className={css({"minW":0})}
-                        placeholder="Value..."
-                        aria-label={`Condition ${idx + 1} value`} value={cond.value}
-                        onChange={e => changeCondition(idx, 'value', e.target.value)}
-                      />
+                      <DashboardSelect label={`Condition ${idx + 1} field`} value={cond.field} onValueChange={value => changeCondition(idx, 'field', value)} options={FIELDS} />
+                      <DashboardSelect label={`Condition ${idx + 1} operator`} value={cond.operator} onValueChange={value => changeCondition(idx, 'operator', value)} options={OPERATORS} />
+                      <ParkField.Root className={css({ minW: 0 })}>
+                        <ParkField.Label>Condition {idx + 1} value</ParkField.Label>
+                        <ParkInput
+                          type="text"
+                          className={css({"minW":0})}
+                          placeholder="Value..."
+                          value={cond.value}
+                          onChange={e => changeCondition(idx, 'value', e.target.value)}
+                        />
+                      </ParkField.Root>
                       <ParkButton
                         type="button"
                         aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}

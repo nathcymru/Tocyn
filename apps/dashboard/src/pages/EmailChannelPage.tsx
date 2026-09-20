@@ -2,7 +2,7 @@ import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
-import { Badge } from '@luminatick/ui/components';
+import { Badge, Field } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -185,32 +185,28 @@ export function EmailChannelPage() {
         {settingsFailed && settings !== undefined && <ParkAlert.Root role="alert" status="warning" variant="surface"><ParkAlert.Content><ParkAlert.Title>Configuration refresh failed</ParkAlert.Title><ParkAlert.Description>Last loaded settings and your edits remain available.</ParkAlert.Description><ParkButton type="button" variant="outline" disabled={settingsFetching} onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton></ParkAlert.Content></ParkAlert.Root>}
         {providerError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{providerError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
         <div className={css({"display":"grid","gap":"4"})}>
-          <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-            <label htmlFor="resend-api-key">
-              Resend API Key
-            </label>
+          <Field.Root className={css({ w: 'full' })}>
+            <Field.Label htmlFor="resend-api-key">Resend API Key</Field.Label>
             <ParkInput
-              id="resend-api-key" type="password" autoComplete="off" disabled={savingResend || settingsLoading || settingsUnavailable}
+              id="resend-api-key" type="password" autoComplete="off" aria-describedby="resend-api-key-help" disabled={savingResend || settingsLoading || settingsUnavailable}
               placeholder="re_xxxxxxxxxxxxxxxxx"
               value={resendApiKey}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendApiKey(e.target.value); }}
               className={css({"w":"full"})}
             />
-            <p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Required to send outbound email replies.</p>
-          </div>
-          <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-            <label htmlFor="resend-from-email">
-              Default From Email
-            </label>
+            <Field.HelperText id="resend-api-key-help">Required to send outbound email replies.</Field.HelperText>
+          </Field.Root>
+          <Field.Root required className={css({ w: 'full' })}>
+            <Field.Label htmlFor="resend-from-email">Default From Email</Field.Label>
             <ParkInput
-              id="resend-from-email" type="email" required disabled={savingResend || settingsLoading || settingsUnavailable}
+              id="resend-from-email" type="email" required aria-describedby="resend-from-email-help" disabled={savingResend || settingsLoading || settingsUnavailable}
               placeholder="support@yourdomain.com"
               value={resendFromEmail}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendFromEmail(e.target.value); }}
               className={css({"w":"full"})}
             />
-            <p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Fallback email if a group email is not configured.</p>
-          </div>
+            <Field.HelperText id="resend-from-email-help">Fallback email if a group email is not configured.</Field.HelperText>
+          </Field.Root>
         </div>
         <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
           {resendSuccess && <span role="status" className={css({ color: 'fg.default' })}><IconCheck aria-hidden="true" className={css({ w: '4', h: '4' })} /> Configuration saved; delivery has not been verified.</span>}
@@ -244,10 +240,8 @@ export function EmailChannelPage() {
 
           <ParkCard.Body><form aria-label="Add support email" aria-busy={createEmail.isPending} onSubmit={handleSubmit} className={css({ display: 'grid', gap: '4' })}>
             <div className={css({"display":"grid","gap":"4"})}>
-              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                <label htmlFor="support-email-address">
-                  Email Address *
-                </label>
+              <Field.Root required className={css({ w: 'full' })}>
+                <Field.Label htmlFor="support-email-address">Email Address <Field.RequiredIndicator> *</Field.RequiredIndicator></Field.Label>
                 <ParkInput
                   id="support-email-address" ref={emailInput} disabled={createEmail.isPending} type="email"
                   required
@@ -256,11 +250,9 @@ export function EmailChannelPage() {
                   onChange={e => setFormData({ ...formData, email_address: e.target.value })}
                   className={css({"w":"full"})}
                 />
-              </div>
-              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                <label htmlFor="support-email-name">
-                  Display Name
-                </label>
+              </Field.Root>
+              <Field.Root className={css({ w: 'full' })}>
+                <Field.Label htmlFor="support-email-name">Display Name</Field.Label>
                 <ParkInput
                   id="support-email-name" disabled={createEmail.isPending} type="text"
                   placeholder="Support Team"
@@ -268,19 +260,16 @@ export function EmailChannelPage() {
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   className={css({"w":"full"})}
                 />
-              </div>
+              </Field.Root>
             </div>
 
             <div className={css({"display":"grid","gap":"4"})}>
-              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-                <label htmlFor="support-email-group">
-                  Assign to Group
-                </label>
-                <DashboardSelect id="support-email-group" aria-label="Assign to Group" disabled={createEmail.isPending} value={formData.group_id} onValueChange={value => setFormData({ ...formData, group_id: value })} options={[{ value: '', label: '(No specific group)' }, ...(groups ?? []).map(group => ({ value: group.id, label: group.name }))]} />
-                <p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+              <Field.Root className={css({ w: 'full' })}>
+                <DashboardSelect id="support-email-group" label="Assign to Group" aria-describedby="support-email-group-help" disabled={createEmail.isPending} value={formData.group_id} onValueChange={value => setFormData({ ...formData, group_id: value })} options={[{ value: '', label: '(No specific group)' }, ...(groups ?? []).map(group => ({ value: group.id, label: group.name }))]} />
+                <Field.HelperText id="support-email-group-help">
                   Tickets from this email will be automatically assigned to this group.
-                </p>
-              </div>
+                </Field.HelperText>
+              </Field.Root>
             </div>
 
             <div className={css({"minW":0})}>

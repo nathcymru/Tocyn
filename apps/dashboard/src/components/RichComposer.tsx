@@ -3,8 +3,7 @@ import { ParkAlert, ParkButton, ParkComposer, ParkDialog, ParkInput, ParkTextare
 import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Markdown } from '@tiptap/markdown';
+import { tocynMarkdownExtensions } from './tiptap-markdown';
 import { TextB, Code, CodeBlock, TextItalic, ListBullets, ListNumbers, TextH, Link as LinkIcon, LinkBreak } from '@phosphor-icons/react';
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
@@ -49,9 +48,6 @@ export type ComposerInsertionHooks = Readonly<{
 type AutocompleteOption = ComposerInsertionOption & Readonly<{ kind: InsertionKind; displayLabel: string }>;
 type Autocomplete = Readonly<{ kind: 'slash' | 'emoji'; options: readonly AutocompleteOption[] }>;
 
-export function insertMarkdownAtCursor(value: string, insertion: string, start = value.length, end = start) {
-  return `${value.slice(0, start)}${insertion}${value.slice(end)}`;
-}
 export function acceptedComposerImages(files: Iterable<Pick<File, 'type' | 'size'>>): File[] {
   return Array.from(files).filter((file): file is File => COMPOSER_IMAGE_MIME_TYPES.includes(file.type as typeof COMPOSER_IMAGE_MIME_TYPES[number]) && file.size <= COMPOSER_MAX_IMAGE_BYTES);
 }
@@ -77,7 +73,11 @@ export function findComposerAutocomplete(value: string, cursor: number, hooks: C
   return { kind, start: cursor - match[0].length + (match[0].startsWith(' ') ? 1 : 0), end: cursor, options };
 }
 function safeLink(url: string) {
-  try { const parsed = new URL(url, window.location.origin); return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : undefined; } catch { return undefined; }
+  if (!/^https?:\/\//i.test(url)) return undefined;
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !parsed.username && !parsed.password ? parsed.href : undefined;
+  } catch { return undefined; }
 }
 /** Render untrusted Markdown without executing HTML or remote image requests. */
 export function SafeMarkdown({ children, className = '' }: { children: string; className?: string }) {
@@ -89,39 +89,37 @@ export function SafeMarkdown({ children, className = '' }: { children: string; c
   }}>{children}</ReactMarkdown></div>;
 }
 
-const ToolbarButton = ({ label, active, onClick, children }: { label: string; active?: boolean; onClick: () => void; children: React.ReactNode }) => (
-  <ParkButton type="button" aria-label={label} aria-pressed={active} className={[composerStyles.toolbarButton, active ? composerStyles.toolbarButtonActive : ''].filter(Boolean).join(' ')} onMouseDown={event => event.preventDefault()} onClick={onClick}>{children}</ParkButton>
+const ToolbarButton = ({ label, active, disabled, onClick, children }: { label: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <ParkButton type="button" variant={active ? 'solid' : 'plain'} aria-label={label} aria-pressed={active} disabled={disabled} className={composerStyles.toolbarButton} onMouseDown={event => event.preventDefault()} onClick={onClick}>{children}</ParkButton>
 );
 
 /** A standalone Markdown-backed Tiptap field used by knowledge editing. */
 export function TiptapMarkdownField({ id, value, onChange, readOnly, ariaDescribedBy }: { id: string; value: string; onChange: (value: string) => void; readOnly: boolean; ariaDescribedBy?: string }) {
-  const legacyValueRef = useRef(value);
   const editor = useEditor({
-    extensions: [StarterKit, Markdown],
+    extensions: tocynMarkdownExtensions,
     content: value, contentType: 'markdown', editable: !readOnly,
     editorProps: { attributes: { id, role: 'textbox', 'aria-label': 'Content (Markdown)' } },
-    onUpdate: ({ editor: instance }) => { legacyValueRef.current = instance.getMarkdown(); if (!readOnly) onChange(legacyValueRef.current); },
+    onUpdate: ({ editor: instance }) => { if (!readOnly) onChange(instance.getMarkdown()); },
   });
   useEffect(() => { editor?.setEditable(!readOnly); }, [editor, readOnly]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy); else dom.removeAttribute('aria-describedby'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); } }, [editor, id, ariaDescribedBy]);
-  useEffect(() => { legacyValueRef.current = value; if (editor) editor.commands.setContent(value || '', { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom; dom.id = id; dom.setAttribute('aria-label', 'Content (Markdown)'); if (ariaDescribedBy) dom.setAttribute('aria-describedby', ariaDescribedBy); else dom.removeAttribute('aria-describedby'); } }, [editor, id, ariaDescribedBy]);
+  useEffect(() => { if (editor && editor.getMarkdown() !== value) editor.commands.setContent(value || '', { contentType: 'markdown', emitUpdate: false }); }, [editor, value]);
   if (!editor) return <div id={id} className={composerStyles.editor} aria-busy="true" aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} />;
   return <div className={composerStyles.editor} aria-disabled={readOnly}>
     <div className={composerStyles.toolbar} role="toolbar" aria-label="Formatting controls">
-      <ToolbarButton label="Add bold text (ctrl + b)" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><TextB weight="duotone" aria-hidden="true" /></ToolbarButton>
-      <ToolbarButton label="Add italic text (ctrl + i)" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic weight="duotone" aria-hidden="true" /></ToolbarButton>
-      <ToolbarButton label="Add heading" active={editor.isActive('heading')} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><TextH weight="duotone" aria-hidden="true" /></ToolbarButton>
-      <ToolbarButton label="Add bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets weight="duotone" aria-hidden="true" /></ToolbarButton>
-      <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
+      <ToolbarButton label="Add bold text (ctrl + b)" active={editor.isActive('bold')} disabled={readOnly} onClick={() => editor.chain().focus().toggleBold().run()}><TextB weight="duotone" aria-hidden="true" /></ToolbarButton>
+      <ToolbarButton label="Add italic text (ctrl + i)" active={editor.isActive('italic')} disabled={readOnly} onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic weight="duotone" aria-hidden="true" /></ToolbarButton>
+      <ToolbarButton label="Add heading" active={editor.isActive('heading')} disabled={readOnly} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><TextH weight="duotone" aria-hidden="true" /></ToolbarButton>
+      <ToolbarButton label="Add bullet list" active={editor.isActive('bulletList')} disabled={readOnly} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets weight="duotone" aria-hidden="true" /></ToolbarButton>
+      <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} disabled={readOnly} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
     </div>
-    <EditorContent editor={editor} className={composerStyles.editor} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onChange={event => { if (!readOnly) onChange((event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown()); }} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
+    <EditorContent editor={editor} className={composerStyles.editor} aria-label="Content (Markdown)" aria-describedby={ariaDescribedBy} onKeyDown={event => { if (readOnly) event.preventDefault(); }} />
   </div>;
 }
 
 export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImageFiles, readOnly, mode, format = 'markdown-v1', knowledge, savedResponses, onKnowledgeInserted, onSavedResponseInserted }: {
   id: string; value: string; onChange: (value: string) => void; onImageFiles: (files: readonly File[]) => void; onRejectedImageFiles: (count: number) => void; readOnly: boolean; mode: 'public' | 'internal'; format?: ArticleBodyFormat;
 } & ComposerInsertionHooks) {
-  const legacyValueRef = useRef(value);
   const hooks = { knowledge, savedResponses, onKnowledgeInserted, onSavedResponseInserted };
   const [autocomplete, setAutocomplete] = useState<(Autocomplete & { start: number; end: number }) | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -138,17 +136,16 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
   const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const focusEditorAfterLinkRef = useRef(false);
   const editor = useEditor({
-    extensions: [StarterKit, Markdown],
-    content: value,
+    extensions: tocynMarkdownExtensions,
+    content: format === 'plain' ? '' : value,
     contentType: 'markdown',
     editable: !readOnly,
     editorProps: { attributes: { id, role: 'textbox', 'aria-label': 'Reply message', 'aria-autocomplete': 'list' } },
     onUpdate: ({ editor: instance }) => {
-      if (readOnly) return;
-      const next = instance.getMarkdown(); legacyValueRef.current = next;
-      onChange(next);
-      const cursor = instance.state.selection.from - 1;
-      setAutocomplete(format === 'plain' ? null : findComposerAutocomplete(instance.state.doc.textBetween(0, instance.state.selection.from, '\n'), cursor, hooks));
+      if (readOnly || format === 'plain') return;
+      onChange(instance.getMarkdown());
+      const beforeCaret = instance.state.doc.textBetween(0, instance.state.selection.from, '\n');
+      setAutocomplete(findComposerAutocomplete(beforeCaret, beforeCaret.length, hooks));
       setActiveIndex(0);
     },
   });
@@ -168,20 +165,16 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
       dom.removeAttribute('aria-readonly');
     }
   }, [editor, readOnly]);
-  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom as HTMLElement & { value?: string }; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); Object.defineProperty(dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { if (readOnly) return; legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); editor.commands.focus('end'); } }); const onLegacyChange = () => { if (readOnly) return; const next = legacyValueRef.current; onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); }; dom.addEventListener('change', onLegacyChange); return () => dom.removeEventListener('change', onLegacyChange); } }, [editor, id, readOnly, onChange, hooks]);
+  useLayoutEffect(() => { if (editor) { const dom = editor.view.dom; dom.id = id; dom.setAttribute('aria-label', 'Reply message'); dom.setAttribute('aria-autocomplete', 'list'); } }, [editor, id]);
   useEffect(() => {
-    if (!editor || editor.getMarkdown() === value) return;
-    if (readOnly) legacyValueRef.current = value;
-    legacyValueRef.current = value; editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
-  }, [editor, value, readOnly]);
+    if (!editor || format === 'plain' || editor.getMarkdown() === value) return;
+    editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
+  }, [editor, value, readOnly, format]);
   const insert = (markdown: string, match = autocomplete) => {
     if (!editor || readOnly || !match) return;
     const { from, to } = editor.state.selection;
     const length = match.end - match.start;
     editor.chain().focus().deleteRange({ from: Math.max(1, from - length), to }).insertContent(markdown, { contentType: 'markdown' }).run();
-    legacyValueRef.current = insertMarkdownAtCursor(legacyValueRef.current, markdown, match.start, match.end);
-    onChange(legacyValueRef.current);
-    Object.defineProperty(editor.view.dom, 'value', { configurable: true, get: () => legacyValueRef.current, set: (next: string) => { legacyValueRef.current = next; editor.commands.setContent(next, { contentType: 'markdown' }); } });
     setAutocomplete(null);
   };
   const chooseAutocomplete = (option: AutocompleteOption, match = autocomplete) => {
@@ -191,26 +184,13 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     if (option.kind === 'saved-response') onSavedResponseInserted?.(inserted);
   };
   const handleEditorKeyDown = (event: React.KeyboardEvent) => {
-    if (event.defaultPrevented) return;
-    const targetValue = (event.target as HTMLElement).getAttribute?.('contenteditable') !== null ? (event.target as HTMLElement).textContent ?? '' : '';
-    const currentValue = targetValue || legacyValueRef.current;
-    if (targetValue && targetValue !== legacyValueRef.current) legacyValueRef.current = targetValue;
-    const currentAutocomplete = autocomplete ?? (format === 'plain' ? null : findComposerAutocomplete(currentValue, currentValue.length, hooks));
+    if (event.defaultPrevented || !editor || readOnly || format === 'plain') return;
+    const beforeCaret = editor.state.doc.textBetween(0, editor.state.selection.from, '\n');
+    const currentAutocomplete = autocomplete ?? findComposerAutocomplete(beforeCaret, beforeCaret.length, hooks);
     if (!currentAutocomplete) return;
     if (event.key === 'Escape') { event.preventDefault(); setAutocomplete(null); return; }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(index => (index + (event.key === 'ArrowDown' ? 1 : currentAutocomplete.options.length - 1)) % currentAutocomplete.options.length); return; }
     if (event.key === 'Enter') { event.preventDefault(); chooseAutocomplete(currentAutocomplete.options[activeIndex] ?? currentAutocomplete.options[0], currentAutocomplete); }
-  };
-  const handleLegacyInput = (event: React.FormEvent<HTMLElement>) => {
-    if (readOnly) return;
-    const target = event.currentTarget;
-    const next = target.textContent ?? '';
-    if (next === legacyValueRef.current) return;
-    legacyValueRef.current = next;
-    if (editor.getMarkdown() !== next) editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false });
-    onChange(next);
-    setAutocomplete(format === 'plain' ? null : findComposerAutocomplete(next, next.length, hooks));
-    setActiveIndex(0);
   };
   useLayoutEffect(() => {
     if (!editor) return;
@@ -252,14 +232,14 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
     closeLinkEditor();
   };
   const editorToolbar = editor && format !== 'plain' && <div className={composerStyles.toolbar} role="toolbar" aria-label="Formatting controls">
-    <ToolbarButton label="Add bold text (ctrl + b)" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><TextB weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ToolbarButton label="Add italic text (ctrl + i)" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ToolbarButton label="Add heading" active={editor.isActive('heading')} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><TextH weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ToolbarButton label="Add bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ToolbarButton label="Add numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListNumbers weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ToolbarButton label="Add inline code" active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()}><Code weight="duotone" aria-hidden="true" /></ToolbarButton>
-    <ParkButton ref={linkButtonRef} type="button" aria-label="Add link" aria-haspopup="dialog" aria-expanded={linkOpen} aria-pressed={editor.isActive('link')} disabled={readOnly} className={[composerStyles.toolbarButton, editor.isActive('link') ? composerStyles.toolbarButtonActive : ''].filter(Boolean).join(' ')} onMouseDown={event => event.preventDefault()} onClick={openLinkEditor}><LinkIcon weight="duotone" aria-hidden="true" /></ParkButton>
+    <ToolbarButton label="Add bold text (ctrl + b)" active={editor.isActive('bold')} disabled={readOnly} onClick={() => editor.chain().focus().toggleBold().run()}><TextB weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ToolbarButton label="Add italic text (ctrl + i)" active={editor.isActive('italic')} disabled={readOnly} onClick={() => editor.chain().focus().toggleItalic().run()}><TextItalic weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ToolbarButton label="Add heading" active={editor.isActive('heading')} disabled={readOnly} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><TextH weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ToolbarButton label="Add bullet list" active={editor.isActive('bulletList')} disabled={readOnly} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListBullets weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ToolbarButton label="Add numbered list" active={editor.isActive('orderedList')} disabled={readOnly} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListNumbers weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ToolbarButton label="Add code block" active={editor.isActive('codeBlock')} disabled={readOnly} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><CodeBlock weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ToolbarButton label="Add inline code" active={editor.isActive('code')} disabled={readOnly} onClick={() => editor.chain().focus().toggleCode().run()}><Code weight="duotone" aria-hidden="true" /></ToolbarButton>
+    <ParkButton ref={linkButtonRef} type="button" variant={editor.isActive('link') ? 'solid' : 'plain'} aria-label="Add link" aria-haspopup="dialog" aria-expanded={linkOpen} aria-pressed={editor.isActive('link')} disabled={readOnly} className={composerStyles.toolbarButton} onMouseDown={event => event.preventDefault()} onClick={openLinkEditor}><LinkIcon weight="duotone" aria-hidden="true" /></ParkButton>
   </div>;
   return <section ref={rootRef} aria-label="Rich message composer" onDragOver={event => { if (!readOnly && event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={receiveDrop} onPaste={receivePaste} className={composerStyles.root}>
     {format === 'markdown-v1' && <p className={composerStyles.formatHelp}>Type <kbd>/</kbd> for commands or <kbd>:</kbd> followed by an emoji name. Formatting controls use accessible rich text editing.</p>}
@@ -269,7 +249,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
       ) : (
         <div className={composerStyles.markdown} aria-busy={readOnly}>
           {editorToolbar}
-        <EditorContent editor={editor} className={composerStyles.editor} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onInput={handleLegacyInput} onChange={event => { if (!readOnly) { const next = (event.target as HTMLElement & { value?: string }).value ?? editor.getMarkdown(); legacyValueRef.current = next; if (editor.getMarkdown() !== next) editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false }); onChange(next); setAutocomplete(findComposerAutocomplete(next, next.length, hooks)); setActiveIndex(0); } }} onKeyDown={handleEditorKeyDown} />
+        <EditorContent editor={editor} className={composerStyles.editor} aria-label="Reply message" aria-autocomplete="list" aria-controls={autocomplete ? listboxId : undefined} aria-activedescendant={autocomplete ? `${listboxId}-option-${activeIndex}` : undefined} onKeyDown={handleEditorKeyDown} />
         </div>
       )}
     </div>

@@ -35,6 +35,14 @@ it('keeps labels distinct, retains failed input, and requires an explicit safe r
   }));
   renderPage();
   expect(await screen.findByText('Waiting on customer')).toBeInTheDocument();
+  for (const label of ['State ID', 'Internal label', 'Customer-visible label']) {
+    const input = screen.getByRole('textbox', { name: label });
+    const field = input.closest('[data-scope="field"][data-part="root"]');
+    expect(field).toHaveClass('field__root');
+    expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent(label);
+  }
+  expect(screen.getByRole('combobox', { name: 'Legacy lifecycle' })).toHaveAttribute('data-scope', 'select');
+  expect(screen.getByText('Legacy lifecycle').closest('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
   expect(screen.getByText('Waiting on customer').closest('[class*="card__root"]')).toBeInTheDocument();
   expect(screen.getByText('Customer label: We need your reply · Legacy lifecycle: pending')).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('State ID'), { target: { value: 'awaiting-customer' } });
@@ -46,6 +54,8 @@ it('keeps labels distinct, retains failed input, and requires an explicit safe r
   expect(saveError.querySelector('.alert__description')).toHaveTextContent('Duplicate state ID');
   expect(screen.getByLabelText('Internal label')).toHaveValue('Still waiting');
   fireEvent.click(screen.getByRole('button', { name: 'Deactivate Waiting on customer' }));
+  expect(screen.getByRole('combobox', { name: 'Replacement state' })).toHaveAttribute('data-scope', 'select');
+  expect(screen.getByText('Replacement state').closest('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
   fireEvent.click(screen.getByRole('button', { name: 'Remap and deactivate' }));
   expect(screen.getByRole('alert').querySelector('.alert__description')).toHaveTextContent('Choose an active replacement');
   await userEvent.click(screen.getByRole('combobox', { name: 'Replacement state' }));

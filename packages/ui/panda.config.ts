@@ -474,14 +474,13 @@ export default {
         },
         composer: {
           className: 'composer',
-          slots: ['root', 'formatHelp', 'markdown', 'toolbar', 'toolbarButton', 'toolbarButtonActive', 'input', 'editor', 'autocomplete', 'autocompleteOption', 'dropHelp', 'preview', 'previewSummary', 'previewBody'],
+          slots: ['root', 'formatHelp', 'markdown', 'toolbar', 'toolbarButton', 'input', 'editor', 'autocomplete', 'autocompleteOption', 'dropHelp', 'preview', 'previewSummary', 'previewBody'],
           base: {
             root: { position: 'relative', display: 'grid', minWidth: '0', gap: '0.75rem' },
             formatHelp: { margin: '0', color: 'text.muted', fontSize: '0.875rem' },
             markdown: { display: 'grid', minWidth: '0', overflow: 'hidden', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.input' },
             toolbar: { display: 'flex', flexWrap: 'wrap', gap: '0.25rem', borderBottom: '1px solid', borderColor: 'border.input', background: 'bg.surface', padding: '0.375rem' },
-            toolbarButton: { minWidth: '2.5rem', minHeight: '2.5rem', padding: '0.5rem', color: 'icon.primary', background: 'transparent', _hover: { background: 'bg.subtle' } },
-            toolbarButtonActive: { background: 'bg.subtle', color: 'text.primary' },
+            toolbarButton: { minWidth: '2.5rem', minHeight: '2.5rem', padding: '0.5rem' },
             input: { minHeight: '12rem', resize: 'vertical' },
             editor: { minHeight: '12rem', padding: '1rem', bg: 'bg.input', color: 'text.primary', fontFamily: 'primary', lineHeight: '1.5', '& .ProseMirror': { minHeight: '10rem', bg: 'bg.input', color: 'text.primary', fontFamily: 'primary', overflowWrap: 'anywhere', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } }, '& .ProseMirror code': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' } },
             autocomplete: { position: 'absolute', zIndex: '10', maxWidth: '24rem', maxHeight: '15rem', overflowY: 'auto', border: '1px solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.surface', padding: '0.25rem', boxShadow: 'sm' },

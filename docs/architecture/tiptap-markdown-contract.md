@@ -24,6 +24,13 @@ requests and unsafe attributes are removed by the existing sanitised preview and
 renderer. A malformed or unsupported image is shown as omitted content and does not
 trigger an upload.
 
+GFM tables use a literal text block in the editor. Their source text stays visible
+and survives parse and save, including when supported Markdown appears around them.
+The editor keeps unsupported link Markdown in stored text, but only explicit HTTP
+and HTTPS destinations without embedded credentials become clickable. Inline image
+references retain their Markdown source while the editor displays a non-fetching
+placeholder; it never creates a remote `<img>` element.
+
 Images are accepted only for JPEG, PNG, GIF and WebP files no larger than 10 MiB.
 Accepted files continue through the existing authorised attachment upload callback;
 rejected files remain rejected with the existing count/error feedback.

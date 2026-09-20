@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { Field } from '@luminatick/ui/components';
 import { ParkAlert, ParkButton, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../api/client';
@@ -8,9 +9,8 @@ import type { KnowledgeDoc } from '../types';
 const styles = {
   root: css({ display: 'grid', gap: '1rem', minWidth: '0', color: 'text.primary' }),
   search: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '0.75rem' }),
-  label: css({ display: 'grid', gap: '0.375rem', flex: '1 1 15rem', fontWeight: 'medium' }),
+  field: css({ flex: '1 1 15rem', minW: '0' }),
   input: css({ width: 'full' }),
-  help: css({ flexBasis: '100%', margin: '0', color: 'text.muted', fontSize: 'sm' }),
   results: css({ display: 'grid', gap: '0.5rem', margin: '0', padding: '0', listStyle: 'none' }),
   result: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', padding: '0.75rem' }),
   preview: css({ display: 'grid', gap: '0.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', padding: '1rem' }),
@@ -24,6 +24,7 @@ export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: 
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState(false);
+  const searchId = useId();
   const [preview, setPreview] = useState<{ article: KnowledgeDoc; status: 'loading' | 'ready' | 'error'; text?: string; truncated?: boolean } | null>(null);
   const generation = useRef(0);
   const active = useRef(false);
@@ -49,8 +50,11 @@ export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: 
   return <div className={styles.root}>
     {inserting && <p role="status">Loading {inserting.title} for insertion…</p>}
     <form onSubmit={event => { event.preventDefault(); setQuery(input.trim()); setSearched(true); }} className={styles.search}>
-      <label className={styles.label}>Search knowledge titles<ParkInput value={input} onChange={event => setInput(event.target.value)} className={styles.input} /></label>
-      <p className={styles.help}>Searches titles of the available internal knowledge articles.</p>
+      <Field.Root className={styles.field}>
+        <Field.Label htmlFor={searchId}>Search knowledge titles</Field.Label>
+        <ParkInput id={searchId} aria-describedby={`${searchId}-help`} value={input} onChange={event => setInput(event.target.value)} className={styles.input} />
+        <Field.HelperText id={`${searchId}-help`}>Searches titles of the available internal knowledge articles.</Field.HelperText>
+      </Field.Root>
       <ParkButton type="submit">Search titles</ParkButton>{searched && <ParkButton type="button" onClick={() => { setInput(''); setQuery(''); setSearched(true); }}>Clear knowledge search</ParkButton>}
     </form>
     {searched && <p role="status">{visible.length} matching knowledge article{visible.length === 1 ? '' : 's'}.</p>}

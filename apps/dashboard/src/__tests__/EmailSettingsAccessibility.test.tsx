@@ -18,6 +18,13 @@ it('keeps provider failure visible independently of add email, prevents duplicat
  api.put.mockImplementationOnce(()=>new Promise((_r,j)=>{reject=j;})).mockResolvedValueOnce({});
  open();const from=await screen.findByLabelText('Default From Email');
  await waitFor(()=>expect(from).toHaveValue('support@example.invalid'));
+ for(const label of ['Resend API Key','Default From Email']){
+  const input=screen.getByLabelText(label);
+  const field=input.closest('[data-scope="field"][data-part="root"]');
+  expect(field).toHaveClass('field__root');
+  expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent(label);
+  expect(document.getElementById(input.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
+ }
  fireEvent.change(from,{target:{value:'changed@example.invalid'}});
  await act(async()=>{await client.invalidateQueries({queryKey:['settings']});});
  expect(from).toHaveValue('changed@example.invalid');
@@ -45,6 +52,15 @@ it('labels the add form, guards pending creation and retains failed entries with
  let reject!:(e:Error)=>void;api.post.mockImplementationOnce(()=>new Promise((_r,j)=>{reject=j;}));
  open();const opener=screen.getByRole('button',{name:'Add Email'});fireEvent.click(opener);
  const email=screen.getByLabelText('Email Address *');expect(email).toHaveFocus();
+ for(const label of ['Email Address *','Display Name']){
+  const input=screen.getByLabelText(label);
+  expect(input.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
+  expect(input.closest('[data-scope="field"][data-part="root"]')?.querySelector('[data-part="label"]')).toHaveClass('field__label');
+ }
+ const group=screen.getByRole('combobox',{name:'Assign to Group'});
+ expect(group).toHaveAttribute('data-scope','select');
+ expect(screen.getByText('Assign to Group').closest('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
+ expect(document.getElementById(group.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
  fireEvent.change(email,{target:{value:'new@example.invalid'}});
  fireEvent.change(screen.getByLabelText('Display Name'),{target:{value:'Synthetic support'}});
  await userEvent.click(screen.getByRole('combobox',{name:'Assign to Group'}));

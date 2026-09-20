@@ -9,7 +9,13 @@ const articles=[{id:'a',title:'Password guide'},{id:'b',title:'Billing guide'}] 
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 function show(){const insert=vi.fn();const view=render(<KnowledgeBrowser articles={articles} disabled={false} onInsert={insert}/>);return {insert,...view};}
 it('searches titles only on explicit submission and clears a no-match query',()=>{
- show();fireEvent.change(screen.getByLabelText('Search knowledge titles'),{target:{value:'PASSWORD'}});
+ show();
+ const search=screen.getByRole('textbox',{name:'Search knowledge titles'});
+ const field=search.closest('[data-scope="field"][data-part="root"]');
+ expect(field).toHaveClass('field__root');
+ expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent('Search knowledge titles');
+ expect(document.getElementById(search.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
+ fireEvent.change(search,{target:{value:'PASSWORD'}});
  expect(screen.queryByRole('status')).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Search titles'}));
  expect(screen.getByRole('status')).toHaveTextContent('1 matching');expect(screen.queryByRole('button',{name:'Preview Billing guide'})).not.toBeInTheDocument();
  fireEvent.change(screen.getByLabelText('Search knowledge titles'),{target:{value:'unknown'}});fireEvent.click(screen.getByRole('button',{name:'Search titles'}));expect(screen.getByText('No knowledge titles match this search.')).toBeInTheDocument();

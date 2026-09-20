@@ -1,4 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
+import { Field } from '@luminatick/ui/components';
 import { ParkAlert, ParkButton, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useRef, useState } from 'react';
@@ -84,18 +85,20 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
           <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
         </ParkAlert.Root>}
         <div className={css({ display: 'grid', gridTemplateColumns: { base: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: '4' })}>
-          <div className={css({ display: 'grid', gap: '1', minW: 0 })}>
-            <label htmlFor="create-ticket-subject">Subject</label>
+          <Field.Root required className={css({ minW: 0 })}>
+            <Field.Label htmlFor="create-ticket-subject">Subject</Field.Label>
             <ParkInput id="create-ticket-subject" ref={subject} required readOnly={pending}
-              aria-describedby={error ? 'create-ticket-error' : undefined} value={draft.subject}
+              aria-describedby={`create-ticket-subject-help${error ? ' create-ticket-error' : ''}`} value={draft.subject}
               onChange={event => update('subject', event.target.value)} />
-          </div>
-          <div className={css({ display: 'grid', gap: '1', minW: 0 })}>
-            <label htmlFor="create-ticket-customer_email">Customer Email</label>
+            <Field.HelperText id="create-ticket-subject-help">A short title for this conversation.</Field.HelperText>
+          </Field.Root>
+          <Field.Root required className={css({ minW: 0 })}>
+            <Field.Label htmlFor="create-ticket-customer_email">Customer Email</Field.Label>
             <ParkInput id="create-ticket-customer_email" type="email" required readOnly={pending}
-              aria-describedby={error ? 'create-ticket-error' : undefined} value={draft.customer_email}
+              aria-describedby={`create-ticket-customer-help${error ? ' create-ticket-error' : ''}`} value={draft.customer_email}
               onChange={event => update('customer_email', event.target.value)} />
-          </div>
+            <Field.HelperText id="create-ticket-customer-help">The customer who will receive replies.</Field.HelperText>
+          </Field.Root>
           <DashboardSelect id="create-ticket-priority" label="Priority" disabled={pending} value={draft.priority}
             onValueChange={value => update('priority', value)} options={[
               { value: 'low', label: 'Low' }, { value: 'normal', label: 'Normal' },
@@ -110,12 +113,13 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
               { value: '', label: 'Unassigned' }, ...(Array.isArray(agents) ? agents.map(agent => ({ value: agent.id, label: agent.full_name || agent.email })) : []),
             ]} />
         </div>
-        <div className={css({ display: 'grid', gap: '1', minW: 0 })}>
-          <label htmlFor="create-ticket-body">Initial Message</label>
+        <Field.Root required className={css({ minW: 0 })}>
+          <Field.Label htmlFor="create-ticket-body">Initial Message</Field.Label>
           <ParkTextarea id="create-ticket-body" rows={4} required readOnly={pending}
-            aria-describedby={error ? 'create-ticket-error' : undefined} value={draft.body}
+            aria-describedby={`create-ticket-body-help${error ? ' create-ticket-error' : ''}`} value={draft.body}
             onChange={event => update('body', event.target.value)} />
-        </div>
+          <Field.HelperText id="create-ticket-body-help">The first message in the conversation.</Field.HelperText>
+        </Field.Root>
       </form>
     </ParkDialog.Body>
     <ParkDialog.Footer>

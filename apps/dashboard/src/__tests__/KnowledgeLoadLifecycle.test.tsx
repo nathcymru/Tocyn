@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -53,6 +54,14 @@ afterEach(() => {cleanup();client?.clear();useAuthStore.getState().logout();pres
 
 const answer = (title = 'Synthetic answer') => [{id:'answer',title,status:'active',tier:'answer'}];
 async function openKnowledge() { fireEvent.click(await screen.findByRole('button',{name:'Show ticket context'})); await screen.findByText('Loading tenant knowledge…'); }
+async function setReplyText(value: string) {
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  editor.focus();
+  await userEvent.clear(editor);
+  await userEvent.type(editor, value, { skipClick: true });
+  return editor;
+}
+const editorParagraphs = (editor: HTMLElement) => Array.from(editor.querySelectorAll('p'), paragraph => paragraph.textContent);
 
 it('loads eligible knowledge and inserts it after existing draft text with feedback and focus', async () => {
   const f=show();await openKnowledge();
@@ -60,10 +69,9 @@ it('loads eligible knowledge and inserts it after existing draft text with feedb
   const insert=await screen.findByRole('button',{name:'Insert Synthetic answer into reply'});
   expect(screen.queryByText('Loading tenant knowledge…')).not.toBeInTheDocument();
   expect(screen.queryByRole('button',{name:/Pending hidden/})).not.toBeInTheDocument();
-  const editor=document.getElementById('reply-message')!;
-  fireEvent.change(editor,{target:{value:'Keep draft'}});fireEvent.click(insert);
+  const editor=await setReplyText('Keep draft');fireEvent.click(insert);
   await screen.findByText('Inserted knowledge: Synthetic answer');
-  await waitFor(()=>expect(editor).toHaveValue('Keep draft\n\nVerified synthetic answer'));
+  await waitFor(()=>expect(editorParagraphs(editor)).toEqual(['Keep draft','Verified synthetic answer']));
   await waitFor(()=>expect(editor).toHaveFocus());
 });
 
@@ -97,33 +105,33 @@ it.each(['ticket','identity'])('discards a pending response after %s remount', a
 
 it('inserts into the latest draft after a pending fresh content read', async () => {
   const f=show(true);await openKnowledge();await act(async()=>f.pending[0](json(answer())));
-  const editor=document.getElementById('reply-message')!;fireEvent.change(editor,{target:{value:'Original'}});
+  const editor=await setReplyText('Original');
   fireEvent.click(await screen.findByRole('button',{name:'Insert Synthetic answer into reply'}));
-  await waitFor(()=>expect(f.contentPending).toHaveLength(1));expect(screen.getByText('Loading Synthetic answer for insertion…')).toBeInTheDocument();fireEvent.change(editor,{target:{value:'Original plus new typing'}});
+  await waitFor(()=>expect(f.contentPending).toHaveLength(1));expect(screen.getByText('Loading Synthetic answer for insertion…')).toBeInTheDocument();await setReplyText('Original plus new typing');
   await act(async()=>f.contentPending[0](json({content:'Verified synthetic answer'})));
-  await waitFor(()=>expect(editor).toHaveValue('Original plus new typing\n\nVerified synthetic answer'));
+  await waitFor(()=>expect(editorParagraphs(editor)).toEqual(['Original plus new typing','Verified synthetic answer']));
   await screen.findByText('Inserted knowledge: Synthetic answer');await waitFor(()=>expect(editor).toHaveFocus());
 });
 
 
 it('previews content without changing the mounted conversation draft', async () => {
   const f=show();await openKnowledge();await act(async()=>f.pending[0](json(answer())));
-  const editor=document.getElementById('reply-message')!;fireEvent.change(editor,{target:{value:'Keep preview draft'}});
+  const editor=await setReplyText('Keep preview draft');
   fireEvent.click(await screen.findByRole('button',{name:'Preview Synthetic answer'}));await screen.findByText('Verified synthetic answer');
-  expect(editor).toHaveValue('Keep preview draft');expect(screen.queryByText('Inserted knowledge: Synthetic answer')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Close preview'}));expect(screen.getByRole('button',{name:'Preview Synthetic answer'})).toHaveFocus();expect(editor).toHaveValue('Keep preview draft');
+  expect(editor).toHaveTextContent('Keep preview draft');expect(screen.queryByText('Inserted knowledge: Synthetic answer')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Close preview'}));expect(screen.getByRole('button',{name:'Preview Synthetic answer'})).toHaveFocus();expect(editor).toHaveTextContent('Keep preview draft');
 });
 
 
 it('does not restore discarded text or announce insertion after a pending content read', async () => {
   const f=show(true);await openKnowledge();await act(async()=>f.pending[0](json(answer())));
-  const editor=document.getElementById('reply-message')!;fireEvent.change(editor,{target:{value:'Discard this draft'}});
+  const editor=await setReplyText('Discard this draft');
   fireEvent.click(await screen.findByRole('button',{name:'Insert Synthetic answer into reply'}));
   await waitFor(()=>expect(f.contentPending).toHaveLength(1));
   fireEvent.click(await screen.findByRole('button',{name:'Discard draft'}));
   await screen.findByText('Draft discarded.');
   await act(async()=>f.contentPending[0](json({content:'Late content must not return'})));
-  expect(editor).toHaveValue('');
+  expect(editor.textContent).toBe('');
   expect(screen.queryByText('Inserted knowledge: Synthetic answer')).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Insert Synthetic answer into reply'})).toBeEnabled();
 });

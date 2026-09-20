@@ -26,6 +26,11 @@ it('retains a failed draft and sends its labelled conditions on retry',async()=>
  fireEvent.click(within(dialog).getByRole('button',{name:'Add Condition'}));
  expect(within(dialog).getByRole('combobox',{name:'Condition 1 field'})).toBeInTheDocument();
  expect(within(dialog).getByRole('combobox',{name:'Condition 1 operator'})).toBeInTheDocument();
+ expect(name.closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();
+ expect(name).toHaveAccessibleDescription('Give this saved view a name your team can recognise.');
+ expect(within(dialog).getByRole('combobox',{name:'Condition 1 field'}).closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('Condition 1 field');
+ expect(within(dialog).getByRole('combobox',{name:'Condition 1 operator'}).closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('Condition 1 operator');
+ expect(within(dialog).getByRole('textbox',{name:'Condition 1 value'}).closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();
  fireEvent.change(within(dialog).getByRole('textbox',{name:'Condition 1 value'}),{target:{value:'open'}});
  fireEvent.submit(within(dialog).getByRole('form'));
  expect(await screen.findByRole('alert')).toHaveTextContent('Your changes have been kept');expect(name).toHaveValue('Keep my draft');

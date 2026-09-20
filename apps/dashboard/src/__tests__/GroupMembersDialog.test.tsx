@@ -116,8 +116,13 @@ it('creates through labelled fields, retaining a failed draft and guarding dupli
  let reject!:(error:Error)=>void;fixture.create.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
  render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Create Group'});opener.focus();fireEvent.click(opener);
  const dialog=await screen.findByRole('dialog',{name:'New Support Group'});const name=within(dialog).getByRole('textbox',{name:'Group Name'});
+ expect(name.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
+ expect(name).toHaveAccessibleDescription('Use a short, clear team name.');
+ const description=within(dialog).getByRole('textbox',{name:'Description (Optional)'});
+ expect(description.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
+ expect(description).toHaveAccessibleDescription('Summarise the tickets this team handles.');
  await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'New team'}});
- fireEvent.change(within(dialog).getByRole('textbox',{name:'Description (Optional)'}),{target:{value:'Synthetic team'}});
+ fireEvent.change(description,{target:{value:'Synthetic team'}});
  const form=within(dialog).getByRole('form');fireEvent.submit(form);fireEvent.submit(form);expect(fixture.create).toHaveBeenCalledTimes(1);
  expect(name).toBeDisabled();expect(within(dialog).getByRole('button',{name:'Close group editor'})).toBeDisabled();
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();

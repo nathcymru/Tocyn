@@ -751,6 +751,13 @@ it('keeps a failed New Ticket draft and retries the same validated payload in th
   fireEvent.click(screen.getByRole('button',{name:'New Ticket'}));
   const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
   const subject=within(dialog).getByRole('textbox',{name:'Subject'});
+  for(const label of ['Subject','Customer Email','Initial Message']){
+    const input=within(dialog).getByRole('textbox',{name:label});
+    const field=input.closest('[data-scope="field"][data-part="root"]');
+    expect(field).toHaveClass('field__root');
+    expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent(label);
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
+  }
   fireEvent.change(subject,{target:{value:'Operator-created follow-up'}});
   fireEvent.change(within(dialog).getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
   const message=within(dialog).getByRole('textbox',{name:'Initial Message'});
@@ -761,8 +768,8 @@ it('keeps a failed New Ticket draft and retries the same validated payload in th
   expect(alert).toHaveAttribute('id','create-ticket-error');
   expect(alert).toHaveClass('alert__root');
   expect(alert.querySelector('.alert__description')).toHaveTextContent('Creation is temporarily unavailable');
-  expect(subject).toHaveAttribute('aria-describedby','create-ticket-error');
-  expect(message).toHaveAttribute('aria-describedby','create-ticket-error');
+  expect(subject).toHaveAttribute('aria-describedby','create-ticket-subject-help create-ticket-error');
+  expect(message).toHaveAttribute('aria-describedby','create-ticket-body-help create-ticket-error');
   expect(subject).toHaveValue('Operator-created follow-up');
   expect(message).toHaveValue('Synthetic operator message');
   created=true;

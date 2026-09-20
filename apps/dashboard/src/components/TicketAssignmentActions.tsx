@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkButton, ParkTextarea } from '@luminatick/ui/park';
+import { Field as ParkField } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useTicketAssignment } from '../hooks/useTicketAssignment';
 import { useAuthStore } from '../store/authStore';
@@ -56,9 +57,11 @@ function AssignmentPanel({ ticketId, ownerId, fresh, disabled, agents, refreshTi
         <p className={assignmentStyles.note}>Administrators can explicitly override availability or the assignment ceiling. Current access rules still apply. The reason is recorded in the internal audit.</p>
         <p>Current owner: {ownerId === null ? 'Unassigned' : agents.find(agent => agent.id === ownerId)?.full_name || 'Assigned operator'}</p>
         <DashboardSelect id={ownerIdInput} label="Assign to operator" value={selected} disabled={action.blocked} onValueChange={setSelected} options={[{ value: '', label: 'Choose an operator' }, ...agents.map(agent => ({ value: agent.id, label: agent.full_name || agent.email }))]} />
-        <label htmlFor={reasonId}>Override reason</label>
-        <ParkTextarea id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
-        <p>A reason is required. Keep it brief.</p>
+        <ParkField.Root>
+          <ParkField.Label htmlFor={reasonId}>Override reason</ParkField.Label>
+          <ParkTextarea id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
+          <ParkField.HelperText>A reason is required. Keep it brief.</ParkField.HelperText>
+        </ParkField.Root>
         {reason.trim() && !reasonValid && <ParkAlert.Root role="alert" status="error" variant="surface">
           <ParkAlert.Content><ParkAlert.Description>The reason is too long. Shorten it before assigning.</ParkAlert.Description></ParkAlert.Content>
         </ParkAlert.Root>}

@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, insertMarkdownAtCursor, RichComposer, SafeMarkdown, TIPTAP_MARKDOWN_CONTRACT } from '../components/RichComposer';
-import StarterKit from '@tiptap/starter-kit';
+import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, RichComposer, SafeMarkdown, TIPTAP_MARKDOWN_CONTRACT } from '../components/RichComposer';
 import { MarkdownManager } from '@tiptap/markdown';
+import { tocynMarkdownExtensions } from '../components/tiptap-markdown';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -11,24 +12,16 @@ function editorFor(name = 'Reply message') {
   return screen.getByRole('textbox', { name: name }) as HTMLElement;
 }
 
-/** Drive the real Tiptap contenteditable instead of emulating a textarea value. */
-function setEditorText(editor: HTMLElement, value: string) {
+/** Enter draft text through ProseMirror's contenteditable keyboard path. */
+async function setEditorText(editor: HTMLElement, value: string) {
   editor.focus();
-  // RichComposer exposes a compatibility value setter while the DOM surface
-  // remains a Tiptap contenteditable. It also places the ProseMirror cursor at
-  // the end, which makes the following keyboard interaction deterministic.
-  (editor as HTMLElement & { value?: string }).value = value;
-  fireEvent.change(editor);
+  await userEvent.clear(editor);
+  await userEvent.type(editor, value, { skipClick: true });
 }
 
 function expectEditorText(editor: HTMLElement, value: string) {
   expect(editor).toHaveTextContent(value);
 }
-
-it('inserts bounded composer content at the selected range', () => {
-  expect(insertMarkdownAtCursor('Hello customer', 'team ', 6, 6)).toBe('Hello team customer');
-  expect(insertMarkdownAtCursor('Hello customer', 'operator', 6, 14)).toBe('Hello operator');
-});
 
 it('accepts only the image types and size accepted by the authenticated upload route', () => {
   const accepted = { type: 'image/png', size: COMPOSER_MAX_IMAGE_BYTES } as File;
@@ -51,7 +44,7 @@ it('round-trips the supported markdown-v1 nodes and marks without changing meani
   expect(TIPTAP_MARKDOWN_CONTRACT.nodes).toContain('taskList');
   expect(TIPTAP_MARKDOWN_CONTRACT.marks).toEqual(['bold', 'italic', 'strike', 'code', 'link']);
   const markdown = '# Title\n\n**bold** and *italic* ~~strike~~ with `code`\n\n- one\n- two\n\n> quote\n\n```\nconst value = true\n```';
-  const manager = new MarkdownManager({ extensions: [StarterKit] });
+  const manager = new MarkdownManager({ extensions: tocynMarkdownExtensions });
   const roundTrip = manager.serialize(manager.parse(markdown));
   expect(roundTrip).toContain('# Title');
   expect(roundTrip).toContain('**bold**');
@@ -83,6 +76,14 @@ it('keeps approved HTTP links readable and isolated from the opener', () => {
   expect(link).toHaveAttribute('target', '_blank');
   expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   expect(link).toHaveClass('link', 'link--variant_underline');
+});
+
+it('keeps unsupported preview links as text without making them actionable', () => {
+  render(<SafeMarkdown children={'[relative](/help) [credentials](https://user:secret@example.invalid/help)'} />);
+  expect(screen.queryByRole('link', { name: 'relative' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'credentials' })).not.toBeInTheDocument();
+  expect(screen.getByText('relative')).toBeInTheDocument();
+  expect(screen.getByText('credentials')).toBeInTheDocument();
 });
 
 it('uses the Park link dialog and rejects unsafe URLs without changing the draft', async () => {
@@ -147,19 +148,19 @@ it('applies and removes an HTTP link on the selected editor text', async () => {
   expect(editor).toHaveTextContent('Link text');
 });
 
-it('autocompletes bounded slash commands and emoji with keyboard controls', () => {
+it('autocompletes bounded slash commands and emoji with keyboard controls', async () => {
   function ControlledComposer() {
     const [value, setValue] = useState('');
     return <RichComposer id="rich-composer-test" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />;
   }
   render(<ControlledComposer />);
   const editor = editorFor();
-  setEditorText(editor, '/g');
+  await setEditorText(editor, '/g');
   expect(screen.getByRole('listbox', { name: 'Slash command suggestions' })).toBeInTheDocument();
   expect(editor).toHaveAttribute('aria-activedescendant');
   fireEvent.keyDown(editor, { key: 'Enter' });
   expectEditorText(editor, 'Hello,');
-  setEditorText(editor, ':ch');
+  await setEditorText(editor, ':ch');
   expect(screen.getByRole('listbox', { name: 'Emoji suggestions' })).toBeInTheDocument();
   fireEvent.keyDown(editor, { key: 'Enter' });
   expectEditorText(editor, '✅');
@@ -172,7 +173,7 @@ it('moves an autocomplete suggestion with arrows and closes it with Escape witho
   }
   render(<ControlledComposer />);
   const editor = editorFor();
-  setEditorText(editor, '/');
+  await setEditorText(editor, '/');
   await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2));
   const firstId = editor.getAttribute('aria-activedescendant');
   fireEvent.keyDown(editor, { key: 'ArrowDown' });
@@ -182,29 +183,31 @@ it('moves an autocomplete suggestion with arrows and closes it with Escape witho
   expect(editor).toHaveFocus();
 });
 
-it('inserts caller-supplied knowledge and saved-response entries and reports their typed callbacks', () => {
+it('inserts caller-supplied knowledge and saved-response entries and reports their typed callbacks', async () => {
   const onKnowledgeInserted = vi.fn();
   const onSavedResponseInserted = vi.fn();
   const knowledge = { id: 'kb-reset', label: 'Reset password', markdown: 'Use the reset link.' };
   const savedResponse = { id: 'saved-hours', label: 'Support hours', markdown: 'We are available Monday to Friday.' };
   function ControlledComposer() {
     const [value, setValue] = useState('');
-    return <RichComposer id="insertion-hooks" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public"
-      knowledge={[knowledge]} savedResponses={[savedResponse]} onKnowledgeInserted={onKnowledgeInserted} onSavedResponseInserted={onSavedResponseInserted} />;
+    return <><output data-testid="stored-markdown">{value}</output><RichComposer id="insertion-hooks" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public"
+      knowledge={[knowledge]} savedResponses={[savedResponse]} onKnowledgeInserted={onKnowledgeInserted} onSavedResponseInserted={onSavedResponseInserted} /></>;
   }
   render(<ControlledComposer />);
   const editor = editorFor();
-  setEditorText(editor, '/reset');
+  await setEditorText(editor, '/reset');
   fireEvent.keyDown(editor, { key: 'Enter' });
   expectEditorText(editor, 'Use the reset link.');
+  expect(screen.getByTestId('stored-markdown').textContent).toBe('Use the reset link.');
   expect(onKnowledgeInserted).toHaveBeenCalledWith(knowledge);
-  setEditorText(editor, '/hours');
+  await setEditorText(editor, '/hours');
   fireEvent.keyDown(editor, { key: 'Enter' });
   expectEditorText(editor, 'We are available Monday to Friday.');
+  expect(screen.getByTestId('stored-markdown').textContent).toBe('We are available Monday to Friday.');
   expect(onSavedResponseInserted).toHaveBeenCalledWith(savedResponse);
 });
 
-it('fences editor and already-open insert controls when composition becomes read-only', () => {
+it('fences editor and already-open insert controls when composition becomes read-only', async () => {
   const onChange = vi.fn();
   function ControlledReadOnlyComposer() {
     const [readOnly, setReadOnly] = useState(false);
@@ -212,7 +215,7 @@ it('fences editor and already-open insert controls when composition becomes read
   }
   render(<ControlledReadOnlyComposer />);
   const editor = editorFor();
-  setEditorText(editor, '/');
+  await setEditorText(editor, '/');
   expect(screen.getByRole('listbox')).toBeInTheDocument();
   onChange.mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'Lock composer' }));
@@ -220,18 +223,19 @@ it('fences editor and already-open insert controls when composition becomes read
   expect(screen.getByRole('button', { name: 'Add link' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Add bold text (ctrl + b)' }));
   expectEditorText(editor, 'draft');
-  setEditorText(editor, 'changed after lock');
+  editor.focus();
+  await userEvent.keyboard('changed after lock');
   expect(onChange).not.toHaveBeenCalled();
 });
 
-it('keeps cursor insertion scoped to its own composer instance', () => {
+it('keeps cursor insertion scoped to its own composer instance', async () => {
   function TwoComposers() {
     const [first, setFirst] = useState('first'); const [second, setSecond] = useState('second');
     return <><RichComposer id="first-composer" value={first} onChange={setFirst} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" /><RichComposer id="second-composer" value={second} onChange={setSecond} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" /></>;
   }
   render(<TwoComposers />);
   const first = screen.getAllByRole('textbox', { name: 'Reply message' })[0] as HTMLElement;
-  setEditorText(first, ':ch');
+  await setEditorText(first, ':ch');
   fireEvent.keyDown(first, { key: 'Enter' });
   expectEditorText(first, '✅');
   expectEditorText(screen.getAllByRole('textbox', { name: 'Reply message' })[1] as HTMLElement, 'second');
@@ -254,5 +258,6 @@ it('keeps the safe preview as the only available preview mode', () => {
   const editor = screen.getByRole('textbox', { name: 'Reply message' });
   fireEvent.keyDown(editor, { key: '8', code: 'Digit8', ctrlKey: true });
   expect(document.querySelector('img')).not.toBeInTheDocument();
-  expect(screen.getByText('[Image omitted: remote]')).toBeInTheDocument();
+  expect(editor.querySelector('[data-tocyn-image]')).toHaveTextContent('[Image omitted: remote]');
+  expect(screen.getAllByText('[Image omitted: remote]')).toHaveLength(2);
 });

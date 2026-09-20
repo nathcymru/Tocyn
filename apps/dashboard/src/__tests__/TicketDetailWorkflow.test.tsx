@@ -77,6 +77,14 @@ async function chooseSelect(name: string, option: string) {
   await userEvent.click(screen.getByRole('combobox', { name }));
   await userEvent.click(await screen.findByRole('option', { name: option }));
 }
+async function typeRichReply(value: string) {
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  expect(editor).toHaveAttribute('contenteditable', 'true');
+  editor.focus();
+  await userEvent.clear(editor);
+  await userEvent.type(editor, value, { skipClick: true });
+  return editor;
+}
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
   ticket=initialTicket();vi.stubGlobal('WebSocket',Socket);vi.stubGlobal('alert',vi.fn());
@@ -155,10 +163,10 @@ it('snapshots native file selection before clearing the input and preserves expl
   let nativeFiles = [file];
   Object.defineProperty(input, 'files', { configurable: true, get: () => nativeFiles });
   Object.defineProperty(input, 'value', { configurable: true, get: () => '', set: () => { nativeFiles = []; } });
-  // A browser clears FileList when value is cleared. Queue another update so the
-  // attachment updater executes after the event, rather than an eager test-only path.
+  // A browser clears FileList when value is cleared. Enter an actual reply
+  // before the queued attachment update rather than relying on a fake value.
+  await typeRichReply('Draft');
   act(() => {
-    fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Draft' } });
     fireEvent.change(input);
   });
   const remove = await screen.findByRole('button', { name: 'Remove selected.txt' });
@@ -623,23 +631,22 @@ it('preserves a rejected reply draft and recovers once, refreshing both detail a
     return json(ticket);
   });
   showDetail();await screen.findByText('Customer question');
-  const composer=screen.getByRole('textbox',{name:'Reply message'});
-  fireEvent.change(composer,{target:{value:'Synthetic public reply'}});
+  const composer=await typeRichReply('Synthetic public reply');
   screen.getByRole('button',{name:'Send Reply'}).focus();
   fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
   await waitFor(()=>expect(composer).toHaveAttribute('readonly'));
   expect(document.activeElement).toBe(screen.getByRole('button',{name:'Send Reply'}));
-  fireEvent.change(composer,{target:{value:'Ignored pending edit'}});
-  expect(composer).toHaveValue('Synthetic public reply');
+  composer.focus();await userEvent.keyboard('Ignored pending edit');
+  expect(composer).toHaveTextContent('Synthetic public reply');
   fireEvent.click(screen.getByRole('tab',{name:'Internal Note'}));
   expect(screen.getByRole('tab',{name:'Public Reply'})).toHaveAttribute('aria-selected','true');
   fireEvent.submit(composer.closest('form')!);expect(posts).toBe(1);
   pending.resolve(json({error:'Reply temporarily unavailable'},503));
   expect(await screen.findByRole('alert')).toHaveTextContent('Reply temporarily unavailable');
-  expect(composer).toHaveValue('Synthetic public reply');
+  expect(composer).toHaveTextContent('Synthetic public reply');
   fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
   await screen.findByText('Synthetic public reply',{selector:'div'});
-  expect(composer).toHaveValue('');
+  expect(composer.textContent).toBe('');
   expect(posts).toBe(2);
   expect(client.getQueryState(['tickets',{}])?.isInvalidated).toBe(true);
   expect(window.alert).not.toHaveBeenCalled();
@@ -659,7 +666,7 @@ it('does not expose or send mention fields when the route has not advertised dur
   await userEvent.keyboard('{Enter}');
   await waitFor(() => expect(screen.getByRole('tab', { name: 'Internal Note' })).toHaveAttribute('aria-selected', 'true'));
   expect(screen.queryByRole('group', { name: 'Mention colleagues' })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Legacy private note' } });
+  await typeRichReply('Legacy private note');
   fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(JSON.parse(String(requests[0].body))).not.toHaveProperty('mentioned_user_ids');
@@ -710,7 +717,7 @@ it('keeps the bounded roster discoverable beyond sixteen while limiting selected
   const late = await screen.findByRole('checkbox', { name: 'Late colleague' });
   late.focus(); expect(late).toHaveFocus(); fireEvent.click(late);
   expect(late).toBeChecked();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Late roster mention' } });
+  await typeRichReply('Late roster mention');
   fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(JSON.parse(String(requests[0].body))).toMatchObject({ mentioned_user_ids: [lateId] });
@@ -730,13 +737,13 @@ it('keeps a selected internal mention through recipient denial and retries the s
   const mention = await screen.findByRole('checkbox', { name: 'Assigned agent' });
   mention.focus(); expect(mention).toHaveFocus(); fireEvent.click(mention);
   expect(mention).toBeChecked();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Private handoff' } });
+  await typeRichReply('Private handoff');
   fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
   await screen.findByRole('alert');
   expect(screen.getByRole('alert')).toHaveTextContent('Mention recipient access changed');
   expect(screen.queryByRole('button', { name: 'Rebase saved draft' })).not.toBeInTheDocument();
   expect(mention).toBeChecked();
-  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Private handoff');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Private handoff');
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(JSON.parse(String(requests[0].body))).toMatchObject({ is_internal: true,
     mentioned_user_ids: ['22222222-2222-4222-8222-222222222222'] });
@@ -843,7 +850,7 @@ it('retries acknowledged-send cleanup without sending the article again', async 
     return json(ticket);
   }, [], options => options.method==='DELETE' && ++deletes===1 ? json({error:'Cleanup unavailable'},503) : undefined);
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Only send once'}});
+  await typeRichReply('Only send once');
   fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
   const retry=await screen.findByRole('button',{name:'Retry sent-draft cleanup'});
   await waitFor(()=>expect(retry).toHaveAttribute('aria-disabled','false'));
@@ -852,7 +859,7 @@ it('retries acknowledged-send cleanup without sending the article again', async 
   fireEvent.click(retry);
   await waitFor(()=>expect(screen.queryByRole('button',{name:'Retry sent-draft cleanup'})).not.toBeInTheDocument());
   expect(posts).toBe(1); expect(deletes).toBe(2);
-  expect(screen.getByRole('textbox',{name:'Reply message'})).toHaveValue('');
+  expect(screen.getByRole('textbox',{name:'Reply message'}).textContent).toBe('');
 });
 
 
@@ -874,7 +881,7 @@ it('retains uploaded attachments after a rejected internal note and reuses them 
   fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['synthetic attachment'],'note.txt',{type:'text/plain'})]}});
   await waitFor(()=>expect(screen.queryByText('Uploading…')).not.toBeInTheDocument());
   expect(screen.getByRole('button',{name:'Add Note'})).toHaveAttribute('aria-disabled','true');
-  fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Synthetic private note'}});
+  await typeRichReply('Synthetic private note');
   fireEvent.click(screen.getByRole('button',{name:'Add Note'}));
   await screen.findByRole('alert');
   expect(screen.getByText('note.txt')).toBeInTheDocument();
@@ -1007,13 +1014,13 @@ it('retains the draft and prevents send until reply-capability failure is recove
   showDetail(); await screen.findByText('Customer question');
   const retry = await screen.findByRole('button', { name: 'Retry reply options' });
   expect(retry).toHaveClass('button--variant_plain');
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Retained while options unavailable' } });
+  await typeRichReply('Retained while options unavailable');
   const send = screen.getByRole('button', { name: 'Send Reply' });
   expect(send).toHaveAttribute('aria-disabled','true'); fireEvent.click(send);
   expect(posts).toBe(0);
   unavailable = false; fireEvent.click(retry);
   await waitFor(() => expect(send).toHaveAttribute('aria-disabled','false'));
-  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Retained while options unavailable');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Retained while options unavailable');
 });
 
 
@@ -1024,7 +1031,7 @@ it('sends an acknowledged collision-safe draft with one stable idempotency key',
     return json(ticket);
   }, [], undefined, undefined, true);
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Acknowledged collision-safe reply' } });
+  await typeRichReply('Acknowledged collision-safe reply');
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: /send reply/i }));
   await waitFor(() => expect(requests).toHaveLength(1));
@@ -1066,8 +1073,7 @@ it('requires manually loading the bounded newest conversation page before a stal
       mode: body.mode, body: body.body, bodyFormat: body.bodyFormat, attachments: body.attachments, baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
   }, undefined, () => conversationRevision);
   showDetail(); await screen.findByText('Customer question');
-  const message = screen.getByRole('textbox', { name: 'Reply message' });
-  fireEvent.change(message, { target: { value: 'Retain paginated draft' } });
+  await typeRichReply('Retain paginated draft');
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
   await screen.findByText(/Review and rebase before sending/);
@@ -1076,7 +1082,7 @@ it('requires manually loading the bounded newest conversation page before a stal
   await screen.findByText(/More messages are available\. Load them/i);
   expect(screen.queryByRole('button', { name: 'Rebase saved draft' })).not.toBeInTheDocument();
   expect(rebaseRequests).toHaveLength(0);
-  expect(message).toHaveValue('Retain paginated draft');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Retain paginated draft');
 
   fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }));
   await screen.findByText('Newest customer material');
@@ -1086,7 +1092,7 @@ it('requires manually loading the bounded newest conversation page before a stal
   fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
   await screen.findByText(/Draft rebased to the reviewed conversation/);
   expect(rebaseRequests).toEqual([expect.objectContaining({ expectedReviewedConversationRevision: 1, expectedRevision: 1 })]);
-  expect(message).toHaveValue('Retain paginated draft');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Retain paginated draft');
 });
 
 it('requires a rendered conversation review and explicit CAS rebase after a stale reply before manual resend', async () => {
@@ -1124,27 +1130,26 @@ it('requires a rendered conversation review and explicit CAS rebase after a stal
       mode: body.mode, body: body.body, bodyFormat: body.bodyFormat, attachments: body.attachments, baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
   }, undefined, () => conversationRevision);
   showDetail(); await screen.findByText('Customer question');
-  const message = screen.getByRole('textbox', { name: 'Reply message' });
-  fireEvent.change(message, { target: { value: 'Keep this draft through review' } });
+  await typeRichReply('Keep this draft through review');
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
   await screen.findByText(/Review and rebase before sending/);
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this draft through review');
   expect(screen.getByRole('button', { name: 'Send Reply' })).toHaveAttribute('aria-disabled', 'true');
 
   injectMaterialBetweenTicketAndRevisionRead = true;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
   await screen.findByText(/conversation changed while it was being refreshed/i);
   expect(screen.queryByText('A newer customer reply')).not.toBeInTheDocument();
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this draft through review');
 
   fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
   await screen.findByText('A newer customer reply');
   await screen.findByRole('button', { name: 'Rebase saved draft' });
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this draft through review');
   fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
   await screen.findByText(/Draft rebased to the reviewed conversation/);
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Keep this draft through review');
 
   fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
   await waitFor(() => expect(replyRequests).toHaveLength(2));

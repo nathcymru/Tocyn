@@ -69,6 +69,12 @@ it('retains entered override values after conflict and submits a fresh explicit 
   const view = show({}, refresh);
   await userEvent.click(screen.getByRole('button', { name: 'Override assignment capacity' }));
   await selectOperator();
+  const reasonField = screen.getByRole('textbox', { name: 'Override reason' });
+  const fieldRoot = reasonField.closest('.field__root');
+  expect(fieldRoot).toBeInTheDocument();
+  expect(fieldRoot?.querySelector('.field__label')).toHaveTextContent('Override reason');
+  expect(fieldRoot?.querySelector('.field__helperText')).toHaveTextContent('A reason is required. Keep it brief.');
+  expect(reasonField).toHaveAccessibleDescription('A reason is required. Keep it brief.');
   await userEvent.type(screen.getByLabelText('Override reason'), 'Urgent approved exception');
   expect(screen.getByLabelText('Override reason')).toHaveValue('Urgent approved exception');
   await userEvent.click(screen.getByRole('button', { name: 'Assign with audited override' }));

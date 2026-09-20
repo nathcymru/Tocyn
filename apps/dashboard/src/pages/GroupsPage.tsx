@@ -1,7 +1,7 @@
 import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable, ParkTextarea } from '@luminatick/ui/park';
-import { InputGroup } from '@luminatick/ui/components';
+import { Field as ParkField, InputGroup } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import {
   IconUsers,
@@ -136,27 +136,29 @@ export const GroupsPage: React.FC = () => {
           <form onSubmit={handleCreateGroup} aria-labelledby={createTitle}>
             {createError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             <fieldset disabled={creating} className={css({"display":"grid","gap":"4"})}>
-            <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-              <label htmlFor={`${createTitle}-name`}>Group Name</label>
+            <ParkField.Root required className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
+              <ParkField.Label htmlFor={`${createTitle}-name`}>Group Name</ParkField.Label>
               <ParkInput
                 type="text"
                 required
-                className={css({"w":"full"})}
+                className={css({ w: 'full' })}
                 placeholder="e.g., Technical Support"
                 id={`${createTitle}-name`} ref={groupNameInput} value={newGroupName}
                 onChange={e => setNewGroupName(e.target.value)}
               />
-            </div>
-            <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
-              <label htmlFor={`${createTitle}-description`}>Description (Optional)</label>
+              <ParkField.HelperText>Use a short, clear team name.</ParkField.HelperText>
+            </ParkField.Root>
+            <ParkField.Root className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
+              <ParkField.Label htmlFor={`${createTitle}-description`}>Description (Optional)</ParkField.Label>
               <ParkTextarea
-                className={css({"w":"full"})}
+                className={css({ w: 'full' })}
                 placeholder="Briefly describe what this group handles..."
                 rows={2}
                 id={`${createTitle}-description`} value={newGroupDescription}
                 onChange={e => setNewGroupDescription(e.target.value)}
               />
-            </div>
+              <ParkField.HelperText>Summarise the tickets this team handles.</ParkField.HelperText>
+            </ParkField.Root>
             <ParkDialog.Footer>
               <ParkButton
                 type="button" variant="outline"

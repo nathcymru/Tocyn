@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SlaSettingsPage } from '../pages/SlaSettingsPage';
 
@@ -28,9 +29,24 @@ it('renders the SLA editor with Park cards and preserves the policy payload', as
   expect(calendar).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Targets' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Reopened conversations' })).toBeInTheDocument();
+  for (const label of ['Calendar JSON', 'Response target (minutes, optional)', 'Resolution target (minutes, optional)']) {
+    const input = screen.getByRole('textbox', { name: label });
+    const field = input.closest('[data-scope="field"][data-part="root"]');
+    expect(field).toHaveClass('field__root');
+    expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent(label);
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
+  }
+  for (const label of ['Response after reopen', 'Resolution after reopen']) {
+    const trigger = screen.getByRole('combobox', { name: label });
+    const select = trigger.closest('[data-scope="select"][data-part="root"]');
+    expect(select).toHaveClass('select__root');
+    expect(select?.querySelector('[data-scope="select"][data-part="label"]')).toHaveTextContent(label);
+  }
+  await userEvent.click(screen.getByRole('combobox', { name: 'Response after reopen' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Restart clock' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Response target (minutes, optional)' }), { target: { value: '90' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save SLA policy' }));
-  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 4, responseTargetMs: 5_400_000, resolutionTargetMs: null })));
+  await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 4, responseTargetMs: 5_400_000, resolutionTargetMs: null, reopenPolicy: { response: 'restart', resolution: 'restart' } })));
   const saved = await screen.findByRole('status');
   expect(saved).toHaveClass('alert__root');
   expect(saved).toHaveTextContent('This policy applies only to clocks started after this revision.');
