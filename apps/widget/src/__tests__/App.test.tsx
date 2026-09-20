@@ -15,13 +15,18 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 async function open(features: { aiChat: boolean | string; ticketForm: boolean | string } = { aiChat: true, ticketForm: true }, extraConfig: Record<string, unknown> = {}) {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ title: 'Synthetic support', primaryColor: '#123456', features, ...extraConfig }))));
   render(<App />); const launcher = await screen.findByRole('button', { name: 'Open support' });
-  fireEvent.click(launcher); return launcher;
+  await userEvent.click(launcher);
+  await screen.findByRole('dialog', { name: String(extraConfig.title ?? 'Synthetic support') });
+  return launcher;
 }
 it('names the disclosure and tabs, supports keyboard selection and preserves drafts across tabs and closing', async () => {
-  const launcher = await open(); const region = screen.getByRole('region', { name: 'Synthetic support' });
+  const launcher = await open(); const region = screen.getByRole('dialog', { name: 'Synthetic support' });
+  expect(region).toHaveAttribute('data-scope', 'popover');
+  expect(region).toHaveAttribute('data-part', 'content');
+  expect(region).toHaveClass('popover__content');
   expect(launcher).toHaveClass('button--variant_solid');
   expect(within(region).getByRole('button', { name: 'Close support' })).toHaveClass('button--variant_plain');
-  expect(launcher).toHaveAttribute('aria-expanded', 'true'); expect(region.querySelector('button')).toHaveFocus();
+  expect(launcher).toHaveAttribute('aria-expanded', 'true'); await waitFor(() => expect(region.querySelector('button')).toHaveFocus());
   const panelViewport = within(region).getByRole('region', { name: 'Support content' });
   expect(panelViewport).toHaveClass('scroll-area__viewport');
   expect(panelViewport.closest('.scroll-area__root')).toBeInTheDocument();
@@ -32,8 +37,10 @@ it('names the disclosure and tabs, supports keyboard selection and preserves dra
   fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), { target: { value: 'Keep this draft' } });
   await userEvent.click(ticket); await userEvent.keyboard('{Home}'); await waitFor(() => expect(chat).toHaveFocus());
   await userEvent.click(ticket); expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Keep this draft');
-  fireEvent.keyDown(region, { key: 'Escape' }); expect(launcher).toHaveFocus(); expect(launcher).toHaveAttribute('aria-expanded', 'false');
-  expect(screen.queryByRole('region')).not.toBeInTheDocument(); fireEvent.click(launcher);
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(launcher).toHaveFocus());
+  expect(launcher).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); await userEvent.click(launcher);
   expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('Keep this draft');
 });
 it('selects the available ticket form when AI is disabled', async () => {
@@ -42,12 +49,26 @@ it('selects the available ticket form when AI is disabled', async () => {
   expect(screen.getByRole('tab', { name: 'New Ticket' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.getByRole('textbox', { name: 'Message' })).toBeVisible();
 });
+it('keeps support open on outside interaction and returns focus after the Park close trigger', async () => {
+  const launcher = await open();
+  const region = screen.getByRole('dialog', { name: 'Synthetic support' });
+  expect(region.closest('[data-scope="popover"][data-part="positioner"]')).toBeInTheDocument();
+  await userEvent.click(document.body);
+  expect(launcher).toHaveAttribute('aria-expanded', 'true');
+  expect(region).toBeVisible();
+  const close = within(region).getByRole('button', { name: 'Close support' });
+  expect(close).toHaveAttribute('data-part', 'close-trigger');
+  await userEvent.click(close);
+  await waitFor(() => expect(launcher).toHaveFocus());
+  expect(launcher).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('dialog', { name: 'Synthetic support' })).not.toBeInTheDocument();
+});
 it('keeps a long tenant title inside the widget header', async () => {
   const title = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   await open({ aiChat: true, ticketForm: true }, { title });
   const heading = screen.getByRole('heading', { name: title });
   expect(heading).toHaveClass('min-w_0', 'ov-wrap_anywhere');
-  const region = screen.getByRole('region', { name: title });
+  const region = screen.getByRole('dialog', { name: title });
   expect(region).toHaveAttribute('aria-labelledby', heading.id);
   expect(within(region).getByRole('button', { name: 'Close support' })).toBeVisible();
 });

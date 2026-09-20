@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkAlert, ParkButton, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { Badge as ParkBadge, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useState, useEffect, useRef } from 'react';
@@ -212,7 +212,7 @@ export function TicketListPage() {
         </ParkDialog.Positioner>
       </ParkDialog.Root>
 
-      <div className={p.surface}>
+      <ParkCard.Root variant="outline">
         {tickets.length === 0 ? (
           <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} variant="solid" className={p.ticketEmptyCreate}> <IconPlus className={p.ticketListIcon} aria-hidden="true" /> New Ticket</ParkButton>} className={p.ticketEmpty} />
         ) : (
@@ -241,7 +241,7 @@ export function TicketListPage() {
             ))}
           </ul>
         )}
-      </div>
+      </ParkCard.Root>
     </div>
   );
 }

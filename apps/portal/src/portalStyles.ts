@@ -3,7 +3,6 @@ import { css } from '@luminatick/ui/styled-system/css';
 // Portal layout and content styles. Interactive controls receive their recipes
 // from the shared Park UI components; these classes only compose the pages.
 const page = css({ maxW: '5xl', mx: 'auto', px: { base: '4', md: '6' }, py: '8' });
-const surface = css({ bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'lg', boxShadow: 'sm' });
 const row = css({ display: 'flex', alignItems: 'center', gap: '3' });
 const spread = css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3', flexWrap: 'wrap' });
 const stack = css({ display: 'flex', flexDirection: 'column', gap: '4' });
@@ -57,7 +56,6 @@ export const p = {
   visuallyHidden: css({ srOnly: true }),
   formControl: full,
 
-  surface,
   ticketList: stack,
   ticketListHeader: spread,
   ticketListTitle: title,
@@ -137,7 +135,7 @@ export const p = {
   emptyError: inset,
   emptyActions: row,
 
-  slaCard: css({ p: '4', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'lg' }),
+  slaCardInset: css({ p: '4' }),
   slaHeading: heading,
   slaState: css({ py: '4' }),
   slaStatus: muted,
