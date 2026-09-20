@@ -46,6 +46,10 @@ const shellSlotNames = [
     "shell__header"
   ],
   [
+    "headerInbox",
+    "shell__headerInbox"
+  ],
+  [
     "pageTitle",
     "shell__pageTitle"
   ],
