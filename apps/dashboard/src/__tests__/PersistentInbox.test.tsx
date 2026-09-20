@@ -5,6 +5,7 @@ import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter,Link,RouterProvider,useLocation } from 'react-router-dom';
 import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 import { InboxWorkspacePage } from '../pages/InboxWorkspacePage';
+import { InboxGlobalAlertProvider } from '../components/InboxGlobalAlert';
 import { useAuthStore } from '../store/authStore';
 
 
@@ -39,7 +40,7 @@ let savedSelection:string|null=null;
 function Location(){const location=useLocation();return <output data-testid="location">{location.pathname}</output>;}
 function showInbox(entry='/inbox/all',globalSearch=false){
   const router=createMemoryRouter([{path:'/inbox/*',element:<>{globalSearch&&<GlobalSearch shortcutsEnabled />}<InboxWorkspacePage/><Location/></>}],{initialEntries:[entry]});
-  const result=render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
+  const result=render(<InboxGlobalAlertProvider><QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider></InboxGlobalAlertProvider>);
   return {...result,router};
 }
 async function chooseSort(option:string){
@@ -370,6 +371,73 @@ it('keeps applied date, customer and text filters when changing the three refere
   expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
 });
 
+it('shows all three priority views with authoritative triage clocks and the separate calendar SLA clock',async()=>{
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const snapshot=new Date().toISOString();
+  const classified=[
+    {...tickets[0],contract_sla_tier:'alpha',criticality_tier:4},
+    {...tickets[1],contract_sla_tier:'delta',criticality_tier:1},
+  ];
+  const requestedSorts:string[]=[];
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')){
+      const sort=new URL(String(url),'http://localhost').searchParams.get('sort');
+      if(sort?.startsWith('priority_')){
+        requestedSorts.push(sort);
+        return json({data:classified,meta:{page:1,limit:2,total:7,total_pages:4},
+          sla:Object.fromEntries(classified.map(ticket=>[ticket.id,unavailableSla])),
+          priorityClocks:Object.fromEntries(classified.map((ticket,index)=>[ticket.id,{remainingHours:index===0?-0.5:-1,paused:false,asOf:snapshot}])),
+          triageOverdueCount:7,asOf:snapshot,next:'signed-next-page'});
+      }
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await chooseView('Default Focus');
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Default Focus'));
+  const first=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(within(first).getByRole('meter',{name:/Alpha contract, level 4 priority triage clock: Overdue by/})).toHaveTextContent('A4−30m');
+  expect(within(first).getByLabelText('Service level unavailable')).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('7 fixed-hour priority countdowns have expired in this priority view');
+  expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(2);
+  await choosePresentation('Table view');
+  expect(within(screen.getByRole('table',{name:'Tickets in the current view'})).getAllByRole('meter')).toHaveLength(2);
+
+  await chooseView('Criticality Matrix');
+  await waitFor(()=>expect(requestedSorts).toContain('priority_criticality'));
+  await chooseView('SLA Commitment');
+  await waitFor(()=>expect(requestedSorts).toContain('priority_commitment'));
+  expect(requestedSorts).toContain('priority_focus');
+  await chooseView('All tickets');
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('All tickets'));
+  expect(within(screen.getByRole('listbox')).queryByRole('meter')).toBeNull();
+});
+
+it('restarts an expired priority snapshot without displaying stale ordinary rows',async()=>{
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const snapshot=new Date().toISOString();
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      priorityReads++;
+      return priorityReads===1?json({code:'priority_sort_restart',error:'Snapshot expired'},409)
+        :json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+          priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:snapshot}},triageOverdueCount:0,asOf:snapshot,next:null});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await chooseView('Default Focus');
+  const restart=await screen.findByRole('button',{name:'Restart priority ordering'});
+  expect(within(screen.getByRole('listbox')).queryAllByRole('option')).toHaveLength(0);
+  fireEvent.click(restart);
+  expect(await within(screen.getByRole('listbox')).findByRole('meter',{name:/Alpha contract, level 4 priority triage clock/})).toBeInTheDocument();
+  expect(priorityReads).toBe(2);
+});
+
 it('uses clamped calendar dates for the month and quarter filter choices',async()=>{
   vi.spyOn(Date,'now').mockReturnValue(Date.UTC(2026,2,31,10,15));
   showInbox('/inbox/all');
@@ -503,8 +571,9 @@ it('keeps a confirmed conversation and draft/list visibility while workspace pre
   }));
   showInbox('/inbox');
   await screen.findByRole('heading',{name:'Conversation ticket-20'});
-  expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveAttribute('aria-selected','true');
-  expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
+  const selectedRow=await screen.findByRole('option',{name:/Fixture conversation 20/});
+  expect(selectedRow).toHaveAttribute('aria-selected','true');
+  expect(selectedRow).toHaveTextContent('Draft');
 
   await chooseSort('oldest first');
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Workspace preferences changed in another session. Review before replacing them.'));

@@ -8,7 +8,8 @@ export type WorkspaceFilters = Readonly<{
 }>;
 export type WorkspacePreference = Readonly<{
   revision: number; view: 'all' | 'mine' | 'unassigned' | 'mentions' | 'drafts' | 'snoozed' | 'needs_action' | 'team' | 'custom';
-  sort: 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'sla_priority';
+  sort: 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'sla_priority'
+    | 'priority_focus' | 'priority_criticality' | 'priority_commitment';
   filters: WorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null;
   panel: 'conversation' | 'details'; splitterRatio: number; updatedAt: string;
 }>;

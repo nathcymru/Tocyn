@@ -447,7 +447,8 @@ export type LocalFixtureBootstrap = Readonly<{
  * Builds synthetic fixture rows for a run-owned local D1 database. Callers may write
  * the SQL only to a mode-0600 temporary file and must never report its contents.
  */
-export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION_KEY'>): Promise<LocalFixtureBootstrap> {
+export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION_KEY'>,
+  options: { priorityReview?: boolean } = {}): Promise<LocalFixtureBootstrap> {
   const principals = generatedPrincipals();
   const auth = new AuthService();
   const mfa = new MFAService();
@@ -467,6 +468,13 @@ export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION
     rows.push(`INSERT INTO tenant_config (tenant_id, key, value) VALUES (${sqlLiteral(tenantId)}, 'PORTAL_URL', ${sqlLiteral('http://localhost:5174')});`);
   }
   appendBeta2FixtureSql(rows, principals);
+  if (options.priorityReview) {
+    // Only the explicit, admitted local-beta launcher selects this budgeted
+    // view on first login. Ordinary local runtimes keep the safe sort default.
+    rows.push(`INSERT INTO operator_workspace_state
+      (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,splitter_ratio)
+      VALUES ('fixture-tenant-a','fixture-operator',1,'all','priority_focus','{}','','page:1',NULL,'conversation',32);`);
+  }
   return Object.freeze({
     sql: rows.join('\n'),
     credentials: Object.freeze(principalNames.map(name => {
@@ -550,6 +558,7 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
     ['fixture-tenant-b', 'fixture-b-only', 'Fixture ticket B only', principals.customerB.localId, principals.customerB.email],
   ];
   for (const [tenantId, id, subject, customerId, customerEmail] of rows) {
+    if (reviewBeta2 && tenantId === 'fixture-tenant-a' && id === 'fixture-ticket') continue;
     await db.prepare('INSERT INTO tickets (tenant_id, id, subject, customer_id, customer_email, source) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(tenantId, id, subject, customerId, customerEmail, 'fixture').run();
   }
@@ -609,10 +618,8 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
     WHERE tenant_id = ? AND ticket_id = ?`)
     .bind('2099-01-01T12:00:00.000Z', 'manual', 'fixture-tenant-a', 'beta2-snoozed-assigned').run();
   if (reviewBeta2) {
-    // Keep the general-purpose test ticket out of the review Inbox's first 20
-    // without changing baseline tests that initialize its SLA at creation time.
-    await db.prepare("UPDATE tickets SET created_at=?,updated_at=? WHERE tenant_id='fixture-tenant-a' AND id='fixture-ticket'")
-      .bind(beta2MinutesAgo(now, 43_200), beta2MinutesAgo(now, 43_200)).run();
+    // The review fixture has exactly 20 classified tenant-A tickets. The
+    // general-purpose fixture ticket belongs only to non-review test runs.
     const reviewStatements: string[] = [];
     appendBeta2ReviewFixtureSql(reviewStatements, now);
     appendBeta2SlaFixtureSql(reviewStatements, now);

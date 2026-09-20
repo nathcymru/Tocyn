@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { absoluteWindowHours, calculatePriorityScore, effectiveUrgencyWindowHours } from '@luminatick/shared';
+import { projectPriorityClock, type PriorityClockRow } from '../src/repositories/priority-clock.repository';
+import { initializeLocalBetaFixture } from './local-beta-fixture';
 import { beta2ReviewPrioritySeeds, createLocalFixtureBootstrap, verifyTwoTenantFixture, withTwoTenantFixture } from './local-tenant-fixture';
 
 test('two disposable fixture runs have independent A/B principals and no report secrets', async () => {
@@ -50,11 +52,12 @@ test('fixture exposes its callback-local R2 binding and named session revocation
 });
 
 test('real local-beta bootstrap includes the classified review matrix', async () => {
-  const bootstrap = await createLocalFixtureBootstrap({ MFA_ENCRYPTION_KEY: 'a'.repeat(64) });
+  const bootstrap = await createLocalFixtureBootstrap({ MFA_ENCRYPTION_KEY: 'a'.repeat(64) }, { priorityReview: true });
   assert.equal([...bootstrap.sql.matchAll(/UPDATE tickets SET priority_category=/g)].length, 22,
     'The real review seed must classify all 20 tenant-A and two isolated tenant-B cases');
   assert.match(bootstrap.sql, /WHERE tenant_id='fixture-tenant-a' AND id='beta2-breach-billing'/);
   assert.match(bootstrap.sql, /WHERE tenant_id='fixture-tenant-b' AND id='beta2-b-email'/);
+  assert.match(bootstrap.sql, /'fixture-tenant-a','fixture-operator',1,'all','priority_focus'/);
 });
 
 test('general Miniflare helper retains the eight-ticket base matrix without review-only SLA facts', async () => {
@@ -155,22 +158,53 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
       const flags = [ticket.priority_regulatory_officer_on_site,ticket.priority_vip_blocked,ticket.priority_hard_deadline];
       assert.ok(flags.every(flag => flag === 0 || flag === 1), `Complete urgency flags required for ${ticket.id}`);
       assert.equal(ticket.priority_score, calculatePriorityScore(ticket.priority_category as Parameters<typeof calculatePriorityScore>[0],
-        ticket.priority_scope as Parameters<typeof calculatePriorityScore>[1],5*flags.reduce((sum,flag)=>sum+flag,0)),ticket.id);
+        ticket.priority_scope as Parameters<typeof calculatePriorityScore>[1],5*flags.reduce<number>((sum,flag)=>sum+flag,0)),ticket.id);
     }
     assert.equal(tenantAClassified.find(ticket => ticket.id === 'beta2-billing-urgent')?.priority_vip_blocked,1);
     assert.equal(tenantAClassified.find(ticket => ticket.id === 'beta2-billing-urgent')?.priority_hard_deadline,1);
+    const priorityClocks = await fixture.db.prepare(`SELECT c.tenant_id,c.ticket_id,c.started_at,c.active_since,c.accrued_active_ms,
+      c.stop_reason,c.last_support_state_revision,c.revision,c.updated_at,
+      t.contract_sla_tier,t.criticality_tier,t.status
+      FROM ticket_priority_clocks c JOIN tickets t ON t.tenant_id=c.tenant_id AND t.id=c.ticket_id
+      WHERE c.ticket_id LIKE 'beta2-%' ORDER BY c.tenant_id,c.ticket_id`)
+      .all<PriorityClockRow & { tenant_id:string;status:string }>();
+    const tenantAClocks = priorityClocks.results.filter(clock => clock.tenant_id === 'fixture-tenant-a');
+    const tenantBClocks = priorityClocks.results.filter(clock => clock.tenant_id === 'fixture-tenant-b');
+    assert.equal(tenantAClocks.length,20,'Every tenant-A review ticket has an authoritative priority clock');
+    assert.equal(tenantBClocks.length,2,'Tenant-B clocks remain in their own tenant');
+    assert.deepEqual(tenantBClocks.map(clock => clock.ticket_id),['beta2-b-email','beta2-b-open-unassigned']);
+    assert.ok(tenantAClocks.every(clock => !tenantBClocks.some(foreign => foreign.ticket_id === clock.ticket_id)));
+    const asOf = Date.now();
+    const projected = new Map(priorityClocks.results.map(clock => [clock.ticket_id,projectPriorityClock(clock,asOf)]));
+    assert.ok(priorityClocks.results.every(clock => projected.get(clock.ticket_id)), 'Every classified fixture clock projects');
     const remainingHours = (ticketId:string) => {
-      const ticket = tenantAClassified.find(candidate => candidate.id === ticketId);
-      assert.ok(ticket,`Missing ${ticketId}`);
-      return absoluteWindowHours(ticket.contract_sla_tier,ticket.criticality_tier)
-        - (Date.now()-Date.parse(ticket.created_at))/3_600_000;
+      const projection = projected.get(ticketId);
+      assert.ok(projection,`Missing authoritative priority clock for ${ticketId}`);
+      return projection.timeRemainingHours;
     };
     for (const id of ['beta2-breach-billing','beta2-breach-delivery']) {
       const ticket = tenantAClassified.find(candidate => candidate.id === id);
       assert.equal(ticket?.contract_sla_tier,'alpha');
       assert.equal(ticket?.criticality_tier,4);
       assert.ok(remainingHours(id)<0,`${id} must exceed its one-hour A4 window`);
+      assert.equal(projected.get(id)?.paused,false,`${id} must still be actively accruing`);
     }
+    assert.ok(tenantAClocks.filter(clock => clock.status === 'pending').length >= 2);
+    for (const clock of tenantAClocks.filter(clock => clock.status === 'pending')) {
+      assert.equal(clock.stop_reason,'waiting',`${clock.ticket_id} must pause in pending`);
+      assert.equal(clock.active_since,null,`${clock.ticket_id} must have no running interval`);
+      assert.equal(projected.get(clock.ticket_id)?.paused,true);
+      assert.equal(remainingHours(clock.ticket_id),absoluteWindowHours(clock.contract_sla_tier!,clock.criticality_tier!),
+        `${clock.ticket_id} must not accrue while pending from ingestion`);
+    }
+    assert.ok(tenantAClocks.filter(clock => clock.status === 'resolved' || clock.status === 'closed').length >= 2);
+    for (const clock of tenantAClocks.filter(clock => clock.status === 'resolved' || clock.status === 'closed')) {
+      assert.equal(clock.stop_reason,'resolved',`${clock.ticket_id} must stop after resolution`);
+      assert.equal(clock.active_since,null,`${clock.ticket_id} must have no running interval`);
+      assert.equal(projected.get(clock.ticket_id)?.paused,true);
+    }
+    assert.equal(tenantBClocks.find(clock => clock.ticket_id === 'beta2-b-email')?.stop_reason,'waiting');
+    assert.equal(tenantBClocks.find(clock => clock.ticket_id === 'beta2-b-open-unassigned')?.stop_reason,null);
     assert.equal(effectiveUrgencyWindowHours(48,remainingHours('beta2-api-update')),24);
     assert.equal(effectiveUrgencyWindowHours(48,remainingHours('beta2-security-question')),4);
     assert.equal(Object.keys(beta2ReviewPrioritySeeds).length,20);
@@ -249,5 +283,59 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     const tenantB = await projection(operatorB, 'beta2-b-open-unassigned');
     assert.equal(tenantB.status, 200);
     assert.equal((await tenantB.json<{ response: { state: string } }>()).response.state, 'on-track');
+  }, { reviewBeta2: true });
+});
+
+test('fresh local-beta runtime serves the classified priority-focus review matrix to tenant A', async () => {
+  await withTwoTenantFixture(async fixture => {
+    await initializeLocalBetaFixture(fixture, {
+      runId: 'priority-review-http',
+      tenants: [fixture.principals.operatorA.tenantId, fixture.principals.operatorB.tenantId],
+      invitations: Object.values(fixture.principals).map(principal => ({
+        tenantId: principal.tenantId,
+        id: principal.localId,
+        kind: principal.role === 'customer' ? 'customer' as const : 'staff' as const,
+      })),
+      limits: { ticketLimit: 30, mutationLimit: 20, recoveryReserve: 2, uploadLimit: 2 },
+    });
+    await fixture.enableCombinedTicketAdmission();
+    const login = await fixture.login('operatorA');
+    assert.equal(login.status, 200);
+    const challenge = await login.json<{ token: string }>();
+    const verified = await fixture.request('/api/auth/mfa/verify', {
+      method: 'POST', token: challenge.token, body: { code: fixture.currentMfaCode('operatorA') },
+    });
+    assert.equal(verified.status, 200);
+    const { token } = await verified.json<{ token: string }>();
+    const response = await fixture.request('/api/tickets?sort=priority_focus&limit=20', { token });
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = await response.json<{
+      data: Array<{ id: string; priority_category: string | null; priority_scope: string | null;
+        contract_sla_tier: string | null; criticality_tier: number | null; priority_score: number | null }>;
+      meta: { total: number; limit: number };
+      priorityClocks: Record<string, { remainingHours: number; paused: boolean; asOf: string } | null>;
+      triageOverdueCount: number;
+      asOf: string;
+    }>();
+    assert.equal(body.meta.total, 20, 'The disposable review inbox contains exactly 20 classified tickets');
+    assert.equal(body.meta.limit, 20);
+    assert.equal(body.data.length, 20);
+    assert.deepEqual(body.data.map(ticket => ticket.id).sort(), Object.keys(beta2ReviewPrioritySeeds).sort(),
+      'The authenticated queue contains exactly the 20 tenant-A review tickets');
+    assert.ok(body.data.every(ticket => ticket.priority_category && ticket.priority_scope
+      && ticket.contract_sla_tier && ticket.criticality_tier && Number.isFinite(ticket.priority_score)));
+    assert.ok(body.triageOverdueCount >= 2);
+    assert.deepEqual(Object.keys(body.priorityClocks).sort(), body.data.map(ticket => ticket.id).sort());
+    assert.ok(Object.values(body.priorityClocks).every(clock => clock && Number.isFinite(clock.remainingHours)
+      && Number.isFinite(Date.parse(clock.asOf))));
+    assert.ok(Number.isFinite(Date.parse(body.asOf)));
+    for (const id of ['beta2-breach-billing', 'beta2-breach-delivery']) {
+      assert.equal(body.data.find(ticket => ticket.id === id)?.contract_sla_tier, 'alpha');
+      assert.equal(body.data.find(ticket => ticket.id === id)?.criticality_tier, 4);
+      assert.ok(body.priorityClocks[id]!.remainingHours < 0, `${id} must be overdue`);
+      assert.equal(body.priorityClocks[id]!.paused, false, `${id} must still be running`);
+    }
+    assert.equal(body.data.some(ticket => ticket.id === 'beta2-b-email' || ticket.id === 'beta2-b-open-unassigned'), false);
+    assert.equal('beta2-b-email' in body.priorityClocks || 'beta2-b-open-unassigned' in body.priorityClocks, false);
   }, { reviewBeta2: true });
 });

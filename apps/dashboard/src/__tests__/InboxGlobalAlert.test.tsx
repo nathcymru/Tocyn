@@ -6,7 +6,8 @@ afterEach(cleanup);
 
 function Trigger() {
   const setAlert = useInboxGlobalAlert();
-  return <button type="button" onClick={() => setAlert({ count: 2, scope: 'All tickets' })}>Show inbox alert</button>;
+  return <><button type="button" onClick={() => setAlert({ count: 2, scope: 'All tickets' })}>Show inbox alert</button>
+    <button type="button" onClick={() => setAlert({ count: 2, scope: 'All tickets', kind: 'priority-triage' })}>Show priority alert</button></>;
 }
 
 it('uses Park Alert anatomy and keeps the assertive notice dismissible in document flow', () => {
@@ -21,4 +22,10 @@ it('uses Park Alert anatomy and keeps the assertive notice dismissible in docume
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss inbox alert' }));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(screen.getByText('Workspace remains available')).toBeInTheDocument();
+});
+
+it('labels expired fixed-hour triage clocks separately from contractual SLA breaches', () => {
+  render(<InboxGlobalAlertProvider><Trigger /></InboxGlobalAlertProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Show priority alert' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Action required: 2 fixed-hour priority countdowns have expired in All tickets.');
 });

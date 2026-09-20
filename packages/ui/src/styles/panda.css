@@ -11516,6 +11516,14 @@
     padding: 1rem;
 }
 
+  .anim_overduePulse_1\.5s_infinite {
+    animation: overduePulse 1.5s infinite;
+}
+
+  .inset_0 {
+    inset: var(--spacing-0);
+}
+
   .p_1\.5rem {
     padding: 1.5rem;
 }
@@ -11540,6 +11548,10 @@
     padding: var(--spacing-4);
 }
 
+  .m_4 {
+    margin: var(--spacing-4);
+}
+
   .p_2 {
     padding: var(--spacing-2);
 }
@@ -11548,16 +11560,8 @@
     background: var(--colors-bg\.canvas);
 }
 
-  .inset_0 {
-    inset: var(--spacing-0);
-}
-
   .bg_critical {
     background: var(--colors-critical);
-}
-
-  .anim_overduePulse_1\.5s_infinite {
-    animation: overduePulse 1.5s infinite;
 }
 
   .p_2rem_1rem {
@@ -11684,6 +11688,18 @@
     border-radius: var(--radii-l2);
 }
 
+  .gap_1 {
+    gap: var(--spacing-1);
+}
+
+  .place-items_center {
+    place-items: center;
+}
+
+  .bdr_full {
+    border-radius: var(--radii-full);
+}
+
   .px_0\.25rem {
     padding-inline: 0.25rem;
 }
@@ -11716,20 +11732,12 @@
     gap: var(--spacing-6);
 }
 
-  .gap_1 {
-    gap: var(--spacing-1);
-}
-
   .ov_hidden {
     overflow: hidden;
 }
 
   .py_3 {
     padding-block: var(--spacing-3);
-}
-
-  .place-items_center {
-    place-items: center;
 }
 
   .border-style_dashed {
@@ -11786,10 +11794,6 @@
 
   .trs_grid-template-rows_180ms_ease\,_opacity_180ms_ease {
     transition: grid-template-rows 180ms ease, opacity 180ms ease;
-}
-
-  .bdr_full {
-    border-radius: var(--radii-full);
 }
 
   .gap_1\.5rem {
@@ -11948,20 +11952,80 @@
     border-width: 0;
 }
 
-  .d_inline {
-    display: inline;
+  .c_red\.11 {
+    color: var(--colors-red-11);
+}
+
+  .c_fg\.default {
+    color: var(--colors-fg-default);
+}
+
+  .d_inline-flex {
+    display: inline-flex;
+}
+
+  .flex-d_column {
+    flex-direction: column;
+}
+
+  .ff_primary {
+    font-family: var(--fonts-primary);
+}
+
+  .pos_relative {
+    position: relative;
+}
+
+  .d_inline-grid {
+    display: inline-grid;
+}
+
+  .pos_absolute {
+    position: absolute;
+}
+
+  .trf_rotate\(-90deg\) {
+    transform: rotate(-90deg);
 }
 
   .ff_tabular {
     font-family: var(--fonts-tabular);
 }
 
-  .ff-s_\"tnum\"_1\,_\"cv01\"_1 {
-    font-feature-settings: "tnum" 1, "cv01" 1;
+  .fs_sm {
+    font-size: var(--font-sizes-sm);
+}
+
+  .fw_bold {
+    font-weight: var(--font-weights-bold);
 }
 
   .fv-num_tabular-nums {
     font-variant-numeric: tabular-nums;
+}
+
+  .fs_xs {
+    font-size: var(--font-sizes-xs);
+}
+
+  .white-space_nowrap {
+    white-space: nowrap;
+}
+
+  .fs_2xs {
+    font-size: var(--font-sizes-2xs);
+}
+
+  .c_fg\.muted {
+    color: var(--colors-fg-muted);
+}
+
+  .d_inline {
+    display: inline;
+}
+
+  .ff-s_\"tnum\"_1\,_\"cv01\"_1 {
+    font-feature-settings: "tnum" 1, "cv01" 1;
 }
 
   .font-style_italic {
@@ -11988,24 +12052,12 @@
     text-align: center;
 }
 
-  .fs_sm {
-    font-size: var(--font-sizes-sm);
-}
-
   .lh_relaxed {
     line-height: var(--line-heights-relaxed);
 }
 
   .fs_xl {
     font-size: var(--font-sizes-xl);
-}
-
-  .fw_bold {
-    font-weight: var(--font-weights-bold);
-}
-
-  .c_fg\.muted {
-    color: var(--colors-fg-muted);
 }
 
   .fw_medium {
@@ -12020,20 +12072,12 @@
     letter-spacing: var(--letter-spacings-wide);
 }
 
-  .c_fg\.default {
-    color: var(--colors-fg-default);
-}
-
   .jc_space-between {
     justify-content: space-between;
 }
 
   .flex-sh_0 {
     flex-shrink: 0;
-}
-
-  .d_inline-flex {
-    display: inline-flex;
 }
 
   .lh_tight {
@@ -12117,16 +12161,8 @@
     justify-content: flex-end;
 }
 
-  .pos_absolute {
-    position: absolute;
-}
-
   .clip_rect\(0\,0\,0\,0\) {
     clip: rect(0,0,0,0);
-}
-
-  .white-space_nowrap {
-    white-space: nowrap;
 }
 
   .color-palette_green {
@@ -12321,10 +12357,6 @@
     z-index: 20;
 }
 
-  .fs_xs {
-    font-size: var(--font-sizes-xs);
-}
-
   .grid-tc_repeat\(3\,_minmax\(0\,_1fr\)\) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -12337,20 +12369,8 @@
     text-align: start;
 }
 
-  .flex-d_column {
-    flex-direction: column;
-}
-
-  .c_red\.11 {
-    color: var(--colors-red-11);
-}
-
   .jc_center {
     justify-content: center;
-}
-
-  .pos_relative {
-    position: relative;
 }
 
   .focus-v-ring_outside {
@@ -12368,10 +12388,6 @@
     color: var(--colors-white);
 }
 
-  .grid-tc_3rem_minmax\(0\,_1fr\) {
-    grid-template-columns: 3rem minmax(0, 1fr);
-}
-
   .ai_start {
     align-items: start;
 }
@@ -12386,6 +12402,14 @@
 
   .bd-s-c_border\.focus {
     border-inline-start-color: var(--colors-border\.focus);
+}
+
+  .grid-tc_7\.5rem_minmax\(0\,_1fr\) {
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+}
+
+  .grid-tc_3rem_minmax\(0\,_1fr\) {
+    grid-template-columns: 3rem minmax(0, 1fr);
 }
 
   .c_inherit {
@@ -12420,16 +12444,8 @@
     line-height: 1.5;
 }
 
-  .d_inline-grid {
-    display: inline-grid;
-}
-
-  .fs_2xs {
-    font-size: var(--font-sizes-2xs);
-}
-
-  .trf_rotate\(-90deg\) {
-    transform: rotate(-90deg);
+  .ai_flex-start {
+    align-items: flex-start;
 }
 
   .justify-self_end {
@@ -12537,10 +12553,6 @@
     color: var(--colors-info\.text);
 }
 
-  .ai_flex-start {
-    align-items: flex-start;
-}
-
   .ai_flex-end {
     align-items: flex-end;
 }
@@ -12555,10 +12567,6 @@
 
   .z_modal {
     z-index: var(--z-index-modal);
-}
-
-  .ff_primary {
-    font-family: var(--fonts-primary);
 }
 
   .bx-sh_xl {
@@ -12717,6 +12725,22 @@
     width: 60%;
 }
 
+  .min-w_16 {
+    min-width: var(--sizes-16);
+}
+
+  .h_16 {
+    height: var(--sizes-16);
+}
+
+  .w_16 {
+    width: var(--sizes-16);
+}
+
+  .h_full {
+    height: var(--sizes-full);
+}
+
   .ov-x_auto {
     overflow-x: auto;
 }
@@ -12837,10 +12861,6 @@
     height: var(--sizes-10);
 }
 
-  .h_16 {
-    height: var(--sizes-16);
-}
-
   .h_12 {
     height: var(--sizes-12);
 }
@@ -12935,10 +12955,6 @@
 
   .w_12 {
     width: var(--sizes-12);
-}
-
-  .h_full {
-    height: var(--sizes-full);
 }
 
   .h_3 {
@@ -13462,6 +13478,9 @@
 }
     .\[\@media_\(prefers-reduced-motion\:_reduce\)\]\:trs_none {
       transition: none;
+}
+    html[data-tocyn-motion="full"] .\[\@media_\(prefers-reduced-motion\:_reduce\)\]\:\[html\[data-tocyn-motion\=\"full\"\]_\&\]\:anim_overduePulse_1\.5s_infinite {
+      animation: overduePulse 1.5s infinite;
 }
 }
 }

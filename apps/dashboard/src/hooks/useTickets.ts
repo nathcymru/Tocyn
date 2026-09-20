@@ -3,16 +3,19 @@ import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { assignmentIdentity } from './useTicketAssignment';
 import { Ticket, TicketWithDetails } from '@luminatick/shared';
+import { isPriorityMatrixSort, usePriorityMatrixTickets } from './usePriorityMatrixTickets';
 import { useSlaPriorityTickets, type TicketQueryPage } from './useSlaPriorityTickets';
 
-export function useTickets(params: Record<string, string> = {}) {
+export function useTickets(params: Record<string, string> = {}, enabled = true) {
   const user = useAuthStore(state => state.user);
   const generation = useAuthStore(state => state.sessionGeneration);
   const identity = JSON.stringify([generation, user?.tenant_id, user?.id, user?.role]);
   const queryParams = new URLSearchParams(params).toString();
-  const sla = useSlaPriorityTickets(params, params.sort === 'sla_priority');
+  const sla = useSlaPriorityTickets(params, enabled && params.sort === 'sla_priority');
+  const priorityMatrixSort = isPriorityMatrixSort(params.sort);
+  const priorityMatrix = usePriorityMatrixTickets(params, enabled && priorityMatrixSort);
   const ordinary = useQuery({
-    enabled: params.sort !== 'sla_priority' && Boolean(user?.id),
+    enabled: enabled && params.sort !== 'sla_priority' && !priorityMatrixSort && Boolean(user?.id),
     queryKey: ['tickets', params, identity],
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === identity ? previous : undefined,
     queryFn: async () => {
@@ -23,7 +26,9 @@ export function useTickets(params: Record<string, string> = {}) {
     },
     refetchInterval: () => document.visibilityState === 'visible' ? 30000 : false,
   });
-  return params.sort === 'sla_priority' ? sla : { ...ordinary, restartSla: sla.restartSla };
+  if (params.sort === 'sla_priority') return { ...sla, restartPriorityMatrix: priorityMatrix.restartPriorityMatrix };
+  if (priorityMatrixSort) return { ...priorityMatrix, restartSla: sla.restartSla };
+  return { ...ordinary, restartSla: sla.restartSla, restartPriorityMatrix: priorityMatrix.restartPriorityMatrix };
 }
 
 type TicketPage = TicketWithDetails & { pagination?: { next_cursor: string | null; has_more: boolean } };

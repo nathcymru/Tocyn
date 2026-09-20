@@ -1,4 +1,5 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
+import { ApiError } from '../api/client';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
@@ -8,6 +9,7 @@ import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} fro
 import { Link,useNavigate,useParams } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { SlaQueueNotice } from '../components/SlaQueueNotice';
+import { PriorityTriageRing, type PriorityRingTicket } from '../components/PriorityTriageRing';
 import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { useInboxGlobalAlert } from '../components/InboxGlobalAlert';
 import { useCreateFilter,useFilters } from '../hooks/useFilters';
@@ -15,6 +17,7 @@ import { OperatorWorkspaceProvider,useOperatorDraftIndicators,useOperatorWorkspa
 import { useSettings } from '../hooks/useSettings';
 import { useTicketSlaBatch, type TicketSla } from '../hooks/useTicketSla';
 import { useStandardQueueCounts, useTickets, useUpdateTicket } from '../hooks/useTickets';
+import { isPriorityMatrixSort, type PriorityClockProjection, type PriorityMatrixTicketQueryPage } from '../hooks/usePriorityMatrixTickets';
 import type { TicketQueryPage } from '../hooks/useSlaPriorityTickets';
 import type { Ticket } from '@luminatick/shared';
 import { ticketReference } from '../utils/ticket-reference';
@@ -27,7 +30,7 @@ const queueOrder=['mentions','mine','unassigned','drafts','actionable','snoozed'
 type NaturalFilters={owner:'All tickets'|'My tickets'|'Unassigned';created:'hour'|'day'|'week'|'month'|'quarter'|'anytime';customer:string;sort:WorkspacePreference['sort'];search:string};
 const defaultNaturalFilters:NaturalFilters={owner:'All tickets',created:'anytime',customer:'anyone',sort:'updated_desc',search:''};
 function ownerForView(view:string):NaturalFilters['owner']{return view==='mine'?'My tickets':view==='unassigned'?'Unassigned':'All tickets';}
-const naturalSortOptions:Readonly<Record<NaturalFilters['sort'],string>>={updated_desc:'recently updated',updated_asc:'least recently updated',created_desc:'newest first',created_asc:'oldest first',priority_desc:'highest impact',priority_asc:'lowest impact',sla_priority:'contract SLA'};
+const naturalSortOptions:Readonly<Record<NaturalFilters['sort'],string>>={updated_desc:'recently updated',updated_asc:'least recently updated',created_desc:'newest first',created_asc:'oldest first',priority_desc:'highest impact',priority_asc:'lowest impact',sla_priority:'contract SLA',priority_focus:'default focus',priority_criticality:'criticality matrix',priority_commitment:'SLA commitment'};
 function naturalSortLabel(sort:NaturalFilters['sort']){return naturalSortOptions[sort];}
 function createdAfterFor(period:NaturalFilters['created']):string|undefined{
   if(period==='anytime')return undefined;
@@ -47,6 +50,10 @@ function createdAfterFor(period:NaturalFilters['created']):string|undefined{
 }
 type QueueView=keyof typeof queueViews;
 function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts'||value==='mine'||value==='unassigned'||value==='mentions';}
+function isClassifiedTicket(ticket:Ticket):ticket is Ticket & PriorityRingTicket{
+  return (ticket.contract_sla_tier==='alpha'||ticket.contract_sla_tier==='bravo'||ticket.contract_sla_tier==='charlie'||ticket.contract_sla_tier==='delta')
+    &&(ticket.criticality_tier===1||ticket.criticality_tier===2||ticket.criticality_tier===3||ticket.criticality_tier===4);
+}
 function pageFromAnchor(anchor:string){const match=/^page:([1-9]\d*)$/.exec(anchor);const page=match?Number(match[1]):1;return Number.isSafeInteger(page)?page:1;}
 function pageAnchor(page:number){return `page:${Math.max(1,Math.floor(page))}`;}
 
@@ -197,7 +204,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     setDraftFilters(defaultNaturalFilters);applyFilters(defaultNaturalFilters);
     setQuickViewError('');setStatus('Ticket filters cleared.');
   };
-  const quickViewRepresentable=activeView==='all'&&draftFilters.owner==='All tickets'&&draftFilters.created==='anytime'&&draftFilters.sort==='updated_desc'&&!draftFilters.search.trim();
+  const quickViewRepresentable=activeView==='all'&&draftFilters.owner==='All tickets'&&draftFilters.created==='anytime'&&(draftFilters.sort==='updated_desc'||draftFilters.sort==='priority_focus')&&!draftFilters.search.trim();
   const saveQuickView=async()=>{
     const name=quickViewName.trim();
     if(!name){setQuickViewError('Enter a name for this quick view.');return;}
@@ -205,39 +212,50 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     try{
       const saved=await createFilter.mutateAsync({name,conditions:draftFilters.customer==='anyone'?[]:[{field:'customer_email',operator:'equals',value:draftFilters.customer}]});
       setSemanticFilters(defaultNaturalFilters);setDraftFilters(defaultNaturalFilters);setFilterOpen(false);setNamingQuickView(false);setQuickViewError('');
-      workspace.update({sort:'updated_desc',listQuery:'',listAnchor:'page:1'});navigate(`/inbox/${saved.id}`);
+      workspace.update({sort:draftFilters.sort,listQuery:'',listAnchor:'page:1'});navigate(`/inbox/${saved.id}`);
       setStatus(`Quick view ${saved.name} saved.`);
     }catch{setQuickViewError('Could not save the quick view. Your filter choices are still here; try again.');}
   };
   const createdAfter = useMemo(() => createdAfterFor(semanticFilters.created), [semanticFilters.created]);
   const identity = assignmentIdentity();
   const listScope = JSON.stringify([identity,activeView,queue,filterId,workspace.listQuery,workspace.sort,semanticFilters.customer,createdAfter]);
-  const query=useTickets({page:String(currentPage),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{}),...(semanticFilters.customer==='anyone'||filterId?{}:{customer_email:semanticFilters.customer}),...(createdAfter?{created_after:createdAfter}:{})});
+  const query=useTickets({page:String(currentPage),sort:workspace.sort,...(queue?{queue}:{}),...(filterId?{filter_id:filterId}:{}),...(workspace.listQuery?{search:workspace.listQuery}:{}),...(semanticFilters.customer==='anyone'||filterId?{}:{customer_email:semanticFilters.customer}),...(createdAfter?{created_after:createdAfter}:{})},routeReady&&workspace.status!=='loading');
   // A failed page read must not turn a confirmed list into an apparent empty queue.
   // Scope the fallback by authenticated operator and every list filter so a change
   // of tenant or view can never display rows from the previous identity/view.
   const confirmedPage=useRef<{scope:string;data:TicketQueryPage}|null>(null);
   if(query.data&&!query.error&&!query.isPlaceholderData)confirmedPage.current={scope:listScope,data:query.data};
-  // SLA ordering is a whole-view snapshot; an expired snapshot must be restarted
+  // Snapshot ordering is a whole-view read; an expired snapshot must be restarted
   // and must never borrow rows from the previous snapshot.
-  const displayPage=query.data??(workspace.sort!=='sla_priority'&&query.error&&confirmedPage.current?.scope===listScope?confirmedPage.current.data:undefined);
+  const priorityMatrixSort=isPriorityMatrixSort(workspace.sort);
+  const slaSort=workspace.sort==='sla_priority';
+  const snapshotSort=slaSort||priorityMatrixSort;
+  const displayPage=query.data??(!snapshotSort&&query.error&&confirmedPage.current?.scope===listScope?confirmedPage.current.data:undefined);
   const tickets=displayPage?.data??[];
   const meta=displayPage?.meta??{page:1,limit:20,total:0,total_pages:1};
-  const slaSort=workspace.sort==='sla_priority';
-  const batchSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),!slaSort&&routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
-  const ticketSla=slaSort?{...query,data:Object.fromEntries(Object.entries(query.data?.sla??{}).filter(([,value])=>value!==null))}:batchSla;
+  const priorityClocks=priorityMatrixSort&&!query.error&&!query.isPlaceholderData
+    ?(query.data as PriorityMatrixTicketQueryPage|undefined)?.priorityClocks:undefined;
+  const batchSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),!snapshotSort&&routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
+  const ticketSla=snapshotSort?{...query,data:Object.fromEntries(Object.entries(query.data?.sla??{}).filter(([,value])=>value!==null))}:batchSla;
   const setGlobalAlert = useInboxGlobalAlert();
   useEffect(() => {
+    if (priorityMatrixSort) {
+      if (query.error || query.isPlaceholderData || !query.data) { setGlobalAlert(null); return; }
+      const count=(query.data as PriorityMatrixTicketQueryPage).triageOverdueCount;
+      setGlobalAlert({kind:'priority-triage',count,scope:activeView==='all'?'this priority view':queueViews[activeView as QueueView]?.label??'this saved view'});
+      return () => setGlobalAlert(null);
+    }
     if (ticketSla.isLoading || ticketSla.isError || query.isPlaceholderData) return;
     const count = tickets.filter(ticket => !ticket.assigned_to && (() => {
       const sla = ticketSla.data?.[ticket.id];
       return sla?.response.state === 'breached' || sla?.resolution.state === 'breached';
     })()).length;
-    const scope = activeView === 'all' ? 'this inbox view' : queueViews[activeView as QueueView]?.label ?? 'this saved view';
+    const scope = activeView === 'all' ? 'the current page of this inbox view' : `the current page of ${queueViews[activeView as QueueView]?.label ?? 'this saved view'}`;
     setGlobalAlert({ count, scope });
     return () => setGlobalAlert(null);
-  }, [activeView, query.isPlaceholderData, setGlobalAlert, ticketSla.data, ticketSla.isError, ticketSla.isLoading, tickets]);
+  }, [activeView, priorityMatrixSort, query.data, query.error, query.isPlaceholderData, setGlobalAlert, ticketSla.data, ticketSla.isError, ticketSla.isLoading, tickets]);
   const restartSla=()=>{query.restartSla();workspace.update({listAnchor:'page:1'});setStatus('SLA ordering restarted. The selected conversation stays open.');};
+  const restartPriority=()=>{query.restartPriorityMatrix();workspace.update({listAnchor:'page:1'});setStatus('Priority ordering restarted. The selected conversation stays open.');};
   const advanceEnabled = useOptionalOperatorPreferencesContext()?.advanceAfterResolve ?? false;
   const advanceScope = JSON.stringify([identity, activeView, filterId, workspace.listQuery, workspace.sort, workspace.filters, filters, selectedTicketId, advanceEnabled]);
   const committedAdvanceScope = useRef(advanceScope);
@@ -252,12 +270,13 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       if (!advanceEnabled || !routeReady || selectedTicketId !== id || assignmentIdentity() !== identity) return;
       workspace.update({listAnchor:'page:1'});
       if (slaSort) query.restartSla();
+      if (priorityMatrixSort) query.restartPriorityMatrix();
       onAdvanceNotice('Conversation resolved. Refreshing this view for the next available work…');
       setAdvanceRequest({id,scope:advanceScope,pageGeneration:manualPageGeneration.current});
     };
     advanceRef.current = begin;
     return () => { if (advanceRef.current === begin) advanceRef.current = null; };
-  }, [advanceEnabled, advanceRef, advanceScope, onAdvanceNotice, identity, query.restartSla, routeReady, selectedTicketId, slaSort, workspace]);
+  }, [advanceEnabled, advanceRef, advanceScope, onAdvanceNotice, identity, query.restartSla, query.restartPriorityMatrix, routeReady, selectedTicketId, slaSort, priorityMatrixSort, workspace]);
   useEffect(() => {
     if (!advanceRequest || currentPage !== 1) return;
     if (advanceRequest.scope !== advanceScope) { setAdvanceRequest(null); onAdvanceNotice('Automatic advance stopped. The current conversation stays open.'); return; }
@@ -303,8 +322,8 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     }
   },[activeView,meta.page,currentPage,query.error,query.isFetching,query.isPlaceholderData,recoveringView]);
   useEffect(()=>{
-    if(!query.isFetching&&paging.current){paging.current=false;if(query.error&&!slaSort)retryButton.current?.focus();else heading.current?.focus();}
-  },[query.error,query.isFetching,slaSort]);
+    if(!query.isFetching&&paging.current){paging.current=false;if(query.error&&!snapshotSort)retryButton.current?.focus();else heading.current?.focus();}
+  },[query.error,query.isFetching,snapshotSort]);
   useEffect(()=>{
     const selected=tickets.findIndex(ticket=>ticket.id===selectedTicketId);
     setFocusedIndex(current=>selected>=0?selected:current>=tickets.length?Math.max(0,tickets.length-1):current);
@@ -320,7 +339,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     navigate(`/inbox/${id}`);
   };
   const selectedViewLabel=activeView==='actionable'?'Needs Attention':activeView==='all'
-    ? workspace.sort==='priority_desc'?'Highest Impact':workspace.sort==='sla_priority'?'Contract SLAs':'All tickets'
+    ? workspace.sort==='priority_focus'?'Default Focus':workspace.sort==='priority_criticality'?'Criticality Matrix'
+      :workspace.sort==='priority_commitment'?'SLA Commitment':workspace.sort==='priority_desc'?'Highest Impact'
+      :workspace.sort==='sla_priority'?'Contract SLAs':'All tickets'
     : queue?queueViews[queue].label:filters?.find(filter=>filter.id===activeView)?.name??'Saved view';
   const pageOpen=tickets.filter(ticket=>ticket.status==='open'||ticket.status==='pending').length;
   const pageOverdue=tickets.filter(ticket=>{
@@ -328,7 +349,10 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   }).length;
   const pageClosed=tickets.filter(ticket=>ticket.status==='resolved'||ticket.status==='closed').length;
   const priorityCounts=(['urgent','high','normal','low'] as const).map(priority=>({priority,count:tickets.filter(ticket=>ticket.priority===priority).length}));
-  const CurrentViewIcon=selectedViewLabel==='Highest Impact'?IconCircleExclamation:selectedViewLabel==='Contract SLAs'?IconShieldHalved:selectedViewLabel==='Needs Attention'?IconClock:selectedViewLabel==='All tickets'?IconTicket:IconFilter;
+  const CurrentViewIcon=selectedViewLabel==='Highest Impact'||selectedViewLabel==='Criticality Matrix'?IconCircleExclamation
+    :selectedViewLabel==='Contract SLAs'||selectedViewLabel==='SLA Commitment'?IconShieldHalved
+    :selectedViewLabel==='Needs Attention'||selectedViewLabel==='Default Focus'?IconClock
+    :selectedViewLabel==='All tickets'?IconTicket:IconFilter;
   const hasConfirmedPage=Boolean(displayPage)&&!query.isLoading&&!query.isPlaceholderData;
   const hasCompleteSla=hasConfirmedPage&&!ticketSla.isLoading&&!ticketSla.isError&&tickets.every(ticket=>Boolean(ticketSla.data?.[ticket.id]));
   const metricScope=query.error&&hasConfirmedPage?'last confirmed page':'current page';
@@ -343,11 +367,15 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       <h1 ref={heading} tabIndex={-1} className={pageStyles.inboxHiddenHeading}>Support Inbox</h1>
       <div data-part="inbox-primary-toolbar" className={css({ display: 'flex', minH: '14', alignItems: 'center', justifyContent: 'space-between', gap: '2', px: '4' })}>
         <ParkMenu.Root positioning={{ placement: 'bottom-start' }}><ParkMenu.Trigger asChild><ParkButton type="button" variant="plain" aria-label="Inbox views" className={css({ gap: '1', fontWeight: 'semibold', minW: 0, maxW: 'full', flex: '1 1 auto', justifyContent: 'flex-start', px: '1' })}><CurrentViewIcon aria-hidden="true" className={css({ display: { base: 'none', '2xl': 'block' } })} /><span className={css({ minW: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{selectedViewLabel}</span><ChevronDown aria-hidden="true" className={css({ flexShrink: 0 })} /></ParkButton></ParkMenu.Trigger><ParkMenu.Positioner><ParkMenu.Content aria-label="Inbox views" className={css({ zIndex: 20, minW: '56', maxH: '80', overflowY: 'auto' })}>
+          <ParkMenu.Item value="priority-focus" onClick={()=>changeView('all','priority_focus',true)}><IconClock aria-hidden="true" />Default Focus</ParkMenu.Item>
+          <ParkMenu.Item value="priority-criticality" onClick={()=>changeView('all','priority_criticality',true)}><IconCircleExclamation aria-hidden="true" />Criticality Matrix</ParkMenu.Item>
+          <ParkMenu.Item value="priority-commitment" onClick={()=>changeView('all','priority_commitment',true)}><IconShieldHalved aria-hidden="true" />SLA Commitment</ParkMenu.Item>
+          <ParkMenu.Separator />
           <ParkMenu.Item value="attention" onClick={()=>changeView('actionable','updated_desc',true)}><IconClock aria-hidden="true" />Needs Attention</ParkMenu.Item>
           <ParkMenu.Item value="impact" onClick={()=>changeView('all','priority_desc',true)}><IconCircleExclamation aria-hidden="true" />Highest Impact</ParkMenu.Item>
           <ParkMenu.Item value="sla" onClick={()=>changeView('all','sla_priority',true)}><IconShieldHalved aria-hidden="true" />Contract SLAs</ParkMenu.Item>
           <ParkMenu.Separator />
-          <ParkMenu.Item value="all" onClick={()=>changeView('all')}>All tickets</ParkMenu.Item>
+          <ParkMenu.Item value="all" onClick={()=>changeView('all','updated_desc')}>All tickets</ParkMenu.Item>
           {queueOrder.filter(id=>id!=='actionable').map(id=><ParkMenu.Item key={id} value={id} onClick={()=>changeView(id)}>{queueViews[id].label}{queueCounts.data?.[id]!==undefined&&<span aria-hidden="true" className={css({ ml: 'auto', color: 'fg.muted', fontSize: 'xs' })}>{queueCounts.data[id]}</span>}</ParkMenu.Item>)}
           {filters?.length ? <><ParkMenu.Separator />{filters.map(filter=><ParkMenu.Item key={filter.id} value={`saved-${filter.id}`} onClick={()=>changeView(filter.id)}>{filter.name}</ParkMenu.Item>)}</> : null}
           <ParkMenu.Separator />
@@ -393,9 +421,19 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     </header>
     {createMounted&&<NewTicketDialog open={createOpen} onOpenChange={setCreateOpen} trigger={createTrigger} onCreated={()=>setStatus('Ticket created.')} />}
     {slaSort&&<SlaQueueNotice asOf={query.data?.asOf} error={query.error} busy={query.isFetching} restart={restartSla} />}
+    {priorityMatrixSort&&<section aria-label="Priority ordering" className={css({ display: 'grid', gap: '2', m: '4', p: '3', borderWidth: '1px', borderColor: 'border.default', borderRadius: 'l2', bg: 'bg.surface' })}>
+      <p role="status">{query.error instanceof ApiError&&query.error.code==='priority_sort_restart'
+        ? 'This priority view changed or expired. Restart ordering to continue.'
+        : query.error ? 'Priority ordering is unavailable. No partial order is shown.'
+          : query.data?.asOf ? <>Priority order calculated at <time dateTime={query.data.asOf}>{new Date(query.data.asOf).toLocaleTimeString()}</time>. Refresh to update the queue.</>
+            : 'Calculating priority order for the whole view…'}</p>
+      <ParkButton type="button" variant="outline" disabled={query.isFetching} onClick={restartPriority} className={css({ justifySelf: 'start' })}>
+        {query.error instanceof ApiError&&query.error.code==='priority_sort_restart'?'Restart priority ordering':'Refresh priority ordering'}
+      </ParkButton>
+    </section>}
     {query.error&&<ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
       <ParkAlert.Description>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</ParkAlert.Description>
-      <ParkButton ref={retryButton} type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()}>Retry conversations</ParkButton>
+      <ParkButton ref={retryButton} type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():priorityMatrixSort?restartPriority():void query.refetch()}>Retry conversations</ParkButton>
     </ParkAlert.Content></ParkAlert.Root>}
     {workspace.status==='error'||workspace.status==='conflict'?<ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
       <ParkAlert.Description>{workspace.error}</ParkAlert.Description>
@@ -406,15 +444,16 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
       <p className={css({ m: '0', px: '4', py: '2', color: 'text.muted', fontSize: 'xs' })}>Table view uses the compact conversation list on small screens.</p>
       <div className={css({ display: { base: 'none', md: 'block' }, minH: '0', flex: '1', overflow: 'auto', bg: 'bg.subtle' })}>
         <ParkTable.Root aria-label="Tickets in the current view" className={pageStyles.inboxTable}>
-          <ParkTable.Head><ParkTable.Row><ParkTable.Header scope="col">Reference</ParkTable.Header><ParkTable.Header scope="col">Conversation</ParkTable.Header><ParkTable.Header scope="col">Customer</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header></ParkTable.Row></ParkTable.Head>
+          <ParkTable.Head><ParkTable.Row><ParkTable.Header scope="col">Reference</ParkTable.Header><ParkTable.Header scope="col">Conversation</ParkTable.Header><ParkTable.Header scope="col">Customer</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header><ParkTable.Header scope="col">Clocks</ParkTable.Header></ParkTable.Row></ParkTable.Head>
           <ParkTable.Body>
-            {query.isLoading&&<ParkTable.Row><ParkTable.Cell colSpan={4}><div role="status" aria-label="Loading conversations"><ParkSkeleton height="10" width="100%" /></div></ParkTable.Cell></ParkTable.Row>}
-            {emptyPage&&<ParkTable.Row><ParkTable.Cell colSpan={4}><ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></ParkTable.Cell></ParkTable.Row>}
+            {query.isLoading&&<ParkTable.Row><ParkTable.Cell colSpan={5}><div role="status" aria-label="Loading conversations"><ParkSkeleton height="10" width="100%" /></div></ParkTable.Cell></ParkTable.Row>}
+            {emptyPage&&<ParkTable.Row><ParkTable.Cell colSpan={5}><ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></ParkTable.Cell></ParkTable.Row>}
             {!emptyPage&&!query.isLoading&&tickets.map(ticket=><ParkTable.Row key={ticket.id} data-selected={ticket.id===selectedTicketId?'true':undefined} className={pageStyles.inboxTableRow}>
               <ParkTable.Cell>{ticketReference(ticket,prefix)}</ParkTable.Cell>
               <ParkTable.Cell><ParkLink asChild><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className={css({ minW: 0, minH: '6', maxW: 'full', overflowWrap: 'anywhere', whiteSpace: 'normal', textAlign: 'start' })}>{ticket.subject}</Link></ParkLink></ParkTable.Cell>
               <ParkTable.Cell>{ticket.customer_email}</ParkTable.Cell>
               <ParkTable.Cell>{ticket.status}</ParkTable.Cell>
+              <ParkTable.Cell><InboxClocks ticket={ticket} showPriorityRing={priorityMatrixSort} priorityClock={priorityClocks?.[ticket.id]} sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id]??undefined} slaLoading={ticketSla.isLoading} /></ParkTable.Cell>
             </ParkTable.Row>)}
           </ParkTable.Body>
         </ParkTable.Root>
@@ -431,6 +470,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         key={ticket.id} ticket={ticket} reference={ticketReference(ticket,prefix)} index={index} activeView={activeView}
         selected={ticket.id===selectedTicketId} focused={index===focusedIndex} expanded={expandedTicketId===ticket.id}
         sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id] ?? undefined} slaLoading={ticketSla.isLoading}
+        showPriorityRing={priorityMatrixSort} priorityClock={priorityClocks?.[ticket.id]}
         hasDraft={drafts.ticketIds.has(ticket.id)} queueId={queue&&!query.isPlaceholderData?queue:undefined} queueLabel={queue&&!query.isPlaceholderData?queueViews[queue].label:undefined}
         rowRefs={rowRefs}
         onFocus={()=>setFocusedIndex(index)} onMoveFocus={moveFocus} onExpanded={setExpandedTicketId}
@@ -445,7 +485,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   </div>;
 }
 
-function InboxConversationCard({ ticket, reference, index, activeView, selected, focused, expanded, sla, slaLoading, hasDraft, queueId, queueLabel, rowRefs, onFocus, onMoveFocus, onExpanded, onOpen, onResolve, onUrgent }: {
+function InboxConversationCard({ ticket, reference, index, activeView, selected, focused, expanded, sla, slaLoading, showPriorityRing, priorityClock, hasDraft, queueId, queueLabel, rowRefs, onFocus, onMoveFocus, onExpanded, onOpen, onResolve, onUrgent }: {
   ticket: Ticket;
   reference: string;
   index: number;
@@ -455,6 +495,8 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
   expanded: boolean;
   sla: TicketSla | undefined;
   slaLoading: boolean;
+  showPriorityRing: boolean;
+  priorityClock: PriorityClockProjection | null | undefined;
   hasDraft: boolean;
   queueId: QueueView | undefined;
   queueLabel: string | undefined;
@@ -495,9 +537,9 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
     onClick={event => { if (!(event.target as Element).closest('a')) linkRef.current?.click(); }}
     onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); onMoveFocus(index + 1); } else if (event.key === 'ArrowUp') { event.preventDefault(); onMoveFocus(index - 1); } else if (event.key === 'Enter') { event.preventDefault(); linkRef.current?.click(); } else if (event.key === ' ' && event.target === event.currentTarget) { event.preventDefault(); onExpanded(expanded ? null : ticket.id); } else if (event.key === 'Escape' && expanded) { event.preventDefault(); onExpanded(null); } else if (event.altKey && event.key === 'ArrowRight') { event.preventDefault(); onResolve(); } else if (event.altKey && event.key === 'ArrowLeft') { event.preventDefault(); onUrgent(); } }}>
     <div aria-hidden="true" style={{ visibility: dragX === 0 ? 'hidden' : 'visible' }} className={css({ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bg: 'critical', px: '4', color: 'white', fontSize: 'sm', fontWeight: 'bold' })}><span>Resolve</span><span>Mark urgent</span></div>
-    <div data-part="ticket-row-surface" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={css({ position: 'relative', display: 'grid', gridTemplateColumns: '3rem minmax(0, 1fr)', alignItems: 'start', gap: '2', p: '2', touchAction: 'pan-y', bg: 'bg.surface', _hover: { bg: 'bg.subtle' }, ...(selected ? { borderInlineStartWidth: '3px', borderInlineStartColor: 'border.focus', bg: 'bg.subtle' } : {}) })}>
-      <div data-part="ticket-sla-anchor" className={css({ display: 'flex', flexDirection: 'column', alignItems: 'center', minW: 0 })}>
-        <InboxSlaRing sla={sla} loading={slaLoading} priority={ticket.priority} />
+    <div data-part="ticket-row-surface" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={clsx(css({ position: 'relative', display: 'grid', alignItems: 'start', gap: '2', p: '2', touchAction: 'pan-y', bg: 'bg.surface', _hover: { bg: 'bg.subtle' }, ...(selected ? { borderInlineStartWidth: '3px', borderInlineStartColor: 'border.focus', bg: 'bg.subtle' } : {}) }),showPriorityRing&&isClassifiedTicket(ticket)?css({ gridTemplateColumns: '7.5rem minmax(0, 1fr)' }):css({ gridTemplateColumns: '3rem minmax(0, 1fr)' }))}>
+      <div data-part="ticket-sla-anchor" className={css({ display: 'flex', alignItems: 'start', justifyContent: 'center', gap: '1', minW: 0 })}>
+        <InboxClocks ticket={ticket} showPriorityRing={showPriorityRing} priorityClock={priorityClock} sla={sla} slaLoading={slaLoading} />
       </div>
       <Link ref={linkRef} tabIndex={-1} aria-label={`Open ${reference}: ${ticket.subject}`} to={`/inbox/${activeView}/${ticket.id}`} onClick={event => { if (didSwipe.current) { event.preventDefault(); didSwipe.current = false; return; } onOpen(); }} className={css({ display: 'block', minW: 0, color: 'inherit', textDecoration: 'none' })}>
         <div data-part="ticket-default" aria-hidden={expanded} className={css({ display: 'grid', gridTemplateRows: expanded ? '0fr' : '1fr', opacity: expanded ? 0 : 1, transition: 'grid-template-rows 180ms ease, opacity 180ms ease', '@media (prefers-reduced-motion: reduce)': { transition: 'none' } })}>
@@ -517,6 +559,15 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
       </Link>
     </div>
   </article>;
+}
+
+function InboxClocks({ticket,showPriorityRing,priorityClock,sla,slaLoading}:{
+  ticket:Ticket;showPriorityRing:boolean;priorityClock:PriorityClockProjection|null|undefined;sla:TicketSla|undefined;slaLoading:boolean;
+}){
+  return <div className={css({ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: '1' })}>
+    {showPriorityRing&&isClassifiedTicket(ticket)&&<PriorityTriageRing ticket={ticket} projection={priorityClock} />}
+    <InboxSlaRing sla={sla} loading={slaLoading} priority={ticket.priority} />
+  </div>;
 }
 
 function InboxSlaRing({ sla, loading, priority }: { sla: TicketSla | undefined; loading: boolean; priority: Ticket['priority'] }) {
