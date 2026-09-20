@@ -560,7 +560,7 @@ export default {
             personaTrigger: { position: 'relative', display: 'inline-flex', flexShrink: '0', alignItems: 'center', justifyContent: 'center', minWidth: '2.75rem', minHeight: '2.75rem', padding: '0.125rem', borderRadius: 'full' },
             personaTriggerLabelled: { width: '100%', minWidth: '0', justifyContent: 'flex-start', gap: '0.75rem', padding: '0.25rem 0.5rem' },
             personaAvatar: { width: '2.5rem', height: '2.5rem' },
-            personaStatus: { position: 'absolute', insetBlockEnd: '-0.0625rem', insetInlineEnd: '-0.0625rem', width: '0.75rem', height: '0.75rem', borderRadius: 'full', borderWidth: '2px', borderColor: { base: 'bg.surface', lg: 'bg.default' }, background: 'green.9' },
+            personaStatus: { width: '0.75rem', height: '0.75rem', borderWidth: '2px', borderColor: { base: 'bg.surface', lg: 'bg.default' }, background: 'green.9' },
             personaDetails: { display: 'flex', minWidth: '0', flexDirection: 'column', alignItems: 'flex-start', gap: '0.125rem', overflow: 'hidden', textAlign: 'left' },
             personaName: { maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 'medium' },
             personaPresence: { color: 'fg.muted', fontSize: '0.75rem', lineHeight: '1rem' },
