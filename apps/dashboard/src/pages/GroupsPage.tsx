@@ -1,5 +1,6 @@
+import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkInput, ParkTextarea, ParkTable } from '@luminatick/ui/park';
 import { ParkEmptyState } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import {
@@ -96,73 +97,73 @@ export const GroupsPage: React.FC = () => {
     } finally { deleteGuard.current = false; setDeleting(false); }
   };
 
-  if (isLoadingGroups) return <ParkEmptyState title="Loading groups…" className="tocyn-groups-loading-state" aria-busy="true" />;
+  if (isLoadingGroups) return <ParkEmptyState title="Loading groups…" className={css({"minW":0})} aria-busy="true" />;
 
   const managingGroup = groups?.find(g => g.id === managingGroupId);
 
   return (
-    <div className="tocyn-groups-page">
-      <div className="tocyn-groups-header">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={pageHeading} tabIndex={-1} className="tocyn-groups-title">Group Management</h1>
-          <p className="tocyn-groups-description">Organize agents into teams to handle specific ticket categories.</p>
+          <h1 ref={pageHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Group Management</h1>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Organize agents into teams to handle specific ticket categories.</p>
         </div>
         {isAdmin && (
           <ParkButton
             ref={createOpener} onClick={() => { setCreateError(''); setIsCreating(true); }}
-            className="tocyn-groups-create"
+            className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            <IconPlus className="tocyn-groups-create-icon" />
+            <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} />
             Create Group
           </ParkButton>
         )}
       </div>
 
-      {groupStatus && <p role="status" className="tocyn-groups-status">{groupStatus}</p>}
+      {groupStatus && <p role="status" className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{groupStatus}</p>}
       <TocynDialog open={isCreating} busy={creating} labelledBy={createTitle} initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current} onOpenChange={next => { if (!next) closeCreate(); }}>
-        <div className="tocyn-groups-editor">
-          <div className="tocyn-groups-editor-header">
-            <h2 id={createTitle} className="tocyn-groups-editor-title">New Support Group</h2>
-            <ParkButton aria-label="Close group editor" disabled={creating} onClick={closeCreate} className="tocyn-groups-editor-close">
+        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+          <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+            <h2 id={createTitle} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>New Support Group</h2>
+            <ParkButton aria-label="Close group editor" disabled={creating} onClick={closeCreate} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
               <IconXmark size={20} />
             </ParkButton>
           </div>
           <form onSubmit={handleCreateGroup} aria-labelledby={createTitle}>
-            {createError && <p role="alert" className="tocyn-groups-editor-error">{createError}</p>}
-            <fieldset disabled={creating} className="tocyn-groups-editor-fields">
-            <div className="tocyn-form-field">
+            {createError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>{createError}</p>}
+            <fieldset disabled={creating} className={css({"display":"grid","gap":"4"})}>
+            <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
               <label htmlFor={`${createTitle}-name`}>Group Name</label>
               <ParkInput
                 type="text"
                 required
-                className="tocyn-form-control"
+                className={css({"w":"full"})}
                 placeholder="e.g., Technical Support"
                 id={`${createTitle}-name`} ref={groupNameInput} value={newGroupName}
                 onChange={e => setNewGroupName(e.target.value)}
               />
             </div>
-            <div className="tocyn-form-field">
+            <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
               <label htmlFor={`${createTitle}-description`}>Description (Optional)</label>
               <ParkTextarea
-                className="tocyn-form-control"
+                className={css({"w":"full"})}
                 placeholder="Briefly describe what this group handles..."
                 rows={2}
                 id={`${createTitle}-description`} value={newGroupDescription}
                 onChange={e => setNewGroupDescription(e.target.value)}
               />
             </div>
-            <div className="tocyn-groups-dialog-actions">
+            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
               <ParkButton
                 type="button"
                 onClick={closeCreate}
-                className="tocyn-groups-cancel-action"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 Cancel
               </ParkButton>
               <ParkButton
                 type="submit"
                 disabled={creating}
-                className="tocyn-groups-create-action"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 {creating ? 'Creating...' : 'Create Group'}
               </ParkButton>
@@ -174,65 +175,65 @@ export const GroupsPage: React.FC = () => {
       <TocynDialog open={deleteOpen} busy={deleting} labelledBy={deleteTitle} initialFocusEl={() => deleteCancel.current}
         finalFocusEl={() => deleteSucceeded.current ? pageHeading.current : deleteOpener.current}
         onOpenChange={next => { if (!next) closeDelete(); }}>
-        <div className="tocyn-groups-delete-dialog">
-          <h2 id={deleteTitle} className="tocyn-groups-delete-title">Delete group: {deleteGroup?.name}</h2>
+        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+          <h2 id={deleteTitle} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Delete group: {deleteGroup?.name}</h2>
           <p>Delete this group? It must not have any active tickets. This action cannot be undone.</p>
-          {deleteError && <p role="alert" className="tocyn-groups-delete-error">{deleteError}</p>}
-          <div className="tocyn-groups-dialog-actions">
+          {deleteError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>{deleteError}</p>}
+          <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
             <ParkButton ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</ParkButton>
             <ParkButton disabled={deleting} onClick={handleDeleteGroup}>{deleting ? 'Deleting...' : 'Delete group'}</ParkButton>
           </div>
         </div>
       </TocynDialog>
 
-      <div className="tocyn-groups-table-shell">
-        <table className="tocyn-groups-table">
-          <thead>
-            <tr className="tocyn-groups-table-head">
-              <th className="tocyn-groups-table-heading-cell">Group Name</th>
-              <th className="tocyn-groups-table-heading-cell">Description</th>
-              <th className="tocyn-groups-table-heading-cell">Created</th>
-              <th className="tocyn-groups-table-heading-cell tocyn-groups-table-heading-actions">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="tocyn-groups-table-body">
+      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","overflowX":"auto"})}>
+        <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
+          <ParkTable.Head>
+            <ParkTable.Row className={css({"borderBottomWidth":"1px","borderColor":"border.default"})}>
+              <ParkTable.Header className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>Group Name</ParkTable.Header>
+              <ParkTable.Header className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>Description</ParkTable.Header>
+              <ParkTable.Header className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>Created</ParkTable.Header>
+              <ParkTable.Header className={css({"p":"3","textAlign":"right","verticalAlign":"top","display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>Actions</ParkTable.Header>
+            </ParkTable.Row>
+          </ParkTable.Head>
+          <ParkTable.Body className={css({"minW":0})}>
             {groups?.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="tocyn-groups-table-empty-cell">
-                  <ParkEmptyState title="No groups found." description="Create one to start organizing your team." className="tocyn-groups-empty-state" />
-                </td>
-              </tr>
+              <ParkTable.Row>
+                <ParkTable.Cell colSpan={4} className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>
+                  <ParkEmptyState title="No groups found." description="Create one to start organizing your team." className={css({"minW":0})} />
+                </ParkTable.Cell>
+              </ParkTable.Row>
             ) : (
               groups?.map((group) => (
-                <tr key={group.id} className="tocyn-groups-table-row">
-                  <td className="tocyn-groups-name">{group.name}</td>
-                  <td className="tocyn-groups-description">{group.description || '-'}</td>
-                  <td className="tocyn-groups-count">
+                <ParkTable.Row key={group.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","borderBottomWidth":"1px","borderColor":"border.default"})}>
+                  <ParkTable.Cell className={css({"fontWeight":"medium","color":"text.default"})}>{group.name}</ParkTable.Cell>
+                  <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{group.description || '-'}</ParkTable.Cell>
+                  <ParkTable.Cell className={css({"minW":0})}>
                     {new Date(group.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="tocyn-groups-actions">
+                  </ParkTable.Cell>
+                  <ParkTable.Cell className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
                     <ParkButton
                       onClick={event => { membersOpener.current = event.currentTarget; setManagingGroupId(group.id); setMembersOpen(true); }}
-                      className="tocyn-groups-action tocyn-groups-action-primary"
+                      className={css({"display":"inline-flex","alignItems":"center","gap":"2","minW":0})}
                     >
-                      <IconUsers className="tocyn-groups-member-icon-md" />
+                      <IconUsers className={css({"w":"4","h":"4","flexShrink":0})} />
                       Members
                     </ParkButton>
                     {isAdmin && (
                       <ParkButton
                         aria-label={`Delete ${group.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setReturnFocusToHeading(false); setDeleteGroup(group); setDeleteError(''); setDeleteOpen(true); }}
-                        className="tocyn-groups-action tocyn-groups-action-danger"
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2","minW":0})}
                         title="Delete Group"
                       >
-                        <IconTrash className="tocyn-groups-member-remove-icon" />
+                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
                       </ParkButton>
                     )}
-                  </td>
-                </tr>
+                  </ParkTable.Cell>
+                </ParkTable.Row>
               ))
             )}
-          </tbody>
-        </table>
+          </ParkTable.Body>
+        </ParkTable.Root>
       </div>
 
       {managingGroupId && managingGroup && (
@@ -294,48 +295,48 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
 
   return (
     <TocynDialog open={open} busy={pending} labelledBy={titleId} initialFocusEl={() => closeButton.current} finalFocusEl={finalFocusEl} onOpenChange={next => { if (!next) close(); }}>
-      <div className="tocyn-groups-members-dialog">
-        <div className="tocyn-groups-dialog-header">
+      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+        <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
           <div>
-            <h2 id={titleId} className="tocyn-groups-members-title">Manage Members: {group.name}</h2>
-            <p className="tocyn-groups-members-description">Add or remove agents from this group.</p>
+            <h2 id={titleId} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Manage Members: {group.name}</h2>
+            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Add or remove agents from this group.</p>
           </div>
-          <ParkButton ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close} className="tocyn-groups-members-close">
+          <ParkButton ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
             <IconXmark size={24} />
           </ParkButton>
         </div>
 
-        <div className="tocyn-groups-dialog-body">
-          {operationError && <p role="alert" className="tocyn-groups-members-error">{operationError}</p>}
-          {status && <p role="status" className="tocyn-groups-dialog-status">{status}</p>}
-          {membersError && <p role="alert" className="tocyn-groups-dialog-alert">Group members could not be loaded. Reopen this page to retry.</p>}
-          {removingId && <div role="group" aria-label="Confirm member removal" className="tocyn-groups-removal-confirm">
+        <div className={css({"minW":0})}>
+          {operationError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>{operationError}</p>}
+          {status && <p role="status" className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{status}</p>}
+          {membersError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>Group members could not be loaded. Reopen this page to retry.</p>}
+          {removingId && <div role="group" aria-label="Confirm member removal" className={css({"minW":0})}>
             <p>Remove {members?.find(member => member.id === removingId)?.full_name || members?.find(member => member.id === removingId)?.email || 'this member'} from the group?</p>
             <ParkButton ref={confirmRemovalButton} disabled={pending} onClick={() => changeMember(removingId, true)}>Remove member</ParkButton>
             <ParkButton disabled={pending} onClick={() => { setRemovingId(null); closeButton.current?.focus(); }}>Cancel removal</ParkButton>
           </div>}
           {/* Current Members Section */}
           <div>
-            <h3 className="tocyn-groups-members-heading">Current Members ({members?.length || 0})</h3>
-            <div className="tocyn-groups-members-list">
+            <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Current Members ({members?.length || 0})</h3>
+            <div className={css({"display":"grid","gap":"4"})}>
               {isLoadingMembers ? (
-                <ParkEmptyState title="Loading members…" className="tocyn-groups-members-loading" aria-busy="true" />
+                <ParkEmptyState title="Loading members…" className={css({"py":"6"})} aria-busy="true" />
               ) : members?.length === 0 ? (
-                <ParkEmptyState title="No members assigned yet." className="tocyn-groups-members-empty" />
+                <ParkEmptyState title="No members assigned yet." className={css({"py":"6"})} />
               ) : (
                 members?.map(member => (
-                  <div key={member.id} className="tocyn-groups-member-row">
-                    <div className="tocyn-groups-member-identity">
-                      <div className="tocyn-groups-member-avatar">
+                  <div key={member.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                    <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                      <div className={css({"display":"grid","placeItems":"center","w":"10","h":"10","rounded":"full","bg":"bg.muted"})}>
                         {member.full_name?.[0] || member.email[0].toUpperCase()}
                       </div>
                       <div>
-                        <div className="tocyn-groups-member-name">
+                        <div className={css({"fontWeight":"medium","color":"text.default"})}>
                           {member.full_name || 'Unnamed'}
-                          {member.role === 'admin' && <IconShieldHalved className="tocyn-groups-member-admin-icon" />}
+                          {member.role === 'admin' && <IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} />}
                         </div>
-                        <div className="tocyn-groups-member-meta">
-                          <IconEnvelope className="tocyn-groups-member-icon" />
+                        <div className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                          <IconEnvelope className={css({"w":"4","h":"4","flexShrink":0})} />
                           {member.email}
                         </div>
                       </div>
@@ -343,10 +344,10 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                     {isAdmin && (
                       <ParkButton
                         disabled={pending} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
-                        className="tocyn-groups-member-remove"
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Remove member"
                       >
-                        <IconTrash className="tocyn-groups-member-remove-icon" />
+                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
                       </ParkButton>
                     )}
                   </div>
@@ -357,55 +358,55 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
 
           {/* Add New Member Section (Admin Only) */}
           {isAdmin && (
-            <div className="tocyn-groups-add-agent">
-              <h3 className="tocyn-groups-members-heading">Add Agent</h3>
-              <div className="tocyn-groups-agent-search">
-                <IconMagnifyingGlass className="tocyn-groups-agent-search-icon" />
+            <div className={css({"minW":0})}>
+              <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Add Agent</h3>
+              <div className={css({"minW":0})}>
+                <IconMagnifyingGlass className={css({"w":"4","h":"4","flexShrink":0})} />
                 <ParkInput
                   type="text"
                   aria-label="Search agents" disabled={pending} placeholder="Search agents by name or email..."
-                  className="tocyn-groups-agent-search-input"
+                  className={css({"w":"full"})}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
               </div>
 
-              <div className="tocyn-groups-agent-options">
-                {agentsError && <p role="alert" className="tocyn-groups-dialog-alert">Agents could not be loaded. Reopen this page to retry.</p>}
-                {agentsLoading && <ParkEmptyState title="Loading agents…" className="tocyn-groups-members-loading" aria-busy="true" />}
+              <div className={css({"display":"grid","gap":"4"})}>
+                {agentsError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>Agents could not be loaded. Reopen this page to retry.</p>}
+                {agentsLoading && <ParkEmptyState title="Loading agents…" className={css({"py":"6"})} aria-busy="true" />}
                 {availableAgents?.map(agent => (
                   <ParkButton
                     key={agent.id}
                     disabled={pending || isLoadingMembers || membersError || agentsLoading || agentsError} aria-label={`Add ${agent.full_name || agent.email}`} onClick={() => changeMember(agent.id, false)}
-                    className="tocyn-groups-agent-option"
+                    className={css({"minW":0})}
                   >
-                    <div className="tocyn-groups-member-identity">
-                      <div className="tocyn-groups-agent-avatar">
+                    <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                      <div className={css({"display":"grid","placeItems":"center","w":"10","h":"10","rounded":"full","bg":"bg.muted"})}>
                         {agent.full_name?.[0] || agent.email[0].toUpperCase()}
                       </div>
                       <div>
-                        <div className="tocyn-groups-agent-name">{agent.full_name || 'Unnamed'}</div>
-                        <div className="tocyn-groups-agent-email">{agent.email}</div>
+                        <div className={css({"fontWeight":"medium","color":"text.default"})}>{agent.full_name || 'Unnamed'}</div>
+                        <div className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{agent.email}</div>
                       </div>
                     </div>
-                    <IconUserPlus className="tocyn-groups-agent-add-icon" />
+                    <IconUserPlus className={css({"w":"4","h":"4","flexShrink":0})} />
                   </ParkButton>
                 ))}
                 {availableAgents?.length === 0 && searchTerm && (
-                  <ParkEmptyState title="No matching agents found." className="tocyn-groups-members-loading" />
+                  <ParkEmptyState title="No matching agents found." className={css({"py":"6"})} />
                 )}
                 {availableAgents?.length === 0 && !searchTerm && (
-                  <ParkEmptyState title="All available agents are already in this group." className="tocyn-groups-members-loading" />
+                  <ParkEmptyState title="All available agents are already in this group." className={css({"py":"6"})} />
                 )}
               </div>
             </div>
           )}
         </div>
 
-        <div className="tocyn-groups-members-footer">
+        <div className={css({"minW":0})}>
           <ParkButton
             disabled={pending} onClick={close}
-            className="tocyn-groups-members-done"
+            className={css({"minW":0})}
           >
             Done
           </ParkButton>

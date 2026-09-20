@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ParkButton, ParkCard, ParkPage } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useAuthStore } from '../store/authStore';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { OperatorPreferencesControl, OperatorThemeControl } from '../components/theme/OperatorThemeProvider';
@@ -11,7 +12,7 @@ export function AccountSettingsPage() {
   return <div className={[page.root, page.content].join(' ')}>
     <header className={page.header}>
       <div>
-        <p className="tocyn-page-eyebrow">Account</p>
+        <p className={css({ color: 'text.muted', fontSize: 'sm', fontWeight: 'medium', textTransform: 'uppercase', letterSpacing: 'wide' })}>Account</p>
         <h1>Account settings</h1>
         <p>Manage your operator identity, appearance, workspace preferences and current work.</p>
       </div>

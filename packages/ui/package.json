@@ -14,6 +14,7 @@
     "./brand": "./src/brand.tsx",
     "./auth-layout": "./src/auth-layout.tsx",
     "./park": "./src/park.tsx",
+    "./components": "./src/components/ui/index.ts",
     "./styled-system/jsx": {
       "types": "./src/styles/generated/jsx/index.d.ts",
       "import": "./src/styles/generated/jsx/index.mjs"
@@ -38,7 +39,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "panda:codegen": "panda codegen --config ./panda.config.ts",
-    "panda:cssgen": "panda cssgen --config ./panda.config.ts --outfile ./src/styles/panda.css"
+    "panda:cssgen": "panda cssgen --config ./panda.config.ts --outfile ./src/styles/panda.css",
+    "panda:generate": "npm run panda:codegen && npm run panda:cssgen"
   },
   "peerDependencies": {
     "react": ">=18.2.0",
@@ -52,9 +54,11 @@
   },
   "devDependencies": {
     "@pandacss/dev": "^1.12.1",
+    "@park-ui/cli": "1.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^24.13.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "jsdom": "^29.1.1",

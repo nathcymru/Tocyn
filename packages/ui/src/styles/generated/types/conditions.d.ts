@@ -2,7 +2,7 @@
 import type { AnySelector, Selectors } from './selectors';
 
 export interface Conditions {
-	/** `&:is(:hover, [data-hover])` */
+	/** `&:not(:disabled):hover` */
 	"_hover": string
 	/** `&:is(:focus, [data-focus])` */
 	"_focus": string
@@ -12,7 +12,7 @@ export interface Conditions {
 	"_focusVisible": string
 	/** `&:is(:disabled, [disabled], [data-disabled], [aria-disabled=true])` */
 	"_disabled": string
-	/** `&:is(:active, [data-active])` */
+	/** `&:not(:disabled):active` */
 	"_active": string
 	/** `&:visited` */
 	"_visited": string
@@ -24,7 +24,7 @@ export interface Conditions {
 	"_readWrite": string
 	/** `&:is(:empty, [data-empty])` */
 	"_empty": string
-	/** `&:is(:checked, [data-checked], [aria-checked=true], [data-state="checked"])` */
+	/** `&:is(:checked, [data-checked], [data-state=checked], [aria-checked=true], [data-state=indeterminate])` */
 	"_checked": string
 	/** `&:enabled` */
 	"_enabled": string
@@ -114,7 +114,7 @@ export interface Conditions {
 	"_required": string
 	/** `&:is(:valid, [data-valid])` */
 	"_valid": string
-	/** `&:is(:invalid, [data-invalid], [aria-invalid=true])` */
+	/** `&:is(:user-invalid, [data-invalid], [aria-invalid=true])` */
 	"_invalid": string
 	/** `&:autofill` */
 	"_autofill": string
@@ -182,7 +182,7 @@ export interface Conditions {
 	"_portrait": string
 	/** `.dark &` */
 	"_dark": string
-	/** `.light &` */
+	/** `:root &, .light &` */
 	"_light": string
 	/** `@media (prefers-color-scheme: dark)` */
 	"_osDark": string
@@ -216,6 +216,10 @@ export interface Conditions {
 	"_noscript": string
 	/** `@media (inverted-colors: inverted)` */
 	"_invertedColors": string
+	/** `&:is([data-state=on])` */
+	"_on": string
+	/** `&:is([data-pinned])` */
+	"_pinned": string
 	/** `@media screen and (min-width: 40rem)` */
 	"sm": string
 	/** `@media screen and (min-width: 40rem) and (max-width: 47.9975rem)` */

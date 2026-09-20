@@ -1,9 +1,28 @@
 import { memo, splitProps } from '../helpers.mjs';
 import { createRecipe, mergeRecipes } from './create-recipe.mjs';
 
-const inputFn = /* @__PURE__ */ createRecipe('input', {}, [])
+const inputFn = /* @__PURE__ */ createRecipe('input', {
+  "size": "md",
+  "variant": "outline"
+}, [])
 
-const inputVariantMap = {}
+const inputVariantMap = {
+  "variant": [
+    "outline",
+    "surface",
+    "subtle",
+    "flushed"
+  ],
+  "size": [
+    "2xs",
+    "xs",
+    "sm",
+    "md",
+    "lg",
+    "xl",
+    "2xl"
+  ]
+}
 
 const inputVariantKeys = Object.keys(inputVariantMap)
 

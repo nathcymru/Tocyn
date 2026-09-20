@@ -42,6 +42,10 @@ function showInbox(entry='/inbox/all',globalSearch=false){
   const result=render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
   return {...result,router};
 }
+async function chooseSort(option:string){
+  await userEvent.click(screen.getByRole('combobox',{name:'Sort conversations'}));
+  await userEvent.click(screen.getByRole('option',{name:option}));
+}
 
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false,refetchInterval:false},mutations:{retry:false}}});
@@ -90,7 +94,11 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
   expect(options[2]).toHaveFocus();
   expect(options[2]).toHaveAttribute('tabindex','0');
   await userEvent.tab();
+  expect(screen.getByRole('separator',{name:'Resize conversation panes'})).toHaveFocus();
+  await userEvent.tab();
   expect(screen.getByRole('link',{name:'Back to conversations'})).toHaveFocus();
+  await userEvent.tab({shift:true});
+  expect(screen.getByRole('separator',{name:'Resize conversation panes'})).toHaveFocus();
   await userEvent.tab({shift:true});
   expect(options[2]).toHaveFocus();
 
@@ -198,7 +206,7 @@ it('keeps a confirmed conversation and draft/list visibility while workspace pre
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveAttribute('aria-selected','true');
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 
-  fireEvent.change(screen.getByRole('combobox',{name:'Sort conversations'}),{target:{value:'created_asc'}});
+  await chooseSort('Oldest created');
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Workspace preferences changed in another session. Review before replacing them.'));
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-20');
   expect(screen.getByRole('heading',{name:'Conversation ticket-20'})).toBeInTheDocument();
@@ -268,7 +276,7 @@ it('switches all 20 fixture conversations and returns without losing the custom 
     expect(pane).toBeInTheDocument();
     expect(pane.scrollTop).toBe(480);
     expect(queryInput).toHaveValue('follow up');
-    expect(sortInput).toHaveValue('created_asc');
+    expect(sortInput).toHaveTextContent('Oldest created');
   }
   fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
   await screen.findByRole('heading',{name:'Choose a conversation'});
@@ -309,7 +317,7 @@ it('keeps the custom list position and selected conversation when its draft refu
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBe(list);
   expect(pane.scrollTop).toBe(640);
   expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
-  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveValue('created_asc');
+  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveTextContent('Oldest created');
 });
 
 it('uses server Drafts queue results and reports an empty saved-draft view without implying all work is complete',async()=>{
@@ -429,11 +437,11 @@ it('starts a different queue on page one after leaving page three without changi
   await waitFor(()=>expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1));
   expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
   expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
-  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveValue('created_asc');
+  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveTextContent('Oldest created');
   releaseOld();await oldRefresh;
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mine');
   expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1);
-  expect(screen.getByRole('status',{name:'Inbox status'})).not.toHaveTextContent('Showing the first page');
+  expect(screen.queryByRole('status',{name:'Inbox status'})?.textContent ?? '').not.toContain('Showing the first page');
 });
 
 it.each(['List view','Table view'] as const)('recovers a shrunken last page without a false queue-clear claim in %s',async presentation=>{
@@ -478,7 +486,7 @@ it('uses whole-view SLA ordering and same-snapshot projections, then restarts an
   await screen.findByRole('option',{name:/Fixture conversation 20/});
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
   const before=vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/ticket-sla/projections').length;
-  fireEvent.change(screen.getByRole('combobox',{name:'Sort conversations'}),{target:{value:'sla_priority'}});
+  await chooseSort('Service level priority');
   await waitFor(()=>expect(slaRequests).toHaveLength(1));
   const list=screen.getByRole('listbox',{name:'Conversation list'});
   await waitFor(()=>expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 20'));

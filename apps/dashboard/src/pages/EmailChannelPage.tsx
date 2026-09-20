@@ -1,5 +1,7 @@
+import { DashboardSelect } from '../components/DashboardSelect';
+import { css } from '@luminatick/ui/styled-system/css';
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkInput, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkCheckbox, ParkInput } from '@luminatick/ui/park';
 import { ParkEmptyState } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -152,19 +154,19 @@ export function EmailChannelPage() {
   };
 
   return (
-    <div className="tocyn-email-channel-page">
-      <div className="tocyn-email-channel-header">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className="tocyn-email-channel-title">Email Channels</h1>
-          <p className="tocyn-email-channel-description">Manage inbound support email addresses</p>
+          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Email Channels</h1>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Manage inbound support email addresses</p>
         </div>
         {!isAdding && (
           <ParkButton
             ref={addOpener}
             onClick={() => { setIsAdding(true); setError(null); setAddStatus(''); }}
-            className="tocyn-email-channel-add"
+            className={css({"minW":0})}
           >
-            <IconPlus className="tocyn-email-channel-add-icon" />
+            <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} />
             Add Email
           </ParkButton>
         )}
@@ -172,22 +174,22 @@ export function EmailChannelPage() {
 
 
       {addStatus && <p role="status">{addStatus}</p>}
-      <form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className="tocyn-email-channel-config">
-        <div className="tocyn-email-channel-config-header">
-          <div className="tocyn-email-channel-config-icon">
-            <IconGear className="tocyn-email-channel-config-icon-glyph" />
+      <form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+        <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+          <div className={css({"w":"4","h":"4","flexShrink":0})}>
+            <IconGear className={css({"w":"4","h":"4","flexShrink":0})} />
           </div>
           <div>
-            <h2 className="tocyn-email-channel-config-title">Resend Integration</h2>
-            <p className="tocyn-email-channel-config-description">Configure your Resend API credentials for outbound emails.</p>
+            <h2 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Resend Integration</h2>
+            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Configure your Resend API credentials for outbound emails.</p>
           </div>
         </div>
 
-        {settingsLoading && <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading configuration…" className="tocyn-email-channel-state" />}
-        {settingsFailed && <ParkEmptyState role="alert" headingLevel={false} title="Configuration could not be loaded." action={<ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton>} className="tocyn-email-channel-state" />}
+        {settingsLoading && <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading configuration…" className={css({"minW":0})} />}
+        {settingsFailed && <ParkEmptyState role="alert" headingLevel={false} title="Configuration could not be loaded." action={<ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton>} className={css({"minW":0})} />}
         {providerError && <p role="alert">{providerError}</p>}
-        <div className="tocyn-email-channel-config-fields">
-          <div className="tocyn-form-field">
+        <div className={css({"display":"grid","gap":"4"})}>
+          <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
             <label htmlFor="resend-api-key">
               Resend API Key
             </label>
@@ -196,11 +198,11 @@ export function EmailChannelPage() {
               placeholder="re_xxxxxxxxxxxxxxxxx"
               value={resendApiKey}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendApiKey(e.target.value); }}
-              className="tocyn-form-control tocyn-email-channel-config-input"
+              className={css({"w":"full"})}
             />
-            <p className="tocyn-email-channel-config-help">Required to send outbound email replies.</p>
+            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Required to send outbound email replies.</p>
           </div>
-          <div className="tocyn-form-field">
+          <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
             <label htmlFor="resend-from-email">
               Default From Email
             </label>
@@ -209,47 +211,47 @@ export function EmailChannelPage() {
               placeholder="support@yourdomain.com"
               value={resendFromEmail}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendFromEmail(e.target.value); }}
-              className="tocyn-form-control tocyn-email-channel-config-input"
+              className={css({"w":"full"})}
             />
-            <p className="tocyn-email-channel-config-help">Fallback email if a group email is not configured.</p>
+            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Fallback email if a group email is not configured.</p>
           </div>
         </div>
-        <div className="tocyn-email-channel-config-actions">
-          {resendSuccess && <span role="status" className="tocyn-email-channel-config-success"><IconCheck className="tocyn-email-channel-config-success-icon"/> Configuration saved; delivery has not been verified.</span>}
+        <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+          {resendSuccess && <span role="status" className={css({"color":"text.default"})}><IconCheck className={css({"w":"4","h":"4","flexShrink":0})}/> Configuration saved; delivery has not been verified.</span>}
           <ParkButton
             type="submit"
             disabled={savingResend || settingsLoading || settingsFailed || !resendApiKey || !resendFromEmail}
-            className="tocyn-email-channel-config-save"
+            className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            <IconFloppyDisk className="tocyn-email-channel-config-save-icon" />
+            <IconFloppyDisk className={css({"w":"4","h":"4","flexShrink":0})} />
             {savingResend ? 'Saving...' : 'Save Configuration'}
           </ParkButton>
         </div>
       </form>
 
       {isAdding && (
-        <div className="tocyn-email-channel-add-card">
-          <div className="tocyn-email-channel-add-header">
-            <h2 className="tocyn-email-channel-add-title">Add Support Email</h2>
+        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+          <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+            <h2 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Add Support Email</h2>
             <ParkButton
               disabled={createEmail.isPending}
               onClick={() => { setIsAdding(false); setError(null); requestAnimationFrame(() => addOpener.current?.focus()); }}
-              className="tocyn-email-channel-add-close"
+              className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
               Cancel
             </ParkButton>
           </div>
 
           {error && (
-            <div role="alert" ref={addError} tabIndex={-1} className="tocyn-email-channel-add-error">
-              <IconCircleExclamation className="tocyn-email-channel-add-error-icon" />
+            <div role="alert" ref={addError} tabIndex={-1} className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>
+              <IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} />
               {error}
             </div>
           )}
 
-          <form aria-label="Add support email" aria-busy={createEmail.isPending} onSubmit={handleSubmit} className="tocyn-email-channel-add-form">
-            <div className="tocyn-email-channel-add-fields">
-              <div className="tocyn-form-field">
+          <form aria-label="Add support email" aria-busy={createEmail.isPending} onSubmit={handleSubmit} className={css({"minW":0})}>
+            <div className={css({"display":"grid","gap":"4"})}>
+              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                 <label htmlFor="support-email-address">
                   Email Address *
                 </label>
@@ -259,10 +261,10 @@ export function EmailChannelPage() {
                   placeholder="support@yourdomain.com"
                   value={formData.email_address}
                   onChange={e => setFormData({ ...formData, email_address: e.target.value })}
-                  className="tocyn-form-control"
+                  className={css({"w":"full"})}
                 />
               </div>
-              <div className="tocyn-form-field">
+              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                 <label htmlFor="support-email-name">
                   Display Name
                 </label>
@@ -271,50 +273,37 @@ export function EmailChannelPage() {
                   placeholder="Support Team"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="tocyn-form-control"
+                  className={css({"w":"full"})}
                 />
               </div>
             </div>
 
-            <div className="tocyn-email-channel-add-fields">
-              <div className="tocyn-form-field">
+            <div className={css({"display":"grid","gap":"4"})}>
+              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                 <label htmlFor="support-email-group">
                   Assign to Group
                 </label>
-                <ParkSelect id="support-email-group" disabled={createEmail.isPending}
-                  value={formData.group_id}
-                  onChange={e => setFormData({ ...formData, group_id: e.target.value })}
-                  className="tocyn-form-control"
-                >
-                  <option value="">(No specific group)</option>
-                  {groups?.map(g => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))}
-                </ParkSelect>
-                <p className="tocyn-email-channel-add-help">
+                <DashboardSelect id="support-email-group" aria-label="Assign to Group" disabled={createEmail.isPending} value={formData.group_id} onValueChange={value => setFormData({ ...formData, group_id: value })} options={[{ value: '', label: '(No specific group)' }, ...(groups ?? []).map(group => ({ value: group.id, label: group.name }))]} />
+                <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                   Tickets from this email will be automatically assigned to this group.
                 </p>
               </div>
             </div>
 
-            <div className="tocyn-email-channel-add-default">
-              <ParkInput
-                type="checkbox"
-                id="is_default" disabled={createEmail.isPending}
-                checked={formData.is_default}
-                onChange={e => setFormData({ ...formData, is_default: e.target.checked })}
-                className="tocyn-email-channel-add-checkbox"
-              />
-              <label htmlFor="is_default" className="tocyn-email-channel-add-label">
-                Set as default outbound email
-              </label>
+            <div className={css({"minW":0})}>
+              <ParkCheckbox.Root checked={formData.is_default} disabled={createEmail.isPending}
+                onCheckedChange={({ checked }) => setFormData({ ...formData, is_default: checked === true })}>
+                <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+                <ParkCheckbox.HiddenInput id="is_default" />
+                <ParkCheckbox.Label>Set as default outbound email</ParkCheckbox.Label>
+              </ParkCheckbox.Root>
             </div>
 
-            <div className="tocyn-email-channel-add-actions">
+            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
               <ParkButton
                 type="submit"
                 disabled={createEmail.isPending}
-                className="tocyn-email-channel-add-submit"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 {createEmail.isPending ? 'Saving...' : 'Save Email'}
               </ParkButton>
@@ -323,33 +312,33 @@ export function EmailChannelPage() {
         </div>
       )}
 
-      <div className="tocyn-email-channel-list-shell">
+      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
         {isLoading ? (
-          <ParkEmptyState role="status" title="Loading emails..." description="Configured support addresses are loading." className="tocyn-email-channel-state" />
+          <ParkEmptyState role="status" title="Loading emails..." description="Configured support addresses are loading." className={css({"minW":0})} />
         ) : emailsFailed ? (
-          <ParkEmptyState role="alert" title="Email channels could not be loaded." description="Retry to check the configured support addresses again." action={<ParkButton onClick={() => { void reloadEmails(); }}>Retry channels</ParkButton>} className="tocyn-email-channel-state" />
+          <ParkEmptyState role="alert" title="Email channels could not be loaded." description="Retry to check the configured support addresses again." action={<ParkButton onClick={() => { void reloadEmails(); }}>Retry channels</ParkButton>} className={css({"minW":0})} />
         ) : emails?.length === 0 ? (
-          <ParkEmptyState title="No email channels" description="No addresses are configured here. Receiving email also requires the separately configured inbound provider." className="tocyn-email-channel-state" />
+          <ParkEmptyState title="No email channels" description="No addresses are configured here. Receiving email also requires the separately configured inbound provider." className={css({"minW":0})} />
         ) : (
-          <div className="tocyn-email-channel-list">
+          <div className={css({"display":"grid","gap":"4"})}>
             {emails?.map((email) => (
-              <div key={email.id} className="tocyn-email-channel-row">
-                <div className="tocyn-email-channel-identity">
-                  <div className="tocyn-email-channel-row-icon">
-                    <IconEnvelope className="tocyn-email-channel-row-icon-glyph" />
+              <div key={email.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                  <div className={css({"w":"4","h":"4","flexShrink":0})}>
+                    <IconEnvelope className={css({"w":"4","h":"4","flexShrink":0})} />
                   </div>
                   <div>
-                    <div className="tocyn-email-channel-row-heading">
-                      <p className="tocyn-email-channel-row-address">{email.email_address}</p>
+                    <div className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+                      <p className={css({"minW":0})}>{email.email_address}</p>
                       {email.is_default && (
-                        <span className="tocyn-email-channel-default-badge">
-                          <IconCheck className="tocyn-email-channel-default-icon" /> Default
+                        <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted"})}>
+                          <IconCheck className={css({"w":"4","h":"4","flexShrink":0})} /> Default
                         </span>
                       )}
                     </div>
-                    <div className="tocyn-email-channel-row-meta">
+                    <div className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                       {email.name && <span>{email.name}</span>}
-                      {email.name && <span className="tocyn-email-channel-row-separator">•</span>}
+                      {email.name && <span className={css({"minW":0})}>•</span>}
                       {email.group_id && groups ? (
                         <span>Group: {groups.find(g => g.id === email.group_id)?.name || 'Unknown'}</span>
                       ) : (
@@ -359,14 +348,14 @@ export function EmailChannelPage() {
                   </div>
                 </div>
 
-                <div className="tocyn-email-channel-row-actions">
+                <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
                   <ParkButton
                     aria-label={`Remove ${email.email_address}`} onClick={event => { removalOpener.current = event.currentTarget; removalSucceeded.current = false; setRemoval(email); setRemoveError(''); setRemoveOpen(true); }}
                     disabled={deleteEmail.isPending}
-                    className="tocyn-email-channel-row-delete"
+                    className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                     title="Remove email"
                   >
-                    <IconTrash className="tocyn-email-channel-row-delete-icon" />
+                    <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
                   </ParkButton>
                 </div>
               </div>

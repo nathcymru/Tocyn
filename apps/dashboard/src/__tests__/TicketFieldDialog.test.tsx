@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -19,9 +20,11 @@ it('preserves generated and overridden names, options and active state in the su
  const {opener,dialog,label}=await openEditor();fireEvent.change(label,{target:{value:'Device Model'}});
  const key=within(dialog).getByRole('textbox',{name:'Key Name'});expect(key).toHaveValue('device_model');
  fireEvent.change(key,{target:{value:'custom_key'}});fireEvent.change(label,{target:{value:'Model Name'}});expect(key).toHaveValue('custom_key');
- fireEvent.change(within(dialog).getByRole('combobox',{name:'Field Type'}),{target:{value:'select'}});
+ await userEvent.click(within(dialog).getByRole('combobox',{name:'Field Type'}));
+ await userEvent.click(await screen.findByRole('option',{name:'Dropdown (Select)'}));
  fireEvent.change(within(dialog).getByRole('textbox',{name:'Options'}),{target:{value:'One, Two'}});
- fireEvent.click(within(dialog).getByRole('checkbox',{name:'Active'}));
+ await userEvent.click(within(dialog).getByText('Active'));
+ expect(within(dialog).getByRole('checkbox',{name:'Active'})).not.toBeChecked();
  fireEvent.submit(within(dialog).getByRole('form'));
  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(dashboardApi.post).toHaveBeenCalledWith('/ticket-fields',{name:'custom_key',label:'Model Name',field_type:'select',options:'One, Two',is_active:false});

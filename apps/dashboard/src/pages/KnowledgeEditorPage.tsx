@@ -1,9 +1,10 @@
-import { ParkButton, ParkEmptyState, ParkInput, ParkKnowledgeEditor, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput, ParkKnowledgeEditor } from '@luminatick/ui/park';
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory } from '../types';
 import { TiptapMarkdownField } from '../components/RichComposer';
+import { DashboardSelect } from '../components/DashboardSelect';
 import { ArrowLeft, FloppyDisk, SpinnerGap } from '@phosphor-icons/react';
 
 export const KnowledgeEditorPage: React.FC = () => {
@@ -131,17 +132,13 @@ export const KnowledgeEditorPage: React.FC = () => {
     }
   };
 
-  const renderCategoryOptions = (cats: KnowledgeCategory[], parentId: string | null = null, depth = 0): React.ReactNode[] => {
+  const renderCategoryOptions = (cats: KnowledgeCategory[], parentId: string | null = null, depth = 0): { value: string; label: string }[] => {
     const children = cats.filter(c => c.parent_id === parentId);
-    let options: React.ReactNode[] = [];
+    let options: { value: string; label: string }[] = [];
 
     for (const child of children) {
       const prefix = '\u00A0\u00A0'.repeat(depth * 2);
-      options.push(
-        <option key={child.id} value={child.id}>
-          {prefix}{child.name}
-        </option>
-      );
+      options.push({ value: child.id, label: `${prefix}${child.name}` });
       options = options.concat(renderCategoryOptions(cats, child.id, depth + 1));
     }
     return options;
@@ -211,30 +208,26 @@ export const KnowledgeEditorPage: React.FC = () => {
 
               <div className={styles.field}>
                 <label htmlFor={categoryIdInput}>Category</label>
-                <ParkSelect
+                <DashboardSelect
                   id={categoryIdInput}
                   value={categoryId}
                   disabled={isSaving || !editorReady}
-                  onChange={e => setCategoryId(e.target.value)}
+                  onValueChange={setCategoryId}
                   className={styles.control}
-                >
-                  <option value="">No Category (Root)</option>
-                  {renderCategoryOptions(categories)}
-                </ParkSelect>
+                  options={[{ value: '', label: 'No Category (Root)' }, ...renderCategoryOptions(categories)]}
+                />
               </div>
 
               <div className={styles.field}>
                 <label htmlFor={tierId}>Tier</label>
-                <ParkSelect
+                <DashboardSelect
                   id={tierId}
                   value={tier}
                   disabled={isSaving || !editorReady}
-                  onChange={e => setTier(e.target.value as 'answer' | 'sop')}
+                  onValueChange={value => setTier(value as 'answer' | 'sop')}
                   className={styles.control}
-                >
-                  <option value="answer">Customer Facing Answer</option>
-                  <option value="sop">Internal SOP (Standard Operating Procedure)</option>
-                </ParkSelect>
+                  options={[{ value: 'answer', label: 'Customer Facing Answer' }, { value: 'sop', label: 'Internal SOP (Standard Operating Procedure)' }]}
+                />
               </div>
             </div>
 

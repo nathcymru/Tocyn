@@ -2,21 +2,20 @@ import { memo, splitProps } from '../helpers.mjs';
 import { createRecipe, mergeRecipes } from './create-recipe.mjs';
 
 const buttonFn = /* @__PURE__ */ createRecipe('button', {
-  "variant": "surface",
+  "variant": "solid",
   "size": "md"
 }, [])
 
 const buttonVariantMap = {
   "variant": [
     "solid",
-    "subtle",
     "surface",
+    "subtle",
     "outline",
-    "plain",
-    "ghost",
-    "destructive"
+    "plain"
   ],
   "size": [
+    "2xs",
     "xs",
     "sm",
     "md",

@@ -1,6 +1,6 @@
+import { w, widgetBrandColor } from './widgetStyles';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
-import { Tabs } from '@luminatick/ui/ark';
-import { ParkButton } from '@luminatick/ui/park';
+import { ParkButton, ParkTabs } from '@luminatick/ui/park';
 import React, { useState, useEffect, useRef, useId } from 'react';
 import TicketForm from './components/TicketForm';
 import AiChat from './components/AiChat';
@@ -42,42 +42,34 @@ const App: React.FC = () => {
   const selectedTab = tabs.includes(activeTab) ? activeTab : tabs[0];
 
   return (
-    <div className="tocyn-widget-launcher-wrap">
+    <div className={w.launcherWrap} style={{ '--widget-brand-color': widgetBrandColor(config.primaryColor) } as React.CSSProperties}>
       <div hidden={!isOpen}>
-        <div id={`${widgetId}-panel`} role="region" aria-labelledby={`${widgetId}-title`} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeWidget(); } }} className="tocyn-widget-panel">
-          <div className="tocyn-widget-panel-header" style={{ backgroundColor: config.primaryColor }}>
-            <h2 id={`${widgetId}-title`} className="tocyn-widget-panel-title">{config.title}</h2>
-            <ParkButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className="tocyn-widget-close">
-              <IconXmark className="tocyn-widget-close-icon" aria-hidden="true" />
+        <div id={`${widgetId}-panel`} role="region" aria-labelledby={`${widgetId}-title`} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeWidget(); } }} className={w.panel}>
+          <div className={w.panelHeader}>
+            <h2 id={`${widgetId}-title`} className={w.panelTitle}>{config.title}</h2>
+            <ParkButton ref={closeButton} aria-label="Close support" onClick={closeWidget} className={w.close}>
+              <IconXmark className={w.closeIcon} aria-hidden="true" />
             </ParkButton>
           </div>
 
-          <Tabs.Root activationMode="manual" value={selectedTab ?? null} onValueChange={({value}) => { if (value === 'chat' || value === 'ticket') setActiveTab(value); }} lazyMount={false} unmountOnExit={false}>
-          <Tabs.List aria-label="Support options" className="tocyn-widget-tabs">
+          <ParkTabs.Root className={w.tabRoot} activationMode="manual" value={selectedTab ?? null} onValueChange={({value}) => { if (value === 'chat' || value === 'ticket') setActiveTab(value); }} lazyMount={false} unmountOnExit={false}>
+          <ParkTabs.List aria-label="Support options" className={w.tabs}>
             {config.features.aiChat && (
-              <Tabs.Trigger value="chat" asChild><ParkButton
-                className={`tocyn-widget-tab ${selectedTab === 'chat' ? 'tocyn-widget-tab--active' : ''}`}
-              >
-                AI Chat
-              </ParkButton></Tabs.Trigger>
+              <ParkTabs.Trigger value="chat" className={w.tab}>AI Chat</ParkTabs.Trigger>
             )}
             {config.features.ticketForm && (
-              <Tabs.Trigger value="ticket" asChild><ParkButton
-                className={`tocyn-widget-tab ${selectedTab === 'ticket' ? 'tocyn-widget-tab--active' : ''}`}
-              >
-                New Ticket
-              </ParkButton></Tabs.Trigger>
+              <ParkTabs.Trigger value="ticket" className={w.tab}>New Ticket</ParkTabs.Trigger>
             )}
-          </Tabs.List>
+          </ParkTabs.List>
 
-          <div className="tocyn-widget-panel-body">
-            {!session && <p className="tocyn-widget-sign-in">Sign in through the support portal to use chat or submit a ticket. {config.portalUrl && <a className="tocyn-widget-portal-link" href={config.portalUrl} target="_blank" rel="noopener noreferrer">Open support portal</a>}</p>}
-            {config.features.aiChat && <Tabs.Content value="chat">{session && <AiChat key={session.email} config={config} />}</Tabs.Content>}
-            {config.features.ticketForm && <Tabs.Content value="ticket">{session && <TicketForm key={session.email} config={config} userEmail={session.email} />}</Tabs.Content>}
+          <div className={w.panelBody}>
+            {!session && <p className={w.signIn}>Sign in through the support portal to use chat or submit a ticket. {config.portalUrl && <a className={w.portalLink} href={config.portalUrl} target="_blank" rel="noopener noreferrer">Open support portal</a>}</p>}
+            {config.features.aiChat && <ParkTabs.Content value="chat">{session && <AiChat key={session.email} config={config} />}</ParkTabs.Content>}
+            {config.features.ticketForm && <ParkTabs.Content value="ticket">{session && <TicketForm key={session.email} userEmail={session.email} />}</ParkTabs.Content>}
           </div>
 
-          </Tabs.Root>
-          <div data-product-attribution className="tocyn-widget-attribution">
+          </ParkTabs.Root>
+          <div data-product-attribution className={w.attribution}>
             Powered by {PRODUCT_BRAND.name}
           </div>
         </div>
@@ -86,13 +78,12 @@ const App: React.FC = () => {
       <ParkButton
         ref={launcher} aria-label={isOpen ? 'Close support' : 'Open support'} aria-expanded={isOpen} aria-controls={`${widgetId}-panel`}
         onClick={toggleWidget}
-        className="tocyn-widget-launcher"
-        style={{ backgroundColor: config.primaryColor }}
+        className={w.launcher}
       >
         {isOpen ? (
-          <IconChevronDown className="tocyn-widget-launcher-icon" aria-hidden="true" />
+          <IconChevronDown className={w.launcherIcon} aria-hidden="true" />
         ) : (
-          <IconMessage className="tocyn-widget-launcher-icon" aria-hidden="true" />
+          <IconMessage className={w.launcherIcon} aria-hidden="true" />
         )}
       </ParkButton>
     </div>

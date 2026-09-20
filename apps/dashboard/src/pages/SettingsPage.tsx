@@ -1,4 +1,5 @@
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
+import { DashboardSelect } from '../components/DashboardSelect';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkTextarea } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
 import {
@@ -205,23 +206,13 @@ export const SettingsPage: React.FC = () => {
               <label htmlFor="SYSTEM_TIMEZONE">
                 System Timezone
               </label>
-              <ParkSelect
-                id="SYSTEM_TIMEZONE"
-                name="SYSTEM_TIMEZONE"
-                value={formData.SYSTEM_TIMEZONE}
-                onChange={handleChange}
-               
-              >
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="America/Chicago">Central Time (CT)</option>
-                <option value="America/Denver">Mountain Time (MT)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                <option value="Europe/London">London (GMT)</option>
-                <option value="Europe/Paris">Central Europe (CET)</option>
-                <option value="Asia/Tokyo">Tokyo (JST)</option>
-                <option value="Australia/Sydney">Sydney (AEST)</option>
-              </ParkSelect>
+              <DashboardSelect id="SYSTEM_TIMEZONE" aria-label="System Timezone" name="SYSTEM_TIMEZONE" value={formData.SYSTEM_TIMEZONE}
+                onValueChange={value => setFormData(prev => ({ ...prev, SYSTEM_TIMEZONE: value }))}
+                options={[{ value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'Eastern Time (ET)' },
+                  { value: 'America/Chicago', label: 'Central Time (CT)' }, { value: 'America/Denver', label: 'Mountain Time (MT)' },
+                  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' }, { value: 'Europe/London', label: 'London (GMT)' },
+                  { value: 'Europe/Paris', label: 'Central Europe (CET)' }, { value: 'Asia/Tokyo', label: 'Tokyo (JST)' },
+                  { value: 'Australia/Sydney', label: 'Sydney (AEST)' }]} />
             </div>
 
             <div className={page.settingsField}>

@@ -1,6 +1,7 @@
+import { css } from '@luminatick/ui/styled-system/css';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput, ParkTable } from '@luminatick/ui/park';
 import React, { useEffect, useState } from 'react';
 import {
   IconKey,
@@ -141,11 +142,11 @@ export function ApiKeyPage() {
   };
 
   return (
-    <div className="tocyn-api-key-page">
-      <div className="tocyn-api-key-header">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className="tocyn-api-key-title">API Keys</h1>
-          <p className="tocyn-api-key-description">Manage external access to the {PRODUCT_BRAND.name} API.</p>
+          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>API Keys</h1>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Manage external access to the {PRODUCT_BRAND.name} API.</p>
         </div>
         <ParkButton
           disabled={Boolean(uncertainKey)}
@@ -153,43 +154,43 @@ export function ApiKeyPage() {
             createSucceeded.current = false; setCreateError(''); setCreatedKey(null);
             setIsCreating(true);
           }}
-          variant="solid" className="tocyn-api-key-create-button"
+          variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
         >
-          <IconPlus className="tocyn-api-key-create-icon" />
+          <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} />
           Create New Key
         </ParkButton>
       </div>
 
       <TocynDialog open={isCreating} busy={creating} labelledBy={createTitleId} initialFocusEl={() => createUnresolved ? retryCreateButton.current : keyNameInput.current}
         finalFocusEl={() => uncertainHeading.current ?? (createSucceeded.current ? createdHeading.current : createOpener.current)} onOpenChange={next => { if (!next) closeCreate(); }}>
-        <div className="tocyn-api-key-create-card">
-          <h2 id={createTitleId} className="tocyn-api-key-create-title">Create New API Key</h2>
+        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+          <h2 id={createTitleId} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Create New API Key</h2>
           <form onSubmit={handleCreate} aria-labelledby={createTitleId}>
-            {createError && <p role="alert" className="tocyn-api-key-create-error">{createError}</p>}
-            <fieldset disabled={creating} className="tocyn-api-key-create-fields">
-            <div className="tocyn-form-field">
-              <label htmlFor={`${createTitleId}-name`} className="tocyn-api-key-create-label">
+            {createError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>{createError}</p>}
+            <fieldset disabled={creating} className={css({"display":"grid","gap":"4"})}>
+            <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
+              <label htmlFor={`${createTitleId}-name`} className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
                 Key Name
               </label>
               <ParkInput
                 type="text" required maxLength={120} disabled={createUnresolved} id={`${createTitleId}-name`} ref={keyNameInput}
                 placeholder="e.g. CRM Integration"
-                className="tocyn-form-control"
+                className={css({"w":"full"})}
                 value={newKeyName}
                 onChange={(e) => setNewKeyName(e.target.value)}
               />
             </div>
-            <div className="tocyn-api-key-create-actions">
+            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
               <ParkButton
                 type="submit" ref={retryCreateButton}
-                variant="solid" className="tocyn-api-key-create-submit"
+                variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 {creating ? 'Generating...' : createUnresolved ? 'Retry creation' : 'Generate Key'}
               </ParkButton>
               <ParkButton
                 type="button"
                 onClick={closeCreate}
-                className="tocyn-api-key-create-cancel"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 Cancel
               </ParkButton>
@@ -200,25 +201,25 @@ export function ApiKeyPage() {
       </TocynDialog>
 
       {createdKey && (
-        <div className="tocyn-api-key-created">
-          <div className="tocyn-api-key-created-header">
-            <IconShieldHalved className="tocyn-api-key-created-icon" />
+        <div className={css({"minW":0})}>
+          <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+            <IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} />
             <div>
-              <h3 ref={createdHeading} tabIndex={-1} className="tocyn-api-key-created-title">New API Key Generated</h3>
-              <p className="tocyn-api-key-created-help">
+              <h3 ref={createdHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>New API Key Generated</h3>
+              <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                 Copy this key now. For security reasons, it will <strong>never</strong> be shown again.
               </p>
             </div>
           </div>
 
-          <div className="tocyn-api-key-created-value">
-            <span className="tocyn-api-key-created-token">{createdKey.apiKey}</span>
+          <div className={css({"minW":0})}>
+            <span className={css({"overflowX":"auto","rounded":"md","bg":"bg.muted","p":"3","fontFamily":"mono","fontSize":"sm"})}>{createdKey.apiKey}</span>
             <ParkButton
               disabled={copying} aria-label="Copy API key" onClick={() => copyToClipboard(createdKey.apiKey)}
-              className="tocyn-api-key-copy"
+              className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}
               title="Copy to clipboard"
             >
-              {copied ? <IconCheck className="tocyn-api-key-copy-icon" /> : <IconCopy className="tocyn-api-key-copy-icon" />}
+              {copied ? <IconCheck className={css({"w":"4","h":"4","flexShrink":0})} /> : <IconCopy className={css({"w":"4","h":"4","flexShrink":0})} />}
             </ParkButton>
           </div>
 
@@ -226,7 +227,7 @@ export function ApiKeyPage() {
           {copied && <p role="status">API key copied.</p>}
           <ParkButton
             onClick={() => { setCreatedKey(null); createOpener.current?.focus(); }}
-            className="tocyn-api-key-created-dismiss"
+            className={css({"minW":0})}
           >
             I've saved my key
           </ParkButton>
@@ -234,13 +235,13 @@ export function ApiKeyPage() {
       )}
 
       {uncertainKey && (
-        <div className="tocyn-api-key-uncertain" role="alert">
-          <h2 ref={uncertainHeading} tabIndex={-1} className="tocyn-api-key-uncertain-title">API key created; plaintext unavailable</h2>
-          <p className="tocyn-api-key-uncertain-copy">
+        <div className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})} role="alert">
+          <h2 ref={uncertainHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>API key created; plaintext unavailable</h2>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>
             The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
             but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
           </p>
-          <ParkButton className="tocyn-api-key-uncertain-revoke" onClick={event => {
+          <ParkButton className={css({"display":"inline-flex","alignItems":"center","gap":"2"})} onClick={event => {
             revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(uncertainKey);
             setRevokeError(''); setRevokeOpen(true);
           }}>Revoke unavailable key</ParkButton>
@@ -248,69 +249,69 @@ export function ApiKeyPage() {
       )}
 
       {listError && <p role="alert">{listError}</p>}
-      <div className="tocyn-api-key-table-shell">
-        <div className="tocyn-api-key-table-scroll">
-          <table className="tocyn-api-key-table">
-            <thead>
-              <tr className="tocyn-api-key-table-head">
-                <th>Name</th>
-                <th>Prefix</th>
-                <th>Created</th>
-                <th>Last Used</th>
-                <th className="tocyn-api-key-table-actions-heading">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="tocyn-api-key-table-body">
+      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","overflowX":"auto"})}>
+        <div className={css({"overflowX":"auto"})}>
+          <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
+            <ParkTable.Head>
+              <ParkTable.Row className={css({"borderBottomWidth":"1px","borderColor":"border.default"})}>
+                <ParkTable.Header>Name</ParkTable.Header>
+                <ParkTable.Header>Prefix</ParkTable.Header>
+                <ParkTable.Header>Created</ParkTable.Header>
+                <ParkTable.Header>Last Used</ParkTable.Header>
+                <ParkTable.Header className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default","textAlign":"right"})}>Actions</ParkTable.Header>
+              </ParkTable.Row>
+            </ParkTable.Head>
+            <ParkTable.Body className={css({"minW":0})}>
               {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="tocyn-api-key-empty-cell">
+                <ParkTable.Row>
+                  <ParkTable.Cell colSpan={5} className={css({"minW":0})}>
                     <ParkEmptyState
                       title="Loading keys..."
                       headingLevel={false}
                       aria-busy="true"
-                      className="tocyn-api-key-empty-state"
+                      className={css({"minW":0})}
                     />
-                  </td>
-                </tr>
+                  </ParkTable.Cell>
+                </ParkTable.Row>
               ) : keys.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="tocyn-api-key-empty-cell">
+                <ParkTable.Row>
+                  <ParkTable.Cell colSpan={5} className={css({"minW":0})}>
                     <ParkEmptyState
                       title={listError ? 'API key list unavailable.' : 'No API keys found.'}
                       description={listError ? 'Reload this page before relying on the list.' : 'Create a key when an integration requires external API access.'}
                       headingLevel={false}
-                      className="tocyn-api-key-empty-state"
+                      className={css({"minW":0})}
                     />
-                  </td>
-                </tr>
+                  </ParkTable.Cell>
+                </ParkTable.Row>
               ) : (
                 keys.map((key) => (
-                  <tr key={key.id} className="tocyn-api-key-table-row">
-                    <td className="tocyn-api-key-name">{key.name}</td>
-                    <td className="tocyn-api-key-prefix">{key.prefix}</td>
-                    <td className="tocyn-api-key-date">
+                  <ParkTable.Row key={key.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","borderBottomWidth":"1px","borderColor":"border.default"})}>
+                    <ParkTable.Cell className={css({"fontWeight":"medium","color":"text.default"})}>{key.name}</ParkTable.Cell>
+                    <ParkTable.Cell className={css({"minW":0})}>{key.prefix}</ParkTable.Cell>
+                    <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                       {new Date(key.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="tocyn-api-key-date">
-                      <div className="tocyn-api-key-last-used">
-                        <IconClock className="tocyn-api-key-clock" />
+                    </ParkTable.Cell>
+                    <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                      <div className={css({"minW":0})}>
+                        <IconClock className={css({"minW":0})} />
                         {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
                       </div>
-                    </td>
-                    <td className="tocyn-api-key-actions">
+                    </ParkTable.Cell>
+                    <ParkTable.Cell className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
                       <ParkButton
                         aria-label={`Revoke ${key.name}`} onClick={event => { revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(key); setRevokeError(''); setRevokeOpen(true); }}
-                        className="tocyn-api-key-revoke"
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Revoke Key"
                       >
-                        <IconTrash className="tocyn-api-key-revoke-icon" />
+                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
                       </ParkButton>
-                    </td>
-                  </tr>
+                    </ParkTable.Cell>
+                  </ParkTable.Row>
                 ))
               )}
-            </tbody>
-          </table>
+            </ParkTable.Body>
+          </ParkTable.Root>
         </div>
       </div>
       {revokeStatus && <p role="status">{revokeStatus}</p>}

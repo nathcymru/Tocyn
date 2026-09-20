@@ -1,3 +1,4 @@
+import { p } from '../portalStyles';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
@@ -107,45 +108,45 @@ export function TicketListPage() {
   };
 
   const statusColors = {
-    open: 'tocyn-status-open',
-    pending: 'tocyn-status-pending',
-    resolved: 'tocyn-status-resolved',
-    closed: 'tocyn-status-closed',
+    open: p.statusOpen,
+    pending: p.statusPending,
+    resolved: p.statusResolved,
+    closed: p.statusClosed,
   };
 
   if (loading) {
-    return <ParkEmptyState role="status" title="Loading tickets…" headingLevel={false} aria-busy="true" className="tocyn-portal-ticket-loading" />;
+    return <ParkEmptyState role="status" title="Loading tickets…" headingLevel={false} aria-busy="true" className={p.ticketLoading} />;
   }
 
   if (error) {
-    return <ParkEmptyState role="alert" title="Tickets could not be loaded." description={error} headingLevel={false} className="tocyn-portal-ticket-error" action={<ParkButton type="button" onClick={retryTickets} className="tocyn-portal-ticket-retry">Retry loading tickets</ParkButton>} />;
+    return <ParkEmptyState role="alert" title="Tickets could not be loaded." description={error} headingLevel={false} className={p.ticketError} action={<ParkButton type="button" onClick={retryTickets} className={p.ticketRetry}>Retry loading tickets</ParkButton>} />;
   }
 
   return (
-    <div className="tocyn-portal-ticket-list">
-      <div className="tocyn-portal-ticket-list-header">
-        <h1 ref={listHeading} tabIndex={-1} className="tocyn-portal-ticket-list-title">Your Tickets</h1>
+    <div className={p.ticketList}>
+      <div className={p.ticketListHeader}>
+        <h1 ref={listHeading} tabIndex={-1} className={p.ticketListTitle}>Your Tickets</h1>
         <ParkButton
           ref={createButton}
           type="button"
           onClick={() => { setCreateError(null); setIsCreating(true); }}
-          variant="solid" className="tocyn-portal-ticket-list-create"
+          variant="solid" className={p.ticketListCreate}
         >
-          <IconPlus className="tocyn-portal-ticket-list-icon" />
+          <IconPlus className={p.ticketListIcon} />
           New Ticket
         </ParkButton>
       </div>
 
-      <p role="status" aria-live="polite" className="tocyn-portal-ticket-list-status">{createStatus}</p>
+      <p role="status" aria-live="polite" className={p.ticketListStatus}>{createStatus}</p>
       <TocynDialog open={isCreating} onOpenChange={setIsCreating} busy={creatingTicket}
           labelledBy="create-ticket-heading" initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
-          className="tocyn-portal-ticket-dialog">
-          <h2 id="create-ticket-heading" className="tocyn-portal-ticket-dialog-title">Create New Ticket</h2>
-          {createError && <p id="create-ticket-error" role="alert" className="tocyn-portal-ticket-dialog-error">{createError}</p>}
-          <p role="status" aria-live="polite" className="tocyn-portal-ticket-dialog-status">{creatingTicket ? 'Creating ticket…' : ''}</p>
-          <form aria-busy={creatingTicket} onSubmit={handleCreate} className="tocyn-portal-ticket-form">
-            <div className="tocyn-portal-ticket-field">
-              <label htmlFor="create-ticket-subject" className="tocyn-portal-ticket-field-label">Subject</label>
+          className={p.ticketDialog}>
+          <h2 id="create-ticket-heading" className={p.ticketDialogTitle}>Create New Ticket</h2>
+          {createError && <p id="create-ticket-error" role="alert" className={p.ticketDialogError}>{createError}</p>}
+          <p role="status" aria-live="polite" className={p.ticketDialogStatus}>{creatingTicket ? 'Creating ticket…' : ''}</p>
+          <form aria-busy={creatingTicket} onSubmit={handleCreate} className={p.ticketForm}>
+            <div className={p.ticketField}>
+              <label htmlFor="create-ticket-subject" className={p.ticketFieldLabel}>Subject</label>
               <ParkInput
                 id="create-ticket-subject"
                 ref={subjectInput}
@@ -155,12 +156,12 @@ export function TicketListPage() {
                 required
                 value={newSubject}
                 onChange={(e) => { if (!creatingTicket) setNewSubject(e.target.value); }}
-                className="tocyn-portal-ticket-field-input"
+                className={p.ticketFieldInput}
                 placeholder="What do you need help with?"
               />
             </div>
-            <div className="tocyn-portal-ticket-field">
-              <label htmlFor="create-ticket-message" className="tocyn-portal-ticket-field-label">Message</label>
+            <div className={p.ticketField}>
+              <label htmlFor="create-ticket-message" className={p.ticketFieldLabel}>Message</label>
               <ParkTextarea
                 id="create-ticket-message"
                 readOnly={creatingTicket}
@@ -169,11 +170,11 @@ export function TicketListPage() {
                 rows={4}
                 value={newMessage}
                 onChange={(e) => { if (!creatingTicket) setNewMessage(e.target.value); }}
-                className="tocyn-portal-ticket-field-input"
+                className={p.ticketFieldInput}
                 placeholder="Describe your issue in detail..."
               />
             </div>
-            <div className="tocyn-portal-ticket-actions">
+            <div className={p.ticketActions}>
               {turnstileSiteKey && (
                 <Turnstile
                   ref={turnstileRef}
@@ -191,43 +192,43 @@ export function TicketListPage() {
                 type="button"
                 aria-disabled={creatingTicket}
                 onClick={() => { if (!creatingTicket) setIsCreating(false); }}
-                className="tocyn-portal-ticket-cancel"
+                className={p.ticketCancel}
               >
                 Cancel
               </ParkButton>
               <ParkButton
                 type="submit"
                 aria-disabled={creatingTicket}
-                variant="solid" className="tocyn-portal-ticket-submit"
+                variant="solid" className={p.ticketSubmit}
               >
-                {creatingTicket && <IconSpinner className="tocyn-portal-ticket-spinner" />}
+                {creatingTicket && <IconSpinner className={p.ticketSpinner} />}
                 Create Ticket
               </ParkButton>
             </div>
           </form>
       </TocynDialog>
 
-      <div className="tocyn-portal-surface">
+      <div className={p.surface}>
         {tickets.length === 0 ? (
-          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} variant="solid" className="tocyn-portal-ticket-empty-create"> <IconPlus className="tocyn-portal-ticket-list-icon" /> New Ticket</ParkButton>} className="tocyn-portal-ticket-empty" />
+          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} variant="solid" className={p.ticketEmptyCreate}> <IconPlus className={p.ticketListIcon} /> New Ticket</ParkButton>} className={p.ticketEmpty} />
         ) : (
-          <ul className="tocyn-portal-ticket-list-items">
+          <ul className={p.ticketListItems}>
             {tickets.map((ticket) => (
-              <li key={ticket.id} className="tocyn-portal-ticket-list-item">
-                <Link to={`/tickets/${ticket.id}`} className="tocyn-portal-ticket-list-link">
-                  <div className="tocyn-portal-ticket-list-row">
-                    <div className="tocyn-portal-ticket-row-main">
-                      <span className="tocyn-portal-ticket-reference">{ticketReference(ticket, ticketPrefix)}</span>
-                      <h3 className="tocyn-portal-ticket-subject">{ticket.subject}</h3>
+              <li key={ticket.id} className={p.ticketListItem}>
+                <Link to={`/tickets/${ticket.id}`} className={p.ticketListLink}>
+                  <div className={p.ticketListRow}>
+                    <div className={p.ticketRowMain}>
+                      <span className={p.ticketReference}>{ticketReference(ticket, ticketPrefix)}</span>
+                      <h3 className={p.ticketSubject}>{ticket.subject}</h3>
                     </div>
-                    <span className={`tocyn-portal-ticket-status ${statusColors[ticket.status]}`}>
+                    <span className={[p.ticketStatus, statusColors[ticket.status]].join(' ')}>
                       {ticket.status}
                     </span>
                   </div>
-                  <div className="tocyn-portal-ticket-list-meta">
+                  <div className={p.ticketListMeta}>
                     <span>Created {formatDistanceToNow(utcTimestamp(ticket.created_at), { addSuffix: true })}</span>
                     <span>•</span>
-                    <span className="tocyn-portal-ticket-priority">Priority: {ticket.priority}</span>
+                    <span className={p.ticketPriority}>Priority: {ticket.priority}</span>
                   </div>
                 </Link>
               </li>

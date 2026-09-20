@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkTable } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -225,7 +225,6 @@ export const KnowledgePage: React.FC = () => {
                 if (e.key === 'Escape') setIsAddingCategory(null);
               }}
               onBlur={() => handleAddCategory(node.id)}
-              className="tocyn-form-control"
               placeholder="New category..."
             />
           </div>
@@ -307,52 +306,52 @@ export const KnowledgePage: React.FC = () => {
         {/* Main Content */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeContent}>
           <ParkCard.Body>
-            <table className={pageStyles.knowledgeTable}>
-              <thead>
-                <tr>
-                  <th>Title</th><th>Status</th><th>Tier</th><th>Created</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <ParkTable.Root className={pageStyles.knowledgeTable}>
+              <ParkTable.Head>
+                <ParkTable.Row>
+                  <ParkTable.Header scope="col">Title</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header><ParkTable.Header scope="col">Tier</ParkTable.Header><ParkTable.Header scope="col">Created</ParkTable.Header><ParkTable.Header scope="col">Actions</ParkTable.Header>
+                </ParkTable.Row>
+              </ParkTable.Head>
+              <ParkTable.Body>
                 {filteredDocs.map((doc) => (
-                  <tr
+                  <ParkTable.Row
                     key={doc.id}
                     className={pageStyles.knowledgeRow}
                     onClick={() => navigate(`/knowledge/edit/${doc.id}`)}
                   >
-                    <td>{doc.title}</td>
-                    <td>
+                    <ParkTable.Cell>{doc.title}</ParkTable.Cell>
+                    <ParkTable.Cell>
                       <span className={pageStyles.knowledgeStatusBadge} data-status={doc.status}>
                         {doc.status}
                       </span>
-                    </td>
-                    <td>
+                    </ParkTable.Cell>
+                    <ParkTable.Cell>
                       <span className={pageStyles.knowledgeStatusBadge} data-tier={doc.tier}>
                         {doc.tier === 'sop' ? 'SOP' : 'Answer'}
                       </span>
-                    </td>
-                    <td>
+                    </ParkTable.Cell>
+                    <ParkTable.Cell>
                       {new Date(doc.created_at).toLocaleDateString()}
-                    </td>
-                    <td>
+                    </ParkTable.Cell>
+                    <ParkTable.Cell>
                       <ParkButton
                         onClick={(e) => confirmDeleteDoc(doc.id, doc.title, e)}
                        
                       >
                         Delete
                       </ParkButton>
-                    </td>
-                  </tr>
+                    </ParkTable.Cell>
+                  </ParkTable.Row>
                 ))}
                 {filteredDocs.length === 0 && (
-                  <tr>
-                    <td colSpan={5}>
+                  <ParkTable.Row>
+                    <ParkTable.Cell colSpan={5}>
                       <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false} />
-                    </td>
-                  </tr>
+                    </ParkTable.Cell>
+                  </ParkTable.Row>
                 )}
-              </tbody>
-            </table>
+              </ParkTable.Body>
+            </ParkTable.Root>
           </ParkCard.Body>
         </ParkCard.Root>
       </div>

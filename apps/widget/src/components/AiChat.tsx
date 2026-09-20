@@ -1,3 +1,4 @@
+import { w } from '../widgetStyles';
 import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { IconPaperPlane } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
@@ -97,31 +98,27 @@ const AiChat: React.FC<Props> = ({ config }) => {
   };
 
   return (
-    <div className="tocyn-widget-ai-chat">
-      <div role="log" aria-label="AI conversation" aria-relevant="additions" className="tocyn-widget-ai-messages">
+    <div className={w.aiChat}>
+      <div role="log" aria-label="AI conversation" aria-relevant="additions" className={w.aiMessages}>
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`tocyn-widget-ai-message-row ${msg.role === 'user' ? 'tocyn-widget-ai-message-row--user' : ''}`}
+            className={[w.aiMessageRow, msg.role === 'user' ? w.aiMessageRowUser : ''].join(' ')}
           >
             <div
-              className={`tocyn-widget-ai-message ${
-                msg.role === 'user'
-                  ? 'tocyn-widget-ai-message--user'
-                  : 'tocyn-widget-ai-message--assistant'
-              }`}
+              className={[w.aiMessage, msg.role === 'user' ? w.aiMessageUser : w.aiMessageAssistant].join(' ')}
             >
               {msg.content}
             </div>
           </div>
         ))}
         {isLoading && (
-          <div role="status" aria-label="Waiting for AI response" className="tocyn-widget-ai-waiting">
-            <div className="tocyn-widget-ai-waiting-bubble">
-              <div aria-hidden="true" className="tocyn-widget-ai-dots">
-                <div className="tocyn-widget-ai-dot" style={{ animationDelay: '0ms' }}></div>
-                <div className="tocyn-widget-ai-dot" style={{ animationDelay: '150ms' }}></div>
-                <div className="tocyn-widget-ai-dot" style={{ animationDelay: '300ms' }}></div>
+          <div role="status" aria-label="Waiting for AI response" className={w.aiWaiting}>
+            <div className={w.aiWaitingBubble}>
+              <div aria-hidden="true" className={w.aiDots}>
+                <div className={w.aiDot}></div>
+                <div className={w.aiDot}></div>
+                <div className={w.aiDot}></div>
               </div>
             </div>
           </div>
@@ -129,8 +126,8 @@ const AiChat: React.FC<Props> = ({ config }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {error && <p role="alert" className="tocyn-widget-ai-error">{error}</p>}
-      <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className="tocyn-widget-ai-composer">
+      {error && <p role="alert" className={w.aiError}>{error}</p>}
+      <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className={w.aiComposer}>
         <ParkInput
           ref={inputRef}
           aria-label="Your question"
@@ -138,17 +135,16 @@ const AiChat: React.FC<Props> = ({ config }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your question..."
-          className="tocyn-form-control tocyn-widget-chat-input"
+          className={[w.formControl, w.chatInput].join(' ')}
           disabled={isLoading}
         />
         <ParkButton
           aria-label="Send question"
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="tocyn-widget-ai-send"
-          style={{ backgroundColor: config.primaryColor }}
+          className={w.aiSend}
         >
-          <IconPaperPlane className="tocyn-widget-ai-send-icon" aria-hidden="true" />
+          <IconPaperPlane className={w.aiSendIcon} aria-hidden="true" />
         </ParkButton>
       </form>
     </div>

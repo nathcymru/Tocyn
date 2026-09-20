@@ -28,6 +28,14 @@ function bounded(value: WorkspacePreference) {
 function merge(base: WorkspacePreference, patch: Partial<WorkspacePreference>): WorkspacePreference {
   return { ...base, ...patch, filters: patch.filters ? { ...patch.filters } : { ...base.filters } };
 }
+function sameEditablePreference(a: WorkspacePreference, b: WorkspacePreference) {
+  const aFilters = a.filters as Record<string, unknown>;
+  const bFilters = b.filters as Record<string, unknown>;
+  const filterKeys = new Set([...Object.keys(aFilters), ...Object.keys(bFilters)]);
+  return a.view === b.view && a.sort === b.sort && a.listQuery === b.listQuery && a.listAnchor === b.listAnchor
+    && a.selectedTicketId === b.selectedTicketId && a.panel === b.panel && Object.is(a.splitterRatio, b.splitterRatio)
+    && [...filterKeys].every(key => Object.is(aFilters[key], bFilters[key]));
+}
 function mergePatch(base: WorkspacePreferencePatch, patch: WorkspacePreferencePatch): WorkspacePreferencePatch {
   return { ...base, ...patch, ...(patch.filters ? { filters: { ...patch.filters } } : {}) };
 }
@@ -130,9 +138,12 @@ function createController(identity: string | null) {
 
   const update = (patch: WorkspacePreferencePatch) => {
     if (!current() && !localOnly()) return;
+    const next = merge(state, patch);
+    // Ark Splitter also emits resize-end while synchronising a controlled size.
+    // An unchanged preference is not an edit and must not fence navigation.
+    if (sameEditablePreference(state, next)) return;
     edit++; dirty = true; cancel();
     pendingPatch = mergePatch(pendingPatch, patch);
-    const next = merge(state, patch);
     if (localOnly()) { replace({ ...next, status: 'idle', error: null }); return; }
     const blocked = !known || state.status === 'conflict';
     replace({ ...next, status: blocked ? state.status : bounded(next) ? 'unsaved' : 'error', error: blocked ? state.error : bounded(next) ? null : 'Workspace preference exceeds the server limit.' });

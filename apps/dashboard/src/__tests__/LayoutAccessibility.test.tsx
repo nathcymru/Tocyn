@@ -1,5 +1,4 @@
 import userEvent from '@testing-library/user-event';
-import '../index.css';
 import { dashboardApi } from '../api/client';
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -23,7 +22,7 @@ vi.mock('../api/client', async () => ({ ...(await vi.importActual<typeof import(
 } }));
 let client: QueryClient;
 const realtime = { isConnected: true, lastMessage: null, presence: [], updateLocation: vi.fn(), connectionDetails: { latency: 10, reconnectCount: 0 }, manualReconnect: vi.fn() };
-function Destination() { const location = useLocation(); return <h1>Route {location.pathname}{location.search}</h1>; }
+function Destination() { const location = useLocation(); return <><h1>Route {location.pathname}{location.search}</h1>{location.state?.logoutWarning && <p role="alert">{location.state.logoutWarning}</p>}</>; }
 function tree(initialEntry = '/tickets') {
   return <QueryClientProvider client={client}><CollaborationProvider><MemoryRouter initialEntries={[initialEntry]}><Routes>
     <Route element={<Layout />}><Route path="*" element={<Destination />} /></Route>
@@ -54,7 +53,7 @@ it('names global search, makes its authorised scope available to assistive techn
   await renderReady();
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
-  expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveClass('tocyn-visually-hidden');
+  expect(screen.getByText(/Searches all tickets you are authorised to access\.|Press Command or Control K to focus this search\.|Filter this view is available in the Inbox/)).toHaveAttribute('id', 'global-ticket-search-scope');
   fireEvent.change(search, { target: { value: 'Follow up' } }); fireEvent.keyDown(search, { key: 'Enter' });
   expect(screen.getByRole('heading').textContent).toBe('Route /tickets');
   fireEvent.keyDown(search, { key: 'Escape' });
@@ -79,7 +78,7 @@ it('provides discoverable command navigation to global search and restores its c
   fireEvent.keyDown(window, { key: 'k', metaKey: true });
   expect(search).toHaveFocus();
   expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
-  expect(screen.getByText(/Press Command or Control K to focus this search/)).toHaveClass('tocyn-visually-hidden');
+  expect(screen.getByText(/Press Command or Control K to focus this search/)).toHaveAttribute('id', 'global-ticket-search-scope');
   fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
   expect(search).toHaveFocus();
 });
@@ -88,10 +87,10 @@ it('constrains the inbox shell to the viewport while keeping the shared header v
   render(tree('/inbox/all/synthetic-ticket'));
   const main = await screen.findByRole('main', { name: 'Workspace' });
   const shell = main.parentElement?.parentElement;
-  expect(shell).toHaveClass('tocyn-shell-root', 'tocyn-shell-root-inbox');
-  expect(main).toHaveClass('tocyn-shell-content', 'tocyn-shell-content-inbox');
+  expect(shell).toHaveClass('shell__root', 'shell__rootInbox');
+  expect(main).toHaveClass('shell__content', 'shell__contentInbox');
   expect(main).not.toHaveClass('h-[calc(100dvh-4rem)]');
-  expect(main.previousElementSibling).toHaveClass('tocyn-shell-header');
+  expect(main.previousElementSibling).toHaveClass('shell__header');
 });
 
 it('names account/connection disclosures and restores focus when their child actions close', async () => {
@@ -106,7 +105,9 @@ it('names account/connection disclosures and restores focus when their child act
   act(()=>result.rerender(tree()));
   const connection = screen.getByRole('button', { name: 'Disconnected' });
   await userEvent.click(connection); expect(connection).toHaveAttribute('aria-expanded', 'true');
+  expect(connection).toHaveClass('popover__trigger');
   const reconnect = await screen.findByRole('button', { name: 'Force Reconnect' });
+  expect(reconnect.closest('.popover__content')).toBeInTheDocument();
   await waitFor(() => expect(reconnect).toHaveFocus()); await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(connection).toHaveFocus()); expect(connection).toHaveAttribute('aria-expanded', 'false');
   await userEvent.click(connection); fireEvent.click(screen.getByRole('button', { name: 'Force Reconnect' }));
@@ -161,7 +162,9 @@ it('uses realtime only to refresh an already-open durable activity panel', async
   expect(screen.queryByText('New Ticket')).not.toBeInTheDocument();
   const trigger = screen.getByRole('button', { name: 'Activity' });
   await userEvent.click(trigger);
+  expect(trigger).toHaveClass('popover__trigger');
   expect(await screen.findByText('No current activity.')).toBeInTheDocument();
+  expect(screen.getByText('No current activity.').closest('.popover__content')).toBeInTheDocument();
   expect(dashboardApi.get).toHaveBeenCalledWith('/activities?limit=20');
 });
 
@@ -266,7 +269,6 @@ it('navigates from the account popover without stealing destination focus', asyn
 });
 
 it('guards overlapping sign-outs and still clears local authentication when server sign-out fails', async () => {
-  const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
   let reject!: (error: Error) => void;
   vi.mocked(dashboardApi.post).mockImplementationOnce(() => new Promise((_resolve, failure) => { reject = failure; }));
   await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
@@ -277,17 +279,20 @@ it('guards overlapping sign-outs and still clears local authentication when serv
   await act(async () => reject(new Error('Synthetic failure')));
   expect(useAuthStore.getState().user).toBeNull();
   expect(screen.getByRole('heading')).toHaveTextContent('/login');
-  expect(alert).toHaveBeenCalledWith(expect.stringContaining('Server sign-out could not be confirmed'));
+  expect(screen.getByRole('alert')).toHaveTextContent('Server sign-out could not be confirmed');
 });
 
-it('keeps the persona menu available while mobile navigation is open', async () => {
+it('contains focus in mobile navigation and restores the persona menu after closing', async () => {
   await renderReady();
   await userEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   const navigation = await screen.findByRole('dialog', { name: 'Navigation' });
   expect(within(navigation).getByRole('link', { name: 'Inbox' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Account options' })).toBeVisible();
+  await waitFor(() => expect(within(navigation).getByRole('button', { name: 'Close navigation' })).toHaveFocus());
+  await userEvent.tab();
+  expect(navigation.contains(document.activeElement)).toBe(true);
   fireEvent.click(within(navigation).getByRole('button', { name: 'Close navigation' }));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'Account options' })).toBeVisible();
 });
 
 it('invalidates ticket queues after dismissing activity while reading retains mention membership',async()=>{

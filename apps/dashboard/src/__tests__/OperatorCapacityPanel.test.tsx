@@ -1,4 +1,5 @@
 import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach,afterEach,it,expect,vi } from 'vitest';
 import { ApiError,dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -13,14 +14,16 @@ it('retains entered values through a conflict and failed reload, then explicitly
  render(<OperatorCapacityPanel userId="operator" editable/>);
  const limit=await screen.findByRole('spinbutton',{name:'Assignment limit (0–1000)'});
  await waitFor(()=>expect(limit).toHaveValue(3));
- fireEvent.change(limit,{target:{value:'5'}});fireEvent.change(screen.getByLabelText('Availability for assignments'),{target:{value:'unavailable'}});
+ fireEvent.change(limit,{target:{value:'5'}});
+ await userEvent.click(screen.getByRole('combobox',{name:'Availability for assignments'}));
+ await userEvent.click(screen.getByRole('option',{name:'Unavailable'}));
  fireEvent.click(screen.getByRole('button',{name:'Save capacity'}));
  await screen.findByText(/Capacity changed elsewhere/);expect(limit).toHaveValue(5);
  expect(screen.getByRole('button',{name:'Save capacity'})).toBeDisabled();
  fireEvent.click(screen.getByRole('button',{name:'Reload current policy'}));
  await screen.findByText(/Current work could not be loaded/);expect(limit).toHaveValue(5);
  fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByText(/Current policy reloaded/);
- expect(limit).toHaveValue(5);expect(screen.getByLabelText('Availability for assignments')).toHaveValue('unavailable');
+ expect(limit).toHaveValue(5);expect(screen.getByRole('combobox',{name:'Availability for assignments'})).toHaveTextContent('Unavailable');
  expect(dashboardApi.put).toHaveBeenCalledTimes(1);
  fireEvent.click(screen.getByRole('button',{name:'Save capacity'}));await screen.findByText('Capacity saved.');
  expect(dashboardApi.put).toHaveBeenLastCalledWith('/operators/operator/capacity',{expectedRevision:4,availability:'unavailable',assignmentCeiling:5});

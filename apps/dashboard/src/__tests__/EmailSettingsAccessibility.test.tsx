@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -46,7 +47,8 @@ it('labels the add form, guards pending creation and retains failed entries with
  const email=screen.getByLabelText('Email Address *');expect(email).toHaveFocus();
  fireEvent.change(email,{target:{value:'new@example.invalid'}});
  fireEvent.change(screen.getByLabelText('Display Name'),{target:{value:'Synthetic support'}});
- fireEvent.change(screen.getByLabelText('Assign to Group'),{target:{value:'group-a'}});
+ await userEvent.click(screen.getByRole('combobox',{name:'Assign to Group'}));
+ await userEvent.click(await screen.findByRole('option',{name:'Synthetic group'}));
  const form=screen.getByRole('form',{name:'Add support email'});fireEvent.submit(form);fireEvent.submit(form);
  await waitFor(()=>expect(api.post).toHaveBeenCalledTimes(1));expect(email).toBeDisabled();expect(screen.getByRole('button',{name:'Cancel'})).toBeDisabled();
  await act(async()=>reject(new Error('private error')));

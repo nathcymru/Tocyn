@@ -1,3 +1,4 @@
+import { p } from '../portalStyles';
 import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -74,13 +75,13 @@ export function LoginPage() {
 
   if (success && type === 'magic_link') {
     return (
-      <div className="tocyn-portal-auth-shell">
-        <div className="tocyn-portal-auth-heading tocyn-portal-auth-success">
-          <div className="tocyn-portal-auth-success-icon">
-            <IconEnvelope className="tocyn-portal-auth-success-mark" />
+      <div className={p.authShell}>
+        <div className={[p.authHeading, p.authSuccess].join(' ')}>
+          <div className={p.authSuccessIcon}>
+            <IconEnvelope className={p.authSuccessMark} />
           </div>
-          <h2 ref={successHeading} tabIndex={-1} className="tocyn-portal-auth-success-title">Check your email</h2>
-          <p className="tocyn-portal-auth-success-copy">
+          <h2 ref={successHeading} tabIndex={-1} className={p.authSuccessTitle}>Check your email</h2>
+          <p className={p.authSuccessCopy}>
             We sent a magic link to <strong>{email}</strong>.<br/>
             Click the link in the email to log in.
           </p>
@@ -90,8 +91,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="tocyn-portal-auth-shell">
-      <div className="tocyn-portal-auth-heading tocyn-portal-auth-login-heading">
+    <div className={p.authShell}>
+      <div className={[p.authHeading, p.authLoginHeading].join(' ')}>
         <h2>
           Sign in to Support
         </h2>
@@ -100,25 +101,25 @@ export function LoginPage() {
         </p>
       </div>
 
-      <div className="tocyn-portal-auth-card">
-        <div className="tocyn-portal-auth-card-body">
+      <div className={p.authCard}>
+        <div className={p.authCardBody}>
           {error && (
-            <div id="portal-login-error" role="alert" aria-atomic="true" className="tocyn-portal-auth-error">
+            <div id="portal-login-error" role="alert" aria-atomic="true" className={p.authError}>
               {error}
             </div>
           )}
           {success && type === 'otp' && (
-            <div role="status" className="tocyn-portal-auth-notice">
+            <div role="status" className={p.authNotice}>
               OTP sent! Redirecting to verification...
             </div>
           )}
 
-          <form aria-busy={loading} className="tocyn-portal-auth-form" onSubmit={handleSubmit}>
-            <div className="tocyn-portal-auth-field">
-              <label htmlFor="email" className="tocyn-portal-auth-label">
+          <form aria-busy={loading} className={p.authForm} onSubmit={handleSubmit}>
+            <div className={p.authField}>
+              <label htmlFor="email" className={p.authLabel}>
                 Email address
               </label>
-              <div className="tocyn-portal-auth-input">
+              <div className={p.authInput}>
                 <ParkInput
                   id="email"
                   name="email"
@@ -128,7 +129,7 @@ export function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => { if (!loading && !success) setEmail(e.target.value); }}
-                  className="tocyn-form-control"
+                  className={p.formControl}
                   placeholder="you@example.com"
                   readOnly={loading || success}
                 />
@@ -136,17 +137,13 @@ export function LoginPage() {
             </div>
 
             <fieldset>
-              <legend className="tocyn-portal-auth-legend">Login method</legend>
-              <div className="tocyn-portal-auth-methods">
+              <legend className={p.authLegend}>Login method</legend>
+              <div className={p.authMethods}>
                 <ParkButton
                   type="button"
                   onClick={() => { if (!loading && !success) setType('magic_link'); }}
                   aria-pressed={type === 'magic_link'}
-                  className={`tocyn-portal-auth-method ${
-                    type === 'magic_link'
-                      ? 'tocyn-portal-auth-method--active'
-                      : 'tocyn-portal-auth-method--inactive'
-                  }`}
+                  className={[p.authMethod, type === 'magic_link' ? p.authMethodActive : p.authMethodInactive].join(' ')}
                   aria-disabled={loading || success}
                 >
                   Magic Link
@@ -155,11 +152,7 @@ export function LoginPage() {
                   type="button"
                   onClick={() => { if (!loading && !success) setType('otp'); }}
                   aria-pressed={type === 'otp'}
-                  className={`tocyn-portal-auth-method ${
-                    type === 'otp'
-                      ? 'tocyn-portal-auth-method--active'
-                      : 'tocyn-portal-auth-method--inactive'
-                  }`}
+                  className={[p.authMethod, type === 'otp' ? p.authMethodActive : p.authMethodInactive].join(' ')}
                   aria-disabled={loading || success}
                 >
                   Code (OTP)
@@ -168,7 +161,7 @@ export function LoginPage() {
             </fieldset>
 
             {siteKey && (
-              <div className="tocyn-portal-auth-turnstile">
+              <div className={p.authTurnstile}>
                 <Turnstile
                   siteKey={siteKey}
                   onSuccess={(token) => setTurnstileToken(token)}
@@ -185,14 +178,14 @@ export function LoginPage() {
               <ParkButton
                 type="submit"
                 aria-disabled={loading || success || !email || (!!siteKey && !turnstileToken)}
-                variant="solid" className="tocyn-portal-auth-submit"
+                variant="solid" className={p.authSubmit}
               >
-                {loading ? <IconSpinner className="tocyn-portal-auth-spinner" /> : <IconArrowRight className="tocyn-portal-auth-icon" />}
+                {loading ? <IconSpinner className={p.authSpinner} /> : <IconArrowRight className={p.authIcon} />}
                 {loading ? 'Sending...' : `Send ${type === 'magic_link' ? 'Magic Link' : 'Code'}`}
               </ParkButton>
             </div>
           </form>
-          <p role="status" aria-live="polite" className="tocyn-portal-auth-status">{loading ? 'Sending login instructions…' : ''}</p>
+          <p role="status" aria-live="polite" className={p.authStatus}>{loading ? 'Sending login instructions…' : ''}</p>
         </div>
       </div>
     </div>

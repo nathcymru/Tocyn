@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ParkButton, ParkCard, ParkEmptyState, ParkPage } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkPage, ParkProgress } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useStats } from '../hooks/useStats';
 import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
@@ -50,25 +51,24 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className={[page.root, page.content].join(' ')}>
       <header className={page.header}>
-        <h1>Dashboard</h1>
-        <p>A quick overview of the support workload.</p>
-        <ParkButton type="button" variant="solid" onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>
+        <div className={page.dashboardHeading}>
+          <h1>Dashboard</h1>
+          <p>A quick overview of the support workload.</p>
+        </div>
+        <ParkButton type="button" variant="solid" className={page.dashboardAction} onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>
       </header>
 
       <div className={page.metricStrip}>
-        {cards.map((card, idx) => (
-          <ParkCard.Root key={idx} variant="outline" className={page.metricCard}>
-            <ParkCard.Header>
-              <div className={page.metricIcon} data-tone={card.tone}>
-                <card.icon />
+        {cards.map(card => (
+          <ParkCard.Root key={card.label} variant="outline" className={page.metricCard}>
+            <ParkCard.Header className={page.metricCardHeader}>
+              <div className={page.metricIcon} data-tone={card.tone} aria-hidden="true">
+                <card.icon aria-hidden="true" />
               </div>
-              <span>Metrics</span>
+              <ParkCard.Title className={page.metricLabel}>{card.label}</ParkCard.Title>
             </ParkCard.Header>
-            <ParkCard.Body>
-              <div>
-                <ParkCard.Description>{card.label}</ParkCard.Description>
-                <ParkCard.Title data-tabular>{card.value}</ParkCard.Title>
-              </div>
+            <ParkCard.Body className={page.metricCardBody}>
+              <p className={page.metricValue} data-tabular>{card.value}</p>
             </ParkCard.Body>
           </ParkCard.Root>
         ))}
@@ -76,9 +76,9 @@ export const DashboardPage: React.FC = () => {
 
       <div className={page.panels}>
         <ParkCard.Root variant="outline">
-          <ParkCard.Header>
-            <IconChartBar />
-            <h3>Tickets by Priority</h3>
+          <ParkCard.Header className={page.panelHeader}>
+            <IconChartBar className={page.panelIcon} aria-hidden="true" />
+            <ParkCard.Title className={page.panelTitle}>Tickets by Priority</ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body className={page.priorityList}>
             {['urgent', 'high', 'normal', 'low'].map((priority) => {
@@ -90,13 +90,15 @@ export const DashboardPage: React.FC = () => {
                     <span>{priority}</span>
                     <span>{count}</span>
                   </div>
-                  <div className={page.progressTrack}>
-                    <div
-                      className={page.progressFill}
-                      data-tone={priority}
-                      style={{ ['--tocyn-progress' as string]: `${percentage}%` }}
-                    />
-                  </div>
+                  <ParkProgress
+                    value={percentage}
+                    className={css({ w: 'full' })}
+                    label={
+                      <span className={css({ position: 'absolute', w: '1px', h: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' })}>
+                        {priority} tickets: {count} of {totalTickets} ({percentage.toFixed(1)}%)
+                      </span>
+                    }
+                  />
                 </div>
               );
             })}
@@ -104,28 +106,32 @@ export const DashboardPage: React.FC = () => {
         </ParkCard.Root>
 
         <ParkCard.Root variant="outline">
-          <ParkCard.Header>
-            <IconUsers />
-            <h3>System Overview</h3>
+          <ParkCard.Header className={page.panelHeader}>
+            <IconUsers className={page.panelIcon} aria-hidden="true" />
+            <ParkCard.Title className={page.panelTitle}>System Overview</ParkCard.Title>
           </ParkCard.Header>
           <ParkCard.Body>
-          <div className={page.overviewGrid}>
-            <ParkCard.Root variant="subtle" className={page.overviewCard}>
-              <div>
-                <IconUsers />
-                <span>Total Users</span>
-              </div>
-              <p>{stats?.totalUsers || 0}</p>
-            </ParkCard.Root>
-            <ParkCard.Root variant="subtle" className={page.overviewCard}>
-              <div>
-                <IconUsers />
-                <span>Active Groups</span>
-              </div>
-              <p>{stats?.totalGroups || 0}</p>
-            </ParkCard.Root>
-          </div>
-          <p className={page.overviewFooter}>Use Inbox to keep the conversation list in place while reviewing and replying.</p>
+            <div className={page.overviewGrid}>
+              <ParkCard.Root variant="subtle" className={page.overviewCard}>
+                <ParkCard.Body className={page.overviewCardBody}>
+                  <div className={page.overviewCardLabel}>
+                    <IconUsers aria-hidden="true" />
+                    <span>Total Users</span>
+                  </div>
+                  <p className={page.overviewCardValue} data-tabular>{stats?.totalUsers || 0}</p>
+                </ParkCard.Body>
+              </ParkCard.Root>
+              <ParkCard.Root variant="subtle" className={page.overviewCard}>
+                <ParkCard.Body className={page.overviewCardBody}>
+                  <div className={page.overviewCardLabel}>
+                    <IconUsers aria-hidden="true" />
+                    <span>Active Groups</span>
+                  </div>
+                  <p className={page.overviewCardValue} data-tabular>{stats?.totalGroups || 0}</p>
+                </ParkCard.Body>
+              </ParkCard.Root>
+            </div>
+            <p className={page.overviewFooter}>Use Inbox to keep the conversation list in place while reviewing and replying.</p>
           </ParkCard.Body>
         </ParkCard.Root>
       </div>

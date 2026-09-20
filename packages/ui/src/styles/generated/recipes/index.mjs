@@ -63,3 +63,4 @@ export * from './composer.mjs';
 export * from './ticket-fields.mjs';
 export * from './shell.mjs';
 export * from './empty-state.mjs';
+export * from './auth-shell.mjs';

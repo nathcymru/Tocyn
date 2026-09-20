@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { UsagePage } from '../pages/UsagePage';
@@ -19,7 +20,7 @@ it('associates automation labels, exposes status state, and swaps conditional ac
  const action=screen.getByRole('combobox',{name:'Action Type'});expect(action).toBeInTheDocument();
  const status=screen.getByRole('button',{name:'Rule status'});expect(status).toHaveAttribute('aria-pressed','true');fireEvent.click(status);expect(status).toHaveAttribute('aria-pressed','false');
  expect(screen.getByRole('textbox',{name:'Webhook URL'})).toBeInTheDocument();expect(screen.getByRole('combobox',{name:'HTTP Method'})).toBeInTheDocument();
- fireEvent.change(action,{target:{value:'retention'}});await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'Retention Period (Days)'})).toBeInTheDocument());expect(screen.queryByRole('textbox',{name:'Webhook URL'})).not.toBeInTheDocument();
+ await userEvent.click(action);await userEvent.click(await screen.findByRole('option',{name:/Retention/i}));await waitFor(()=>expect(screen.getByRole('spinbutton',{name:'Retention Period (Days)'})).toBeInTheDocument());expect(screen.queryByRole('textbox',{name:'Webhook URL'})).not.toBeInTheDocument();
 });
 
 it('names usage credential inputs when the local API reports missing configuration', async () => {

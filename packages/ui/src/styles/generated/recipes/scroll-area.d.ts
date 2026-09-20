@@ -3,14 +3,21 @@ import type { ConditionalValue } from '../types/index';
 import type { DistributiveOmit, Pretty } from '../types/system-types';
 
 interface ScrollAreaVariant {
-  
+  /**
+ * @default "auto"
+ */
+scrollbar: "auto" | "visible"
+/**
+ * @default "md"
+ */
+size: "xs" | "sm" | "md" | "lg"
 }
 
 type ScrollAreaVariantMap = {
   [key in keyof ScrollAreaVariant]: Array<ScrollAreaVariant[key]>
 }
 
-type ScrollAreaSlot = "root" | "viewport" | "content" | "scrollbar" | "thumb"
+type ScrollAreaSlot = "root" | "viewport" | "content" | "scrollbar" | "thumb" | "corner"
 
 export type ScrollAreaVariantProps = {
   [key in keyof ScrollAreaVariant]?: ConditionalValue<ScrollAreaVariant[key]> | undefined

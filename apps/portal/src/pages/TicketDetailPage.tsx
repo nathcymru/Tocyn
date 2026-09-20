@@ -1,3 +1,4 @@
+import { p } from '../portalStyles';
 import { ParkButton, ParkEmptyState, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -296,68 +297,68 @@ function TicketDetail({ id }: { id: string | undefined }) {
   };
 
   const statusColors = {
-    open: 'tocyn-status-open',
-    pending: 'tocyn-status-pending',
-    resolved: 'tocyn-status-resolved',
-    closed: 'tocyn-status-closed',
+    open: p.statusOpen,
+    pending: p.statusPending,
+    resolved: p.statusResolved,
+    closed: p.statusClosed,
   };
 
   if (loading) {
-    return <ParkEmptyState role="status" title="Loading conversation…" headingLevel={false} aria-busy="true" className="tocyn-portal-empty-state" />;
+    return <ParkEmptyState role="status" title="Loading conversation…" headingLevel={false} aria-busy="true" className={p.emptyState} />;
   }
 
   if (error || !ticket) {
-    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className="tocyn-portal-empty-error" action={<div className="tocyn-portal-empty-actions"><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }} className="tocyn-portal-empty-retry">Retry loading conversation</ParkButton><Link to="/tickets" className="tocyn-portal-empty-back">Back to Tickets</Link></div>} />;
+    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className={p.emptyError} action={<div className={p.emptyActions}><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }} className={p.emptyRetry}>Retry loading conversation</ParkButton><Link to="/tickets" className={p.emptyBack}>Back to Tickets</Link></div>} />;
   }
 
   return (
-    <div className="tocyn-portal-ticket-detail">
-      <div className="tocyn-portal-ticket-detail-header">
-        <Link to="/tickets" aria-label="Back to Tickets" className="tocyn-portal-ticket-detail-back">
-          <IconArrowLeft className="tocyn-portal-chat-back-icon" />
+    <div className={p.ticketDetail}>
+      <div className={p.ticketDetailHeader}>
+        <Link to="/tickets" aria-label="Back to Tickets" className={p.ticketDetailBack}>
+          <IconArrowLeft className={p.chatBackIcon} />
         </Link>
         <div>
-          <h1 ref={conversationHeading} tabIndex={-1} className="tocyn-portal-ticket-detail-title">
+          <h1 ref={conversationHeading} tabIndex={-1} className={p.ticketDetailTitle}>
             {ticket.subject}
-            <span className={`tocyn-portal-chat-status-pill ${statusColors[ticket.status]}`}>
+            <span className={[p.chatStatusPill, statusColors[ticket.status]].join(' ')}>
               {ticket.status}
             </span>
           </h1>
-          <p className="tocyn-portal-ticket-detail-meta">
+          <p className={p.ticketDetailMeta}>
             Ticket {ticketReference(ticket, ticketPrefix)} • Created {format(utcTimestamp(ticket.created_at), 'MMM d, yyyy h:mm a')}
           </p>
         </div>
       </div>
 
-      {refreshError && <div className="tocyn-portal-chat-reply-error">
+      {refreshError && <div className={p.chatReplyError}>
         <p role="alert">Could not refresh messages: {refreshError}</p>
-        <ParkButton type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket('interactive') === 'updated') messagesRegion.current?.focus(); }} className="tocyn-portal-chat-refresh">Refresh messages</ParkButton>
+        <ParkButton type="button" aria-disabled={refreshing} onClick={async () => { if (!refreshing && await fetchTicket('interactive') === 'updated') messagesRegion.current?.focus(); }} className={p.chatRefresh}>Refresh messages</ParkButton>
       </div>}
-      {downloadError && <p role="alert" className="tocyn-portal-chat-error">{downloadError}</p>}
-      <p role="status" aria-label="Attachment download status" className="tocyn-portal-chat-status">{downloadStatus}</p>
+      {downloadError && <p role="alert" className={p.chatError}>{downloadError}</p>}
+      <p role="status" aria-label="Attachment download status" className={p.chatStatus}>{downloadStatus}</p>
       <TicketSlaStatus ticketId={ticket.id} />
-      <div className="tocyn-portal-surface tocyn-portal-chat-surface">
+      <div className={[p.surface, p.chatSurface].join(' ')}>
         {/* Messages List */}
-        <div ref={messagesRegion} id="conversation-messages" role="region" aria-label="Conversation messages" tabIndex={0} className="tocyn-portal-message-feed tocyn-portal-chat-feed focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">
-          {articles.length === 0 ? <ParkEmptyState title="No messages yet." description="Your conversation will appear here when a message is added." headingLevel={false} className="tocyn-portal-empty-state" /> : articles.map((article) => {
+        <div ref={messagesRegion} id="conversation-messages" role="region" aria-label="Conversation messages" tabIndex={0} className={[p.messageFeed, p.chatFeed].join(' ')}>
+          {articles.length === 0 ? <ParkEmptyState title="No messages yet." description="Your conversation will appear here when a message is added." headingLevel={false} className={p.emptyState} /> : articles.map((article) => {
             const isCustomer = article.sender_type === 'customer';
             return (
-              <div key={article.id} className={`tocyn-portal-chat-item ${isCustomer ? 'items-end' : 'items-start'}`}>
-                <div className="tocyn-portal-chat-meta">
-                  <span className="tocyn-portal-chat-meta-name">
+              <div key={article.id} className={[p.chatItem, isCustomer ? p.chatItemCustomer : p.chatItemSupport].join(' ')}>
+                <div className={p.chatMeta}>
+                  <span className={p.chatMetaName}>
                     {isCustomer ? 'You' : 'Support Team'}
                   </span>
-                  <span className="tocyn-portal-chat-meta-time">
+                  <span className={p.chatMetaTime}>
                     {formatDistanceToNow(utcTimestamp(article.created_at), { addSuffix: true })}
                   </span>
                 </div>
                 <div
-                  className={`tocyn-portal-message ${isCustomer ? 'tocyn-portal-message--customer' : 'tocyn-portal-message--support'}`}
+                  className={[p.message, isCustomer ? p.messageCustomer : p.messageSupport].join(' ')}
                 >
-                  <div className="tocyn-portal-chat-body">{article.body_format === 'markdown-v1' && typeof article.body_text === 'string' ? article.body_text : article.body}</div>
+                  <div className={p.chatBody}>{article.body_format === 'markdown-v1' && typeof article.body_text === 'string' ? article.body_text : article.body}</div>
 
                   {article.attachments && article.attachments.length > 0 && (
-                    <div className="tocyn-portal-chat-attachments">
+                    <div className={p.chatAttachments}>
                       {article.attachments.map((att) => (
                         <ParkButton
                           key={att.id}
@@ -365,13 +366,11 @@ function TicketDetail({ id }: { id: string | undefined }) {
                           aria-label={`Download ${att.filename || 'attachment'}`}
                           aria-disabled={Boolean(downloading)}
                           onClick={() => downloadAttachment(att.id, att.filename)}
-                          className={`tocyn-portal-chat-attachment ${
-                            isCustomer ? 'tocyn-portal-chat-attachment--customer' : 'tocyn-portal-chat-attachment--support'
-                          }`}
+                          className={[p.chatAttachment, isCustomer ? p.chatAttachmentCustomer : p.chatAttachmentSupport].join(' ')}
                         >
-                          <IconPaperclip className="tocyn-portal-chat-attachment-icon" />
-                          <span className="tocyn-portal-chat-attachment-name">{att.filename || 'Attachment'}</span>
-                          <span className="tocyn-portal-chat-attachment-size">
+                          <IconPaperclip className={p.chatAttachmentIcon} />
+                          <span className={p.chatAttachmentName}>{att.filename || 'Attachment'}</span>
+                          <span className={p.chatAttachmentSize}>
                             {attachmentSize(att.size)}
                           </span>
                         </ParkButton>
@@ -382,23 +381,23 @@ function TicketDetail({ id }: { id: string | undefined }) {
             );
           })}
         </div>
-        {paginationVisible && <div className="tocyn-portal-chat-pagination">
+        {paginationVisible && <div className={p.chatPagination}>
           <ParkButton type="button" onClick={loadMore} aria-disabled={!nextCursor || loadingMore || refreshing}
             aria-controls="conversation-messages" aria-busy={loadingMore}
-            className="tocyn-portal-chat-pagination-button">
+            className={p.chatPaginationButton}>
             {loadingMore ? 'Loading messages…' : nextCursor ? 'Load more messages' : 'All messages loaded'}
           </ParkButton>
-          <p role="status" aria-label="Message pagination" aria-live="polite" className="tocyn-portal-chat-pagination-status">{pageStatus}</p>
+          <p role="status" aria-label="Message pagination" aria-live="polite" className={p.chatPaginationStatus}>{pageStatus}</p>
         </div>}
 
         {/* Reply Area */}
         {(ticket.status === 'open' || ticket.status === 'pending') && (
-          <div className="tocyn-portal-chat-composer">
-            <form aria-busy={sending} onSubmit={handleReply} className="tocyn-portal-chat-composer-form">
-              <label htmlFor="reply-message" className="tocyn-portal-chat-reply-label">Reply</label>
-              {replyError && <p id="reply-error" role="alert" className="tocyn-portal-chat-reply-error">{replyError}</p>}
-              <p role="status" aria-label="Reply status" className="tocyn-portal-chat-reply-status">{replyStatus}</p>
-              <p id="reply-requirement" className="tocyn-portal-chat-reply-requirement">Reply text is required, including when attaching files.</p>
+          <div className={p.chatComposer}>
+            <form aria-busy={sending} onSubmit={handleReply} className={p.chatComposerForm}>
+              <label htmlFor="reply-message" className={p.chatReplyLabel}>Reply</label>
+              {replyError && <p id="reply-error" role="alert" className={p.chatReplyError}>{replyError}</p>}
+              <p role="status" aria-label="Reply status" className={p.chatReplyStatus}>{replyStatus}</p>
+              <p id="reply-requirement" className={p.chatReplyRequirement}>Reply text is required, including when attaching files.</p>
               <ParkTextarea
                 id="reply-message"
                 readOnly={sending}
@@ -406,38 +405,38 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 value={newMessage}
                 onChange={(e) => { if (!sending) setNewMessage(e.target.value); }}
                 placeholder="Type your reply here..."
-                className="tocyn-portal-chat-reply-input"
+                className={p.chatReplyInput}
                 rows={3}
               />
 
               {/* Attachment Preview */}
               {attachments.length > 0 && (
-                <div className="tocyn-portal-chat-attachment-list">
+                <div className={p.chatAttachmentList}>
                   {attachments.map((file, idx) => (
-                    <div key={idx} className="tocyn-portal-chat-attachment-item">
-                      <IconPaperclip className="tocyn-portal-chat-attachment-icon" />
-                      <span className="tocyn-portal-chat-attachment-name tocyn-portal-chat-attachment-name--compact">{file.name}</span>
+                    <div key={idx} className={p.chatAttachmentItem}>
+                      <IconPaperclip className={p.chatAttachmentIcon} />
+                      <span className={[p.chatAttachmentName, p.chatAttachmentNameCompact].join(' ')}>{file.name}</span>
                       <ParkButton
                         type="button"
                         aria-label={`Remove ${file.name}`}
                         aria-disabled={sending}
                         onClick={() => removeAttachment(idx)}
-                        className="tocyn-portal-chat-attachment-remove"
+                        className={p.chatAttachmentRemove}
                       >
-                        <IconXmark className="tocyn-portal-chat-attachment-remove-icon" />
+                        <IconXmark className={p.chatAttachmentRemoveIcon} />
                       </ParkButton>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="tocyn-portal-chat-reply-actions">
+              <div className={p.chatReplyActions}>
                 <div>
                   <ParkInput
                     type="file"
                     aria-label="Choose reply attachments"
                     multiple
-                    className="tocyn-portal-chat-file-input"
+                    className={p.chatFileInput}
                     ref={fileInputRef}
                     onChange={handleFileSelect}
                   />
@@ -445,20 +444,20 @@ function TicketDetail({ id }: { id: string | undefined }) {
                     type="button"
                     ref={attachButton}
                     onClick={() => { if (!sending) fileInputRef.current?.click(); }}
-                    className="tocyn-portal-chat-attach-button"
+                    className={p.chatAttachButton}
                     aria-disabled={sending}
                   >
-                    <IconPaperclip className="tocyn-portal-chat-attach-icon" />
-                    <span className="tocyn-portal-chat-attach-label">Attach Files</span>
+                    <IconPaperclip className={p.chatAttachIcon} />
+                    <span className={p.chatAttachLabel}>Attach Files</span>
                   </ParkButton>
                 </div>
 
                 <ParkButton
                   type="submit"
                   aria-disabled={sending || !newMessage.trim()}
-                  className="tocyn-portal-chat-send-button"
+                  className={p.chatSendButton}
                 >
-                  {sending ? <IconSpinner className="tocyn-portal-chat-send-icon" /> : <IconPaperPlane className="tocyn-portal-chat-send-icon" />}
+                  {sending ? <IconSpinner className={p.chatSendIcon} /> : <IconPaperPlane className={p.chatSendIcon} />}
                   Send Reply
                 </ParkButton>
               </div>
@@ -467,7 +466,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
         )}
 
         {ticket.status === 'resolved' || ticket.status === 'closed' ? (
-           <div className="tocyn-portal-chat-closed">
+           <div className={p.chatClosed}>
              This ticket is {ticket.status}. You cannot reply to it.
            </div>
         ) : null}

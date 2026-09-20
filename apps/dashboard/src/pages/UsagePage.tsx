@@ -1,4 +1,5 @@
-import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkProgress } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi, ApiError } from '../api/client';
 import {
@@ -12,13 +13,6 @@ import {
   IconBolt
 } from '@luminatick/ui/icons';
 import { UsageStats } from '@luminatick/shared';
-import { clsx } from 'clsx';
-
-function cn(...inputs: any[]) {
-  return clsx(inputs);
-}
-
-
 
 const LIMITS = {
   d1_reads_writes: 5_000_000, // 5M per day
@@ -113,36 +107,36 @@ export function UsagePage() {
   }, []);
 
   const renderCredentialsForm = () => (
-    <div className="tocyn-usage-credentials">
-      <div className={cn("tocyn-usage-credentials-header", isAuthError ? "tocyn-usage-credentials-header--auth" : "tocyn-usage-credentials-header--update")}>
-        <IconCircleExclamation className="tocyn-usage-credentials-icon" />
+    <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+      <div className={css({ display: 'flex', alignItems: 'center', gap: '3', p: '4', bg: isAuthError ? 'bg.subtle' : 'bg.surface' })}>
+        <IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} />
         <div>
-          <h3 className="tocyn-usage-credentials-title">
+          <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
             {isAuthError ? 'Cloudflare Credentials Required' : 'Update Cloudflare Credentials'}
           </h3>
-          <p className="tocyn-usage-credentials-copy">
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>
             {isAuthError
               ? 'To view your usage and costs, you need to provide your Cloudflare Account ID and an API Token with Account Analytics permissions.'
               : 'Update your Cloudflare Account ID or Analytics API Token. Leave the token field blank to keep your existing encrypted token.'}
           </p>
-          <p className="tocyn-usage-credentials-note">
+          <p className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
             Note: Storing these credentials in the database allows anyone with Admin access to view them, but it makes setup easier.
           </p>
         </div>
       </div>
 
-      <div className="tocyn-usage-credentials-body">
+      <div className={css({"minW":0})}>
         <div>
-          <h4 className="tocyn-usage-credentials-step-title">1. How to get your API Token:</h4>
-          <ol className="tocyn-usage-credentials-steps">
+          <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.default"})}>1. How to get your API Token:</h4>
+          <ol className={css({"minW":0})}>
             <li>
-              Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className="tocyn-usage-credentials-link">Cloudflare API Tokens <IconArrowUpRightFromSquare className="tocyn-usage-credentials-link-icon" /></a> dashboard.
+              Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className={css({"minW":0})}>Cloudflare API Tokens <IconArrowUpRightFromSquare className={css({"w":"4","h":"4","flexShrink":0})} /></a> dashboard.
             </li>
             <li>Click <strong>Create Token</strong> and choose <strong>Create Custom Token</strong>.</li>
             <li>
               Under Permissions, select:
-              <ul className="tocyn-usage-credentials-permissions">
-                <li>Account <span className="tocyn-usage-credentials-arrow">→</span> Account Analytics <span className="tocyn-usage-credentials-arrow">→</span> Read</li>
+              <ul className={css({"minW":0})}>
+                <li>Account <span className={css({"minW":0})}>→</span> Account Analytics <span className={css({"minW":0})}>→</span> Read</li>
               </ul>
             </li>
             <li>Under Account Resources, select your account.</li>
@@ -151,10 +145,10 @@ export function UsagePage() {
         </div>
 
         <div>
-          <h4 className="tocyn-usage-credentials-step-title tocyn-usage-credentials-step-title--form">2. Enter your credentials:</h4>
-          <div className="tocyn-usage-credentials-fields">
+          <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.default","maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>2. Enter your credentials:</h4>
+          <div className={css({"display":"grid","gap":"4"})}>
             <div>
-              <label htmlFor="cloudflare-account-id" className="tocyn-usage-credentials-label">
+              <label htmlFor="cloudflare-account-id" className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
                 Cloudflare Account ID
               </label>
               <ParkInput
@@ -163,11 +157,11 @@ export function UsagePage() {
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 placeholder="e.g., 1234567890abcdef1234567890abcdef"
-                className="tocyn-form-control tocyn-usage-credentials-input"
+                className={css({"w":"full"})}
               />
             </div>
             <div>
-              <label htmlFor="cloudflare-api-token" className="tocyn-usage-credentials-label">
+              <label htmlFor="cloudflare-api-token" className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>
                 Cloudflare API Token
               </label>
               <ParkInput
@@ -176,14 +170,14 @@ export function UsagePage() {
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
                 placeholder={isAuthError ? "Enter your API token" : "•••••••• (Leave blank to keep existing)"}
-                className="tocyn-form-control tocyn-usage-credentials-input"
+                className={css({"w":"full"})}
               />
             </div>
-            <div className="tocyn-usage-credentials-actions">
+            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
               <ParkButton
                 onClick={saveCredentials}
                 disabled={savingCredentials}
-                className="tocyn-usage-credentials-save"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 {savingCredentials ? 'Saving...' : 'Save & View Usage'}
               </ParkButton>
@@ -191,7 +185,7 @@ export function UsagePage() {
                 <ParkButton
                   onClick={() => setShowCredentialsForm(false)}
                   disabled={savingCredentials}
-                  className="tocyn-usage-credentials-cancel"
+                  className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                 >
                   Cancel
                 </ParkButton>
@@ -204,32 +198,32 @@ export function UsagePage() {
   );
 
   if (loading) {
-    return <ParkEmptyState title="Loading usage data…" headingLevel={false} aria-busy="true" className="tocyn-usage-loading" />;
+    return <ParkEmptyState title="Loading usage data…" headingLevel={false} aria-busy="true" className={css({"py":"6"})} />;
   }
 
   if (isMasterKeyMissing) {
     return (
-      <div className="tocyn-usage-state-page">
+      <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
         <div>
-          <h1 className="tocyn-usage-state-title">
-            <IconCreditCard className="tocyn-usage-state-icon" />
+          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+            <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
         </div>
-        <div className="tocyn-usage-critical">
-          <IconCircleExclamation className="tocyn-usage-critical-icon" />
+        <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+          <IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} />
           <div>
-            <h3 className="tocyn-usage-critical-title">Critical: Missing Encryption Key</h3>
-            <p className="tocyn-usage-critical-copy">
-              Your server is missing the <code className="tocyn-usage-critical-code">APP_MASTER_KEY</code> environment variable.
+            <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Critical: Missing Encryption Key</h3>
+            <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>
+              Your server is missing the <code className={css({"overflowX":"auto","rounded":"md","bg":"bg.muted","p":"3","fontFamily":"mono","fontSize":"sm"})}>APP_MASTER_KEY</code> environment variable.
               This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
             </p>
-            <p className="tocyn-usage-critical-note">
+            <p className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
               Please ask your system administrator to add it to your server's environment configuration, then restart the application.
             </p>
             <ParkButton
               onClick={fetchUsage}
-              className="tocyn-usage-critical-retry"
+              className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
               Retry
             </ParkButton>
@@ -241,19 +235,19 @@ export function UsagePage() {
 
   if (error && !isAuthError) {
     return (
-      <div className="tocyn-usage-state-page">
+      <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
         <div>
-          <h1 className="tocyn-usage-state-title">
-            <IconCreditCard className="tocyn-usage-state-icon" />
+          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+            <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
         </div>
-        <div className="tocyn-usage-error">
-          <p className="tocyn-usage-error-title">Error loading usage data</p>
-          <p className="tocyn-usage-error-copy">{error}</p>
+        <div className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>
+          <p className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Error loading usage data</p>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>{error}</p>
           <ParkButton
             onClick={fetchUsage}
-            className="tocyn-usage-error-retry"
+            className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
             Retry
           </ParkButton>
@@ -263,21 +257,21 @@ export function UsagePage() {
   }
 
   return (
-    <div className="tocyn-usage-page">
-      <div className="tocyn-usage-header">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 className="tocyn-usage-title">
-            <IconCreditCard className="tocyn-usage-title-icon" />
+          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
+            <IconCreditCard className={css({"w":"4","h":"4","flexShrink":0})} />
             Usage & Costs
           </h1>
-          <p className="tocyn-usage-description">
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
             Monitor your Cloudflare resource usage against Free Tier limits. Updates may be delayed by a few hours.
           </p>
         </div>
         {!isAuthError && !showCredentialsForm && (
           <ParkButton
             onClick={() => setShowCredentialsForm(true)}
-            className="tocyn-usage-update"
+            className={css({"minW":0})}
           >
             Update Credentials
           </ParkButton>
@@ -287,7 +281,7 @@ export function UsagePage() {
       {(isAuthError || showCredentialsForm) && renderCredentialsForm()}
 
       {!isAuthError && !showCredentialsForm && (
-        <div className="tocyn-usage-stat-grid">
+        <div className={css({"display":"grid","gap":"4","gridTemplateColumns":{"base":"1fr","md":"repeat(2,minmax(0,1fr))","xl":"repeat(3,minmax(0,1fr))"}})}>
           <StatCard
             title="D1 Reads and Writes"
             description="Database row operations"
@@ -296,9 +290,7 @@ export function UsagePage() {
             limit={LIMITS.d1_reads_writes}
             unit="/ day"
             format={formatNumber}
-            colorClass="tocyn-palette-blue-text"
-            bgClass="tocyn-palette-blue-soft"
-            fillClass="tocyn-palette-blue-fill"
+            bgClass={css({ bg: 'blue.3' })}
           />
 
           <StatCard
@@ -309,9 +301,7 @@ export function UsagePage() {
             limit={LIMITS.r2_class_a}
             unit="/ month"
             format={formatNumber}
-            colorClass="tocyn-palette-indigo-text"
-            bgClass="tocyn-palette-indigo-soft"
-            fillClass="tocyn-palette-indigo-fill"
+            bgClass={css({ bg: 'blue.3' })}
           />
 
           <StatCard
@@ -322,9 +312,7 @@ export function UsagePage() {
             limit={LIMITS.r2_class_b}
             unit="/ month"
             format={formatNumber}
-            colorClass="tocyn-palette-purple-text"
-            bgClass="tocyn-palette-purple-soft"
-            fillClass="tocyn-palette-purple-fill"
+            bgClass={css({ bg: 'purple.3' })}
           />
 
           <StatCard
@@ -335,9 +323,7 @@ export function UsagePage() {
             limit={LIMITS.worker_requests}
             unit="/ day"
             format={formatNumber}
-            colorClass="tocyn-palette-green-text"
-            bgClass="tocyn-palette-green-soft"
-            fillClass="tocyn-palette-green-fill"
+            bgClass={css({ bg: 'green.3' })}
           />
 
           <StatCard
@@ -348,9 +334,7 @@ export function UsagePage() {
             limit={LIMITS.ai_neurons}
             unit="/ day"
             format={formatNumber}
-            colorClass="tocyn-palette-brand-text"
-            bgClass="tocyn-palette-brand-soft"
-            fillClass="tocyn-palette-brand-fill"
+            bgClass={css({ bg: 'colorPalette.3' })}
           />
 
           <StatCard
@@ -361,9 +345,7 @@ export function UsagePage() {
             limit={LIMITS.do_requests}
             unit="/ day"
             format={formatNumber}
-            colorClass="tocyn-palette-amber-text"
-            bgClass="tocyn-palette-amber-soft"
-            fillClass="tocyn-palette-amber-fill"
+            bgClass={css({ bg: 'amber.3' })}
           />
 
           <StatCard
@@ -374,9 +356,7 @@ export function UsagePage() {
             limit={LIMITS.vectorize_queries}
             unit="/ month"
             format={formatNumber}
-            colorClass="tocyn-palette-pink-text"
-            bgClass="tocyn-palette-pink-soft"
-            fillClass="tocyn-palette-pink-fill"
+            bgClass={css({ bg: 'pink.3' })}
           />
 
           <StatCard
@@ -387,9 +367,7 @@ export function UsagePage() {
             limit={LIMITS.vectorize_writes}
             unit="/ month"
             format={formatNumber}
-            colorClass="tocyn-palette-rose-text"
-            bgClass="tocyn-palette-rose-soft"
-            fillClass="tocyn-palette-rose-fill"
+            bgClass={css({ bg: 'red.3' })}
           />
         </div>
       )}
@@ -405,60 +383,26 @@ interface StatCardProps {
   limit: number;
   unit: string;
   format?: (n: number) => string;
-  colorClass: string;
   bgClass: string;
-  fillClass: string;
 }
 
-function StatCard({ title, description, icon: Icon, current, limit, unit, format, colorClass, bgClass, fillClass }: StatCardProps) {
+function StatCard({ title, description, icon: Icon, current, limit, unit, format, bgClass }: StatCardProps) {
   const percentage = Math.min((current / limit) * 100, 100);
-  const isNearLimit = percentage >= 80;
-  const isOverLimit = percentage >= 100;
-
   const displayCurrent = format ? format(current) : current;
   const displayLimit = format ? format(limit) : limit;
 
-  return (
-    <div className="tocyn-usage-stat-card">
-      <div className="tocyn-usage-stat-header">
-        <div className="tocyn-usage-stat-heading">
-          <div className={cn("tocyn-usage-stat-icon", bgClass, colorClass)}>
-            <Icon className="tocyn-usage-stat-icon-glyph" />
-          </div>
-          <div>
-            <h3 className="tocyn-usage-stat-title">{title}</h3>
-            <p className="tocyn-usage-stat-description">{description}</p>
-          </div>
+  return <ParkCard.Root variant="outline">
+    <ParkCard.Body className={css({ display: 'grid', gap: '4' })}>
+      <div className={css({ display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: '3' })}>
+        <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: 0 })}>
+          <div className={[css({ display: 'grid', placeItems: 'center', w: '10', h: '10', rounded: 'md' }), bgClass].join(' ')}><Icon aria-hidden="true" /></div>
+          <div><ParkCard.Title>{title}</ParkCard.Title><ParkCard.Description>{description}</ParkCard.Description></div>
         </div>
-        <div className="tocyn-usage-stat-value">
-          <div className="tocyn-usage-stat-current">
-            {displayCurrent}
-          </div>
-          <div className="tocyn-usage-stat-limit">
-            of {displayLimit} {unit}
-          </div>
+        <div className={css({ textAlign: 'right', flexShrink: 0 })}>
+          <strong>{displayCurrent}</strong><p className={css({ color: 'text.muted', fontSize: 'xs' })}>of {displayLimit} {unit}</p>
         </div>
       </div>
-
-      <div className="tocyn-usage-stat-progress">
-        <div className="tocyn-usage-stat-progress-label">
-          <span className={cn(
-            "tocyn-usage-stat-percentage",
-            isOverLimit ? "tocyn-usage-stat-percentage--over" : isNearLimit ? "tocyn-usage-stat-percentage--near" : "tocyn-usage-stat-percentage--normal"
-          )}>
-            {percentage.toFixed(1)}% Used
-          </span>
-          <span className="tocyn-usage-stat-free-tier">Free Tier Limit</span>
-        </div>
-        <div className="tocyn-progress-track tocyn-progress-track--usage">
-          <div
-            className={cn("tocyn-progress-fill tocyn-usage-stat-fill",
-              isOverLimit ? "tocyn-palette-red-fill" : isNearLimit ? "tocyn-palette-orange-fill" : fillClass
-            )}
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
+      <ParkProgress value={percentage} label={`${percentage.toFixed(1)}% Used · Free Tier Limit`} />
+    </ParkCard.Body>
+  </ParkCard.Root>;
 }

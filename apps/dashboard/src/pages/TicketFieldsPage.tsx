@@ -1,5 +1,7 @@
+import { DashboardSelect } from '../components/DashboardSelect';
+import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkEmptyState, ParkInput, ParkSelect, ParkTicketFields } from '@luminatick/ui/park';
+import { ParkButton, ParkCheckbox, ParkEmptyState, ParkInput, ParkTicketFields, ParkTable } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
@@ -50,53 +52,53 @@ export function TicketFieldsPage() {
 
       <div className={styles.tableShell}>
         {isLoading ? (
-          <ParkEmptyState title="Loading fields..." headingLevel={false} aria-busy="true" className="tocyn-ticket-fields-loading" />
+          <ParkEmptyState title="Loading fields..." headingLevel={false} aria-busy="true" className={css({"py":"6"})} />
         ) : fields?.length === 0 ? (
           <ParkEmptyState
             title="No custom fields"
             description="Create fields to collect specific information on tickets."
-            className="tocyn-ticket-fields-empty"
+            className={css({"py":"6"})}
             action={<ParkButton
               onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
-              className="tocyn-ticket-fields-empty-action"
+              className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
               Create your first field
             </ParkButton>}
           />
         ) : (
-          <table className={styles.table}>
-            <thead className={styles.tableHead}>
-              <tr className={styles.tableRow}>
-                <th>Label</th>
-                <th>Key Name</th>
-                <th>Type</th>
-                <th>Options</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
+          <ParkTable.Root className={styles.table}>
+            <ParkTable.Head className={styles.tableHead}>
+              <ParkTable.Row className={styles.tableRow}>
+                <ParkTable.Header>Label</ParkTable.Header>
+                <ParkTable.Header>Key Name</ParkTable.Header>
+                <ParkTable.Header>Type</ParkTable.Header>
+                <ParkTable.Header>Options</ParkTable.Header>
+                <ParkTable.Header>Status</ParkTable.Header>
+              </ParkTable.Row>
+            </ParkTable.Head>
+            <ParkTable.Body>
               {fields?.map((field) => (
-                <tr key={field.id} className={styles.tableRow}>
-                  <td>{field.label}</td>
-                  <td>{field.name}</td>
-                  <td>
+                <ParkTable.Row key={field.id} className={styles.tableRow}>
+                  <ParkTable.Cell>{field.label}</ParkTable.Cell>
+                  <ParkTable.Cell>{field.name}</ParkTable.Cell>
+                  <ParkTable.Cell>
                     <div className={styles.fieldType}>
                       {getIconForType(field.field_type)}
                       <span className="capitalize">{field.field_type}</span>
                     </div>
-                  </td>
-                  <td>
+                  </ParkTable.Cell>
+                  <ParkTable.Cell>
                     {field.options || '-'}
-                  </td>
-                  <td>
+                  </ParkTable.Cell>
+                  <ParkTable.Cell>
                     <span className={[styles.fieldStatus, field.is_active ? styles.fieldStatusActive : styles.fieldStatusInactive].join(' ')}>
                       {field.is_active ? 'Active' : 'Inactive'}
                     </span>
-                  </td>
-                </tr>
+                  </ParkTable.Cell>
+                </ParkTable.Row>
               ))}
-            </tbody>
-          </table>
+            </ParkTable.Body>
+          </ParkTable.Root>
         )}
       </div>
 
@@ -202,16 +204,7 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
 
           <div>
             <label htmlFor={`${titleId}-type`} className={styles.dialogLabel}>Field Type</label>
-            <ParkSelect
-              id={`${titleId}-type`} value={formData.field_type}
-              onChange={(e) => setFormData({ ...formData, field_type: e.target.value })}
-              className={styles.dialogControl}
-            >
-              <option value="text">Text (Single line)</option>
-              <option value="textarea">Textarea (Multi-line)</option>
-              <option value="select">Dropdown (Select)</option>
-              <option value="checkbox">Checkbox</option>
-            </ParkSelect>
+            <DashboardSelect id={`${titleId}-type`} aria-label="Field Type" value={formData.field_type} onValueChange={value => setFormData({ ...formData, field_type: value })} className={styles.dialogControl} options={[{ value: 'text', label: 'Text (Single line)' }, { value: 'textarea', label: 'Textarea (Multi-line)' }, { value: 'select', label: 'Dropdown (Select)' }, { value: 'checkbox', label: 'Checkbox' }]} />
           </div>
 
           {formData.field_type === 'select' && (
@@ -228,10 +221,10 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
             </div>
           )}
 
-          <label className={styles.checkbox}>
-            <ParkInput type="checkbox" checked={formData.is_active} onChange={e => setFormData({...formData,is_active:e.target.checked})} />
-            Active
-          </label>
+          <ParkCheckbox.Root checked={formData.is_active} onCheckedChange={({ checked }) => setFormData({ ...formData, is_active: checked === true })} className={styles.checkbox}>
+            <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+            <ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Active</ParkCheckbox.Label>
+          </ParkCheckbox.Root>
 
           <div className={styles.dialogActions}>
             <ParkButton

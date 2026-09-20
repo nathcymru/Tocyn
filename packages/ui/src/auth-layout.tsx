@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AUTH_SPLASH } from '@luminatick/shared/auth-splash';
 import { ProductLogo } from './brand';
+import { authShell } from './styles/generated/recipes';
 
 type Mode = 'light' | 'dark';
 function currentMode(): Mode {
@@ -30,10 +31,11 @@ export function AuthLayout({ children }: { children: ReactNode }) {
     return () => { observer.disconnect(); theme?.removeEventListener('change', update); size?.removeEventListener('change', update); };
   }, [choice]);
   const pool = AUTH_SPLASH[mode];
-  return <div className="tocyn-auth" data-auth-mode={mode} data-tocyn-theme-mode={mode}>
-    {wide && <aside className="tocyn-auth-splash" aria-hidden="true"><img src={pool[Math.floor(choice * pool.length)]} alt="" /></aside>}
-    <main className="tocyn-auth-main"><div className="tocyn-auth-form">
-      <ProductLogo mode={mode} className="tocyn-auth-logo" />{children}
+  const styles = authShell();
+  return <div className={[styles.root, mode === 'dark' ? 'dark' : ''].filter(Boolean).join(' ')} data-auth-mode={mode} data-tocyn-theme-mode={mode}>
+    {wide && <aside className={styles.splash} aria-hidden="true"><img className={styles.image} src={pool[Math.floor(choice * pool.length)]} alt="" /></aside>}
+    <main className={styles.main}><div className={styles.form}>
+      <ProductLogo mode={mode} className={styles.logo} />{children}
     </div></main>
   </div>;
 }

@@ -1,4 +1,5 @@
-import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
+import { ParkButton, ParkEmptyState, ParkSwitch } from '@luminatick/ui/park';
 import React, { useEffect, useState, useRef } from 'react';
 import {
   IconCircleExclamation,
@@ -84,38 +85,39 @@ export function AgentPermissionsPage() {
 
 
   return (
-    <div className="tocyn-permissions-page">
-      <div className="tocyn-permissions-header">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 className="tocyn-permissions-title"><IconShieldHalved className="tocyn-permissions-title-icon" /> Agent permissions</h1>
-          <p className="tocyn-permissions-description">Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
+          <h1 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}><IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} /> Agent permissions</h1>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
         </div>
-        <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className="tocyn-permissions-save">
-          {saving ? <IconSpinner className="tocyn-permissions-save-icon" /> : <IconFloppyDisk className="tocyn-permissions-save-icon" />} Save changes
+        <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
+          {saving ? <IconSpinner className={css({"w":"4","h":"4","flexShrink":0})} /> : <IconFloppyDisk className={css({"w":"4","h":"4","flexShrink":0})} />} Save changes
         </ParkButton>
       </div>
 
-      {loading ? <ParkEmptyState title="Loading permissions…" headingLevel={false} aria-busy="true" className="tocyn-permissions-loading" /> : <p role="status" aria-live="polite" className="tocyn-permissions-status">{status}</p>}
-      {error && <div role="alert" className="tocyn-permissions-error"><IconCircleExclamation className="tocyn-permissions-error-icon" /><p className="tocyn-permissions-error-message">{error}</p><ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="tocyn-permissions-retry">Reload permissions</ParkButton></div>}
+      {loading ? <ParkEmptyState title="Loading permissions…" headingLevel={false} aria-busy="true" className={css({"py":"6"})} /> : <p role="status" aria-live="polite" className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{status}</p>}
+      {error && <div role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}><IconCircleExclamation className={css({"w":"4","h":"4","flexShrink":0})} /><p className={css({"minW":0})}>{error}</p><ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Reload permissions</ParkButton></div>}
 
-      <div className="tocyn-permissions-list">
-        {capabilities.length === 0 && !loading ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className="tocyn-permissions-empty" /> : capabilities.map(capability => {
+      <div className={css({"display":"grid","gap":"3"})}>
+        {capabilities.length === 0 && !loading ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className={css({"py":"6"})} /> : capabilities.map(capability => {
           const tenantManaged = capability.key !== capability.capability;
           const available = capability.ownerAllowed && capability.roleAllowed && tenantManaged;
           const checked = policies[capability.key] ?? false;
           const descriptionId = `capability-${capability.capability}-description`;
           return (
-            <div key={capability.capability} className="tocyn-permission-row">
-              <div className="tocyn-permission-content">
-                <h2 className="tocyn-permission-label">{capability.label}</h2>
-                <p id={descriptionId} className="tocyn-permission-description">{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
-                {!available && <p className="tocyn-permission-unavailable">Managed by the deployment owner; this tenant cannot enable it.</p>}
+            <div key={capability.capability} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","p":"4","bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"md"})}>
+              <div className={css({"minW":0})}>
+                <h2 className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>{capability.label}</h2>
+                <p id={descriptionId} className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
+                {!available && <p className={css({"minW":0})}>Managed by the deployment owner; this tenant cannot enable it.</p>}
               </div>
-              <label className={`tocyn-permission-toggle ${available ? 'tocyn-permission-toggle--available' : 'tocyn-permission-toggle--disabled'}`}>
-                <span className="tocyn-visually-hidden">Allow agents to use {capability.label}</span>
-                <ParkInput type="checkbox" className="tocyn-visually-hidden tocyn-toggle-input" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
-                <span aria-hidden="true" className="tocyn-permission-switch" />
-              </label>
+              <ParkSwitch.Root checked={checked} disabled={!available || saving || loading || revision === null}
+                onCheckedChange={() => handleToggle(capability)} className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}>
+                <ParkSwitch.Control />
+                <ParkSwitch.HiddenInput aria-describedby={descriptionId} />
+                <ParkSwitch.Label>Allow agents to use {capability.label}</ParkSwitch.Label>
+              </ParkSwitch.Root>
             </div>
           );
         })}

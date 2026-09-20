@@ -1,3 +1,4 @@
+import { p } from '../portalStyles';
 import { useCallback, useEffect, useState } from 'react';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -46,10 +47,10 @@ function dueLabel(target: SlaTargetProjection) {
 
 function Target({ name, target }: { name: string; target: SlaTargetProjection }) {
   const due = dueLabel(target);
-  return <li className="tocyn-portal-sla-target">
-    <p className="tocyn-portal-sla-target-name">{name}</p>
-    <p className="tocyn-portal-sla-target-status">{targetLabel(target)}</p>
-    {due && <p className="tocyn-portal-sla-target-due">Due {due}</p>}
+  return <li className={p.slaTarget}>
+    <p className={p.slaTargetName}>{name}</p>
+    <p className={p.slaTargetStatus}>{targetLabel(target)}</p>
+    {due && <p className={p.slaTargetDue}>Due {due}</p>}
   </li>;
 }
 
@@ -85,23 +86,23 @@ export function TicketSlaStatus({ ticketId }: { ticketId: string }) {
   const retry = useCallback(() => { setRetryGeneration(current => current + 1); }, []);
 
   if (read.status === 'loading' && !read.projection) {
-    return <section aria-labelledby="ticket-sla-heading" className="tocyn-portal-sla-card">
-      <h2 id="ticket-sla-heading" className="tocyn-portal-sla-heading">Service status</h2>
-      <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading service status…" className="tocyn-portal-sla-state" />
+    return <section aria-labelledby="ticket-sla-heading" className={p.slaCard}>
+      <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
+      <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading service status…" className={p.slaState} />
     </section>;
   }
 
   if (read.status === 'failed' || !read.projection) {
-    return <section aria-labelledby="ticket-sla-heading" className="tocyn-portal-sla-card">
-      <h2 id="ticket-sla-heading" className="tocyn-portal-sla-heading">Service status</h2>
-      <ParkEmptyState role="status" aria-live="polite" headingLevel={false} title="Service status is unavailable. Try again." className="tocyn-portal-sla-state" action={<ParkButton type="button" onClick={retry} className="tocyn-portal-sla-retry">Retry service status</ParkButton>} />
+    return <section aria-labelledby="ticket-sla-heading" className={p.slaCard}>
+      <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
+      <ParkEmptyState role="status" aria-live="polite" headingLevel={false} title="Service status is unavailable. Try again." className={p.slaState} action={<ParkButton type="button" onClick={retry} className={p.slaRetry}>Retry service status</ParkButton>} />
     </section>;
   }
 
-  return <section aria-labelledby="ticket-sla-heading" className="tocyn-portal-sla-card">
-    <h2 id="ticket-sla-heading" className="tocyn-portal-sla-heading">Service status</h2>
-    <p className="tocyn-portal-sla-status">Responsible handler: {read.projection.handlerName ?? 'Unavailable'}</p>
-    <ul className="tocyn-portal-sla-targets" aria-label="Service targets">
+  return <section aria-labelledby="ticket-sla-heading" className={p.slaCard}>
+    <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
+    <p className={p.slaStatus}>Responsible handler: {read.projection.handlerName ?? 'Unavailable'}</p>
+    <ul className={p.slaTargets} aria-label="Service targets">
       <Target name="Response target" target={read.projection.response} />
       <Target name="Resolution target" target={read.projection.resolution} />
     </ul>

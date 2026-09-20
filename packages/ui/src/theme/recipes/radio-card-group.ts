@@ -60,7 +60,7 @@ export const radioCardGroup = defineSlotRecipe({
         },
         itemControl: {
           borderWidth: '1px',
-          borderColor: 'gray.subtle.border',
+          borderColor: 'gray.surface.border',
           _checked: {
             borderColor: 'colorPalette.solid.bg',
             _after: {

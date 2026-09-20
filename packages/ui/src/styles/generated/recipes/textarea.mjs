@@ -1,9 +1,26 @@
 import { memo, splitProps } from '../helpers.mjs';
 import { createRecipe, mergeRecipes } from './create-recipe.mjs';
 
-const textareaFn = /* @__PURE__ */ createRecipe('textarea', {}, [])
+const textareaFn = /* @__PURE__ */ createRecipe('textarea', {
+  "size": "md",
+  "variant": "surface"
+}, [])
 
-const textareaVariantMap = {}
+const textareaVariantMap = {
+  "variant": [
+    "outline",
+    "surface",
+    "subtle",
+    "flushed"
+  ],
+  "size": [
+    "xs",
+    "sm",
+    "md",
+    "lg",
+    "xl"
+  ]
+}
 
 const textareaVariantKeys = Object.keys(textareaVariantMap)
 

@@ -1,8 +1,7 @@
 import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
-import { Popover } from '@luminatick/ui/ark';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu, ParkShell } from '@luminatick/ui/park';
+import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkMenu, ParkPopover, ParkShell, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
@@ -56,11 +55,10 @@ function UserMenu({ onNavigate }: SidebarProps) {
     if (loggingOut.current) return;
     loggingOut.current = true;
     setLogoutBusy(true);
-    let confirmed = false;
-    try { await dashboardApi.post('/auth/logout'); confirmed = true; }
-    catch { /* Local sign-out must still complete. */ }
-    finally { logout(); navigate('/login'); setLogoutBusy(false); setLogoutOpen(false); }
-    if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
+    let warning: string | undefined;
+    try { await dashboardApi.post('/auth/logout'); }
+    catch { warning = "Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data."; }
+    finally { logout(); navigate('/login', { state: warning ? { logoutWarning: warning } : undefined }); setLogoutBusy(false); setLogoutOpen(false); }
   };
 
   return <>
@@ -94,8 +92,6 @@ function UserMenu({ onNavigate }: SidebarProps) {
     description="You are about to log out of the system. Please ensure any active work is saved before proceeding. You will need to sign in again to resume access."
     cancelLabel="Cancel"
     confirmLabel={`Log Out (${logoutCountdown})`}
-    confirmClassName="tocyn-logout-confirm"
-    cancelClassName="tocyn-logout-cancel"
     onConfirm={() => void handleLogout()}
   />
   </>;
@@ -263,7 +259,7 @@ function LayoutContent() {
   const visibleActivityItems = activity?.page.items.filter(item => !item.dismissedAt) ?? [];
 
   return (
-      <div className={cn(shellStyles.root, isInboxRoute ? shellStyles.rootInbox : shellStyles.rootStandard, 'tocyn-shell-root', isInboxRoute ? 'tocyn-shell-root-inbox' : 'tocyn-shell-root-standard')}>
+      <div className={cn(shellStyles.root, isInboxRoute ? shellStyles.rootInbox : shellStyles.rootStandard)}>
       <aside data-tocyn-inverse="" className={shellStyles.sidebarDesktop}>
         <SidebarContent navigationFocus={() => main.current} />
       </aside>
@@ -272,7 +268,7 @@ function LayoutContent() {
           finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
           data-tocyn-dialog-edge="" data-tocyn-inverse=""
           className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
-          <h2 id={`${mobileDialogId}-title`} className="tocyn-visually-hidden">Navigation</h2>
+          <ParkVisuallyHidden id={`${mobileDialogId}-title`}>Navigation</ParkVisuallyHidden>
           <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
             className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
           <div className={shellStyles.mobileContent}><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
@@ -280,7 +276,7 @@ function LayoutContent() {
 
       {/* Main content */}
       <div className={shellStyles.main}>
-        <header className={cn(shellStyles.header, 'tocyn-shell-header')}>
+        <header className={shellStyles.header}>
           <ParkButton
             type="button"
             ref={navigationTrigger}
@@ -298,16 +294,16 @@ function LayoutContent() {
 
           <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
 
-          <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
-            <Popover.Trigger asChild>
+          <ParkPopover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
+            <ParkPopover.Trigger asChild>
               <ParkButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className={shellStyles.activityTrigger}>
                 <Bell className={shellStyles.icon} />
                 {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className={shellStyles.activityBadge}>{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
               </ParkButton>
-            </Popover.Trigger>
-            <Popover.Positioner>
-              <Popover.Content aria-label="Activity" className={shellStyles.activityPopover}>
-                <div className={shellStyles.activityHeader}><h2 className={shellStyles.activityTitle}>Activity</h2><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className={shellStyles.activityRefresh}>Refresh</ParkButton></div>
+            </ParkPopover.Trigger>
+            <ParkPopover.Positioner>
+              <ParkPopover.Content aria-label="Activity" className={shellStyles.activityPopover}>
+                <ParkPopover.Header className={shellStyles.activityHeader}><ParkPopover.Title className={shellStyles.activityTitle}>Activity</ParkPopover.Title><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className={shellStyles.activityRefresh}>Refresh</ParkButton></ParkPopover.Header>
                 {activityUpdatesAvailable && <p role="status" className={shellStyles.activityMessage}>Updates available. Refresh to load current activity.</p>}
                 {activityError && <div role="alert" className={shellStyles.activityWarning}><p>{activityError}</p><ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className={shellStyles.activityRetry}>Retry loading activity</ParkButton></div>}
                 {activityLoading && !activity && <p role="status" className={shellStyles.activityMessage}>Loading durable activity…</p>}
@@ -325,16 +321,16 @@ function LayoutContent() {
                 </ul>
                 {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
                 {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className={shellStyles.activityMoreWrap}><ParkButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className={shellStyles.activityMore}>{activityLoading ? 'Loading more activity…' : 'Load more activity'}</ParkButton></div>}
-                {activity && !activityLoading && visibleActivityItems.length > 0 && <p role="status" className="tocyn-visually-hidden">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</p>}
-              </Popover.Content>
-            </Popover.Positioner>
-          </Popover.Root>
+                {activity && !activityLoading && visibleActivityItems.length > 0 && <ParkVisuallyHidden role="status">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</ParkVisuallyHidden>}
+              </ParkPopover.Content>
+            </ParkPopover.Positioner>
+          </ParkPopover.Root>
 
           <UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} navigationFocus={() => main.current} />
 
-          {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
+          {!isConnected && <ParkPopover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
           <div className={shellStyles.connectionWrap}>
-            <Popover.Trigger asChild>
+            <ParkPopover.Trigger asChild>
             <ParkButton
               type="button"
               ref={connectionTrigger}
@@ -345,14 +341,14 @@ function LayoutContent() {
               <WifiOff className={shellStyles.smallIcon} />
               <span>Disconnected</span>
               <ChevronDown className={cn(shellStyles.connectionChevron, showConnDetails && "rotate-180")} />
-            </ParkButton></Popover.Trigger>
+            </ParkButton></ParkPopover.Trigger>
 
-            <Popover.Positioner>
-              <Popover.Content aria-label="Connection Status" className={shellStyles.connectionPopover}>
-                <div className={shellStyles.activityHeader}>
-                  <h3 className={shellStyles.activityTitle}>Connection Status</h3>
+            <ParkPopover.Positioner>
+              <ParkPopover.Content aria-label="Connection Status" className={shellStyles.connectionPopover}>
+                <ParkPopover.Header className={shellStyles.activityHeader}>
+                  <ParkPopover.Title asChild><h3 className={shellStyles.activityTitle}>Connection Status</h3></ParkPopover.Title>
                   <div className={shellStyles.connectionDot} data-state={isConnected ? 'connected' : 'disconnected'} />
-                </div>
+                </ParkPopover.Header>
 
                 <p role="status">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
 
@@ -369,14 +365,14 @@ function LayoutContent() {
                     Force Reconnect
                   </ParkButton>
                 </div>
-              </Popover.Content>
-            </Popover.Positioner>
+              </ParkPopover.Content>
+            </ParkPopover.Positioner>
           </div>
-          </Popover.Root>}
-          {connectionRecoveryMessage && <p role="status" aria-live="polite" className="tocyn-visually-hidden">{connectionRecoveryMessage}</p>}
+          </ParkPopover.Root>}
+          {connectionRecoveryMessage && <ParkVisuallyHidden role="status" aria-live="polite">{connectionRecoveryMessage}</ParkVisuallyHidden>}
         </header>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn(shellStyles.content, isInboxRoute ? shellStyles.contentInbox : shellStyles.contentStandard, !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && shellStyles.contentPadded, 'tocyn-shell-content', isInboxRoute ? 'tocyn-shell-content-inbox' : 'tocyn-shell-content-standard')}>
+        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn(shellStyles.content, isInboxRoute ? shellStyles.contentInbox : shellStyles.contentStandard, !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && shellStyles.contentPadded)}>
           <Outlet />
         </main>
       </div>

@@ -1,8 +1,16 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkSelect, ParkTextarea } from '@luminatick/ui/park';
+import { ParkButton, ParkTextarea } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useTicketAssignment } from '../hooks/useTicketAssignment';
 import { useAuthStore } from '../store/authStore';
+import { DashboardSelect } from './DashboardSelect';
+
+const assignmentStyles = {
+  panel: css({ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }),
+  dialog: css({ width: '100%', maxWidth: '32rem', display: 'grid', gap: '0.75rem', padding: '1.5rem' }),
+  note: css({ margin: '0', color: 'text.muted' }),
+};
 
 type Props = {
   ticketId: string; ownerId: string | null; fresh: boolean; disabled: boolean;
@@ -27,31 +35,27 @@ function AssignmentPanel({ ticketId, ownerId, fresh, disabled, agents, refreshTi
   const unavailable = disabled || !fresh || action.blocked;
   const status = <>
     {action.message && <p role={['uncertain', 'denied', 'refresh-error'].includes(action.phase) ? 'alert' : 'status'}>{action.message}</p>}
-    {action.phase === 'uncertain' && <ParkButton className="tocyn-assignment-action" type="button" onClick={action.retry}>Retry same assignment</ParkButton>}
-    {['refresh-error', 'denied'].includes(action.phase) && <ParkButton className="tocyn-assignment-action" type="button" onClick={action.refresh}>Refresh current ownership</ParkButton>}
+    {action.phase === 'uncertain' && <ParkButton type="button" onClick={action.retry}>Retry same assignment</ParkButton>}
+    {['refresh-error', 'denied'].includes(action.phase) && <ParkButton type="button" onClick={action.refresh}>Refresh current ownership</ParkButton>}
   </>;
-  return <div className="tocyn-assignment-panel">
-    <ParkButton className="tocyn-assignment-action" type="button" disabled={unavailable || ownerId !== null} onClick={action.balance}>Balance assignment</ParkButton>
+  return <div className={assignmentStyles.panel}>
+    <ParkButton type="button" disabled={unavailable || ownerId !== null} onClick={action.balance}>Balance assignment</ParkButton>
     {!fresh && <p role="status">Refresh current ticket details before assigning.</p>}
-    {admin && <ParkButton className="tocyn-assignment-action" ref={trigger} type="button" aria-disabled={unavailable} onClick={() => { if (!unavailable) setOpen(true); }}>Override assignment capacity</ParkButton>}
+    {admin && <ParkButton ref={trigger} type="button" aria-disabled={unavailable} onClick={() => { if (!unavailable) setOpen(true); }}>Override assignment capacity</ParkButton>}
     {!open && status}
     <TocynDialog open={open} onOpenChange={setOpen} labelledBy={titleId}
       initialFocusEl={() => close.current} finalFocusEl={() => trigger.current}>
-      <div className="tocyn-assignment-dialog">
-        <h2 id={titleId} className="tocyn-assignment-dialog-title">Override assignment capacity</h2>
-        <ParkButton className="tocyn-assignment-action" ref={close} type="button" onClick={() => setOpen(false)}>Close assignment override</ParkButton>
-        <p className="tocyn-assignment-dialog-copy">Administrators can explicitly override availability or the assignment ceiling. Current access rules still apply. The reason is recorded in the internal audit.</p>
+      <div className={assignmentStyles.dialog}>
+        <h2 id={titleId}>Override assignment capacity</h2>
+        <ParkButton ref={close} type="button" onClick={() => setOpen(false)}>Close assignment override</ParkButton>
+        <p className={assignmentStyles.note}>Administrators can explicitly override availability or the assignment ceiling. Current access rules still apply. The reason is recorded in the internal audit.</p>
         <p>Current owner: {ownerId === null ? 'Unassigned' : agents.find(agent => agent.id === ownerId)?.full_name || 'Assigned operator'}</p>
-        <label htmlFor={ownerIdInput}>Assign to operator</label>
-        <ParkSelect className="tocyn-assignment-select" id={ownerIdInput} value={selected} disabled={action.blocked} onChange={event => setSelected(event.target.value)}>
-          <option value="">Choose an operator</option>
-          {agents.map(agent => <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>)}
-        </ParkSelect>
+        <DashboardSelect id={ownerIdInput} label="Assign to operator" value={selected} disabled={action.blocked} onValueChange={setSelected} options={[{ value: '', label: 'Choose an operator' }, ...agents.map(agent => ({ value: agent.id, label: agent.full_name || agent.email }))]} />
         <label htmlFor={reasonId}>Override reason</label>
-        <ParkTextarea className="tocyn-assignment-reason" id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
+        <ParkTextarea id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
         <p>A reason is required. Keep it brief.</p>
         {reason.trim() && !reasonValid && <p role="alert">The reason is too long. Shorten it before assigning.</p>}
-        <ParkButton className="tocyn-assignment-action" type="button" disabled={!fresh || disabled || action.blocked || !selected || !reasonValid}
+        <ParkButton type="button" disabled={!fresh || disabled || action.blocked || !selected || !reasonValid}
           onClick={() => action.override(selected, ownerId, reason)}>Assign with audited override</ParkButton>
         {status}
       </div>

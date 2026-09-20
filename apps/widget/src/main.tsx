@@ -8,7 +8,7 @@ import { EnvironmentProvider } from '@luminatick/ui/ark';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import widgetStyles from './index.css?inline';
+import { w } from './widgetStyles';
 
 // The widget is intended to be self-initializing when the script is included.
 (function () {
@@ -25,35 +25,13 @@ import widgetStyles from './index.css?inline';
   const shadow = container.attachShadow({ mode: 'open' });
   const root = document.createElement('div');
   root.id = 'lumina-widget-root';
+  root.className = w.host;
+  // The generated light palette selector must match inside the ShadowRoot.
+  root.classList.add('light');
   shadow.appendChild(root);
   const primitiveStyleElement = document.createElement('style');
   primitiveStyleElement.textContent = primitiveStyles;
   shadow.appendChild(primitiveStyleElement);
-  const widgetStyleElement = document.createElement('style');
-  // Vite compiles this import; widget utility styles stay inside the shadow tree.
-  widgetStyleElement.textContent = widgetStyles;
-  shadow.appendChild(widgetStyleElement);
-
-  const styles = document.createElement('style');
-  // Widget positioning remains scoped to this shadow tree.
-  styles.textContent = `
-    #lumina-widget-root {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 999999;
-      font-family: var(--tocyn-font-primary, 'Atkinson Hyperlegible', ui-sans-serif, system-ui, sans-serif);
-    }
-  `;
-  shadow.appendChild(styles);
-
-  // Retain optional legacy shadow-scoped additions for existing embedders.
-  if ((window as any).LUMINA_WIDGET_CSS) {
-    const legacyWidgetStyles = document.createElement('style');
-    legacyWidgetStyles.textContent = (window as any).LUMINA_WIDGET_CSS;
-    shadow.appendChild(legacyWidgetStyles);
-  }
-
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <EnvironmentProvider value={() => shadow}>

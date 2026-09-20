@@ -1,7 +1,15 @@
 import React,{useEffect,useState} from 'react';
 import { ParkButton, ParkInput } from '@luminatick/ui/park';
-import { ParkSelect } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useOperatorCapacity,type CapacityInput } from '../../hooks/useOperatorCapacity';
+import { DashboardSelect } from '../DashboardSelect';
+
+const capacityStyles = {
+  panel: css({ display: 'grid', gap: '1rem', minWidth: '0' }),
+  summary: css({ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.5rem', '& dt': { color: 'text.muted' }, '& dd': { margin: '0', fontFamily: 'tabular', fontVariantNumeric: 'tabular-nums' } }),
+  form: css({ display: 'grid', gap: '0.75rem', paddingTop: '1rem' }),
+  note: css({ margin: '0', color: 'text.muted', overflowWrap: 'anywhere' }),
+};
 
 export function OperatorCapacityPanel({userId,editable=false}:{userId:string;editable?:boolean}){
   const capacity=useOperatorCapacity(userId);
@@ -17,37 +25,33 @@ function CapacityContent({capacity,editable}:{capacity:ReturnType<typeof useOper
   const value=ceiling.trim()===''?NaN:Number(ceiling);
   const valid=Number.isSafeInteger(value)&&value>=0&&value<=1000;
   const submit=async(event:React.FormEvent)=>{event.preventDefault();if(valid)await capacity.save({availability,assignmentCeiling:value});};
-  return <div className="tocyn-capacity-panel">
-    <p className="tocyn-capacity-description">Current work includes assigned open and pending conversations, including waiting and snoozed work.</p>
+  return <div className={capacityStyles.panel}>
+    <p className={capacityStyles.note}>Current work includes assigned open and pending conversations, including waiting and snoozed work.</p>
     {data&&<>
-      <dl className="tocyn-capacity-summary">
+      <dl className={capacityStyles.summary}>
         <dt>{phase==='ready'||phase==='saved'?'Current work':'Last confirmed work'}</dt><dd>{data.currentWork===null?'Unavailable — above the count limit':data.currentWork}</dd>
         <dt>Availability</dt><dd>{data.availability===null?'Not configured':data.availability==='available'?'Available':'Unavailable'}</dd>
         <dt>Assignment limit</dt><dd>{data.assignmentCeiling===null?'Not configured':data.assignmentCeiling}</dd>
       </dl>
-      {data.revision===0&&<p className="tocyn-capacity-copy">No capacity policy is configured. Existing manual assignment behavior applies.</p>}
-      {data.status==='unavailable'&&<p className="tocyn-capacity-copy">The exact count is unavailable. No partial total is shown.</p>}
-      {data.currentWork!==null&&data.assignmentCeiling!==null&&data.currentWork>data.assignmentCeiling&&<p className="tocyn-capacity-copy">Existing work remains assigned above the limit. Further normal assignments are blocked.</p>}
-      <p className="tocyn-capacity-confirmed">Confirmed at <time dateTime={data.asOf}>{new Date(data.asOf).toLocaleString()}</time>.</p>
+      {data.revision===0&&<p className={capacityStyles.note}>No capacity policy is configured. Existing manual assignment behavior applies.</p>}
+      {data.status==='unavailable'&&<p className={capacityStyles.note}>The exact count is unavailable. No partial total is shown.</p>}
+      {data.currentWork!==null&&data.assignmentCeiling!==null&&data.currentWork>data.assignmentCeiling&&<p className={capacityStyles.note}>Existing work remains assigned above the limit. Further normal assignments are blocked.</p>}
+      <p className={capacityStyles.note}>Confirmed at <time dateTime={data.asOf}>{new Date(data.asOf).toLocaleString()}</time>.</p>
     </>}
-    <p role={phase==='error'||phase==='conflict'?'alert':'status'} aria-live="polite" className="tocyn-capacity-copy">
+    <p role={phase==='error'||phase==='conflict'?'alert':'status'} aria-live="polite" className={capacityStyles.note}>
       {message??(phase==='loading'?'Loading current work…':phase==='idle'?'Current work is unavailable for this session.':'')}
     </p>
-    <ParkButton type="button" disabled={busy} onClick={()=>void capacity.reload()} className="tocyn-capacity-refresh">
+    <ParkButton type="button" disabled={busy} onClick={()=>void capacity.reload()}>
       {phase==='error'?'Retry':needsReload&&data?'Reload current policy':'Refresh current work'}
     </ParkButton>
-    {editable&&<form onSubmit={submit} className="tocyn-capacity-form">
-      <p className="tocyn-capacity-copy">Changes apply to new assignments. Existing work stays assigned.</p>
-      <label htmlFor={`${id}-availability`} className="tocyn-capacity-label">Availability for assignments</label>
-      <ParkSelect id={`${id}-availability`} value={availability} disabled={phase==='saving'} onChange={event=>{setAvailability(event.target.value as CapacityInput['availability']);setDirty(true);}}
-        className="tocyn-form-control">
-        <option value="available">Available</option><option value="unavailable">Unavailable</option>
-      </ParkSelect>
-      <label htmlFor={`${id}-ceiling`} className="tocyn-capacity-label">Assignment limit (0–1000)</label>
+    {editable&&<form onSubmit={submit} className={capacityStyles.form}>
+      <p className={capacityStyles.note}>Changes apply to new assignments. Existing work stays assigned.</p>
+      <DashboardSelect id={`${id}-availability`} label="Availability for assignments" value={availability} disabled={phase==='saving'} onValueChange={value=>{setAvailability(value as CapacityInput['availability']);setDirty(true);}} options={[{value:'available',label:'Available'},{value:'unavailable',label:'Unavailable'}]} />
+      <label htmlFor={`${id}-ceiling`}>Assignment limit (0–1000)</label>
       <ParkInput id={`${id}-ceiling`} type="number" min={0} max={1000} step={1} value={ceiling} disabled={phase==='saving'}
-        onChange={event=>{setCeiling(event.target.value);setDirty(true);}} className="tocyn-capacity-input"/>
-      {data&&dirty&&<p className="tocyn-capacity-copy">Current saved policy: {data.availability??'not configured'}, limit {data.assignmentCeiling??'not configured'}. Your entered values are separate until saved.</p>}
-      <ParkButton type="submit" disabled={busy||needsReload||!data||!valid||data.revision>=Number.MAX_SAFE_INTEGER} className="tocyn-capacity-save">Save capacity</ParkButton>
+        onChange={event=>{setCeiling(event.target.value);setDirty(true);}} />
+      {data&&dirty&&<p className={capacityStyles.note}>Current saved policy: {data.availability??'not configured'}, limit {data.assignmentCeiling??'not configured'}. Your entered values are separate until saved.</p>}
+      <ParkButton type="submit" disabled={busy||needsReload||!data||!valid||data.revision>=Number.MAX_SAFE_INTEGER}>Save capacity</ParkButton>
     </form>}
   </div>;
 }

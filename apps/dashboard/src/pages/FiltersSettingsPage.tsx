@@ -1,5 +1,7 @@
+import { DashboardSelect } from '../components/DashboardSelect';
+import { css } from '@luminatick/ui/styled-system/css';
 import { TocynDialog, TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkEmptyState, ParkInput, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput, ParkTable } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useFilters, useCreateFilter, useUpdateFilter, useDeleteFilter } from '../hooks/useFilters';
 import {
@@ -138,21 +140,21 @@ export function FiltersSettingsPage() {
   };
 
   if (isLoading) {
-    return <ParkEmptyState role="status" className="tocyn-filters-loading" title="Loading filters..." headingLevel={false} />;
+    return <ParkEmptyState role="status" className={css({"py":"6"})} title="Loading filters..." headingLevel={false} />;
   }
 
   return (
-    <div className="tocyn-filters-page">
-      <div className="tocyn-filters-header">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className="tocyn-filters-title">Custom Filters</h1>
-          <p className="tocyn-filters-description">Create and manage ticket filters for your team.</p>
+          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Custom Filters</h1>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Create and manage ticket filters for your team.</p>
         </div>
         <ParkButton
           onClick={event => handleOpenModal(undefined, event.currentTarget)}
-          className="tocyn-filters-create"
+          className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
         >
-          <IconPlus className="tocyn-filters-create-icon" />
+          <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} />
           Create Filter
         </ParkButton>
       </div>
@@ -162,82 +164,83 @@ export function FiltersSettingsPage() {
         description="Delete this filter? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete filter'} error={deleteError}
         onConfirm={handleDelete} onOpenChange={next => { if (!next && !deletionGuard.current) setDeleteOpen(false); }}
         finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
-      <div className="tocyn-filters-table-shell">
-        <table className="tocyn-filters-table">
-          <thead>
-            <tr className="tocyn-filters-table-head">
-              <th className="tocyn-filters-table-heading">Name</th>
-              <th className="tocyn-filters-table-heading">System</th>
-              <th className="tocyn-filters-table-heading tocyn-filters-table-heading-actions">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="tocyn-filters-table-body">
+      <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4","overflowX":"auto"})}>
+        <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
+          <ParkTable.Head>
+            <ParkTable.Row className={css({"borderBottomWidth":"1px","borderColor":"border.default"})}>
+              <ParkTable.Header className={css({"p":"3","textAlign":"left","verticalAlign":"top","fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>Name</ParkTable.Header>
+              <ParkTable.Header className={css({"p":"3","textAlign":"left","verticalAlign":"top","fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>System</ParkTable.Header>
+              <ParkTable.Header className={css({"p":"3","textAlign":"right","verticalAlign":"top","fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default","display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>Actions</ParkTable.Header>
+            </ParkTable.Row>
+          </ParkTable.Head>
+          <ParkTable.Body className={css({"minW":0})}>
             {filters?.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="tocyn-filters-empty">
-                  No filters created yet.
-                </td>
-              </tr>
+              <ParkTable.Row>
+                <ParkTable.Cell colSpan={3} className={css({"py":"6"})}>
+                  <ParkEmptyState title="No filters created yet." description="Create a filter to save a view for your team."
+                    headingLevel={false} action={<ParkButton type="button" onClick={event => handleOpenModal(undefined, event.currentTarget)}>Create filter</ParkButton>} />
+                </ParkTable.Cell>
+              </ParkTable.Row>
             ) : (
               filters?.map((filter) => (
-                <tr key={filter.id} className="tocyn-filters-table-row">
-                  <td className="tocyn-filters-table-cell">
-                    <div className="tocyn-filters-name">{filter.name}</div>
-                  </td>
-                  <td className="tocyn-filters-table-cell">
+                <ParkTable.Row key={filter.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","borderBottomWidth":"1px","borderColor":"border.default"})}>
+                  <ParkTable.Cell className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>
+                    <div className={css({"fontWeight":"medium","color":"text.default"})}>{filter.name}</div>
+                  </ParkTable.Cell>
+                  <ParkTable.Cell className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>
                     {filter.is_system ? (
-                      <span className="tocyn-filter-kind tocyn-filter-kind-system">System</span>
+                      <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted","minW":0})}>System</span>
                     ) : (
-                      <span className="tocyn-filter-kind tocyn-filter-kind-custom">Custom</span>
+                      <span className={css({"display":"inline-flex","alignItems":"center","rounded":"full","px":"2","py":"0.5","fontSize":"xs","fontWeight":"medium","bg":"bg.muted","minW":0})}>Custom</span>
                     )}
-                  </td>
-                  <td className="tocyn-filters-table-actions-cell">
-                    <div className="tocyn-filters-table-actions">
+                  </ParkTable.Cell>
+                  <ParkTable.Cell className={css({"p":"3","textAlign":"left","verticalAlign":"top"})}>
+                    <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
                       <ParkButton
                         onClick={event => handleOpenModal(filter, event.currentTarget)}
-                        className="tocyn-filter-action tocyn-filter-action-edit"
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Edit Filter"
                       >
-                        <IconPenToSquare className="tocyn-filter-action-icon" />
+                        <IconPenToSquare className={css({"w":"4","h":"4","flexShrink":0})} />
                       </ParkButton>
                       {!filter.is_system && (
                         <ParkButton
                           aria-label={`Delete ${filter.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setDeletion(filter); setDeleteError(''); setDeleteOpen(true); }}
-                          className="tocyn-filter-action tocyn-filter-action-delete"
+                          className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                           title="Delete Filter"
                         >
-                          <IconTrash className="tocyn-filter-action-icon" />
+                          <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
                         </ParkButton>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </ParkTable.Cell>
+                </ParkTable.Row>
               ))
             )}
-          </tbody>
-        </table>
+          </ParkTable.Body>
+        </ParkTable.Root>
       </div>
 
       <TocynDialog open={isModalOpen} busy={saving} onOpenChange={open => { if (!open) handleCloseModal(); }}
         labelledBy={titleId} initialFocusEl={() => nameInput.current} finalFocusEl={() => opener.current}>
-          <div className="tocyn-filter-dialog">
-            <div className="tocyn-filter-dialog-header">
-              <h2 id={titleId} className="tocyn-filter-dialog-title">
+          <div className={css({"bg":"bg.surface","borderWidth":"1px","borderColor":"border.default","rounded":"lg","p":"4"})}>
+            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+              <h2 id={titleId} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.default"})}>
                 {editingFilter ? 'Edit Filter' : 'Create Filter'}
               </h2>
-              <ParkButton type="button" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal} className="tocyn-filter-dialog-close">
-                <IconXmark className="tocyn-filter-dialog-close-icon" />
+              <ParkButton type="button" aria-label="Close filter editor" disabled={saving} onClick={handleCloseModal} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>
+                <IconXmark className={css({"w":"4","h":"4","flexShrink":0})} />
               </ParkButton>
             </div>
-            <form onSubmit={handleSubmit} aria-labelledby={titleId} className="tocyn-filter-dialog-form">
-              {saveError && <p role="alert" className="tocyn-filter-dialog-error">{saveError}</p>}
-              <fieldset disabled={saving} className="tocyn-filter-dialog-fields">
-              <div className="tocyn-form-field">
+            <form onSubmit={handleSubmit} aria-labelledby={titleId} className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6"})}>
+              {saveError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.default"})}>{saveError}</p>}
+              <fieldset disabled={saving} className={css({"display":"grid","gap":"4"})}>
+              <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
                 <label htmlFor={nameId}>Filter Name</label>
                 <ParkInput id={nameId} ref={nameInput}
                   type="text"
                   required
-                  className="tocyn-filter-name-input"
+                  className={css({"w":"full"})}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., My Open Tickets"
@@ -245,37 +248,25 @@ export function FiltersSettingsPage() {
               </div>
 
               <div>
-                <div className="tocyn-filter-conditions-header">
-                  <label className="tocyn-filter-conditions-label">Conditions</label>
+                <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                  <label className={css({"fontWeight":"medium","color":"text.default","display":"grid","gap":"1","fontSize":"sm"})}>Conditions</label>
                   <ParkButton
                     type="button"
                     onClick={addCondition}
-                    className="tocyn-filter-add-condition"
+                    className={css({"minW":0})}
                   >
-                    <IconPlus className="tocyn-filter-action-icon" /> Add Condition
+                    <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} /> Add Condition
                   </ParkButton>
                 </div>
 
-                <div className="tocyn-filter-condition-list">
+                <div className={css({"display":"grid","gap":"4"})}>
                   {formData.conditions.map((cond, idx) => (
-                    <div key={idx} className="tocyn-filter-condition-row">
-                      <ParkSelect
-                        className="tocyn-filter-condition-field"
-                        aria-label={`Condition ${idx + 1} field`} value={cond.field}
-                        onChange={e => changeCondition(idx, 'field', e.target.value)}
-                      >
-                        {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </ParkSelect>
-                      <ParkSelect
-                        className="tocyn-filter-condition-operator"
-                        aria-label={`Condition ${idx + 1} operator`} value={cond.operator}
-                        onChange={e => changeCondition(idx, 'operator', e.target.value)}
-                      >
-                        {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </ParkSelect>
+                    <div key={idx} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                      <DashboardSelect aria-label={`Condition ${idx + 1} field`} value={cond.field} onValueChange={value => changeCondition(idx, 'field', value)} options={FIELDS} />
+                      <DashboardSelect aria-label={`Condition ${idx + 1} operator`} value={cond.operator} onValueChange={value => changeCondition(idx, 'operator', value)} options={OPERATORS} />
                       <ParkInput
                         type="text"
-                        className="tocyn-filter-condition-value"
+                        className={css({"minW":0})}
                         placeholder="Value..."
                         aria-label={`Condition ${idx + 1} value`} value={cond.value}
                         onChange={e => changeCondition(idx, 'value', e.target.value)}
@@ -283,33 +274,33 @@ export function FiltersSettingsPage() {
                       <ParkButton
                         type="button"
                         aria-label={`Remove condition ${idx + 1}`} onClick={() => removeCondition(idx)}
-                        className="tocyn-filter-condition-remove"
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                       >
-                        <IconTrash className="tocyn-filter-action-icon" />
+                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} />
                       </ParkButton>
                     </div>
                   ))}
 
                   {formData.conditions.length === 0 && (
-                    <p className="tocyn-filter-no-conditions">
+                    <p className={css({"minW":0})}>
                       No conditions. This filter will match all tickets.
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="tocyn-filter-dialog-actions">
+              <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
                 <ParkButton
                   type="button"
                   onClick={handleCloseModal}
-                  className="tocyn-filter-dialog-cancel"
+                  className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                 >
                   Cancel
                 </ParkButton>
                 <ParkButton
                   type="submit"
                   disabled={saving || createFilter.isPending || updateFilter.isPending}
-                  className="tocyn-filter-dialog-submit"
+                  className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                 >
                   {editingFilter ? 'Save Changes' : 'Create Filter'}
                 </ParkButton>

@@ -1,5 +1,6 @@
 import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkInput } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { dashboardApi } from '../api/client';
@@ -14,6 +15,33 @@ import {
 interface SetupResponse {
   provisioning_uri: string;
 }
+
+const securityStyles = {
+  page: css({ width: '100%', maxWidth: '48rem', marginInline: 'auto', padding: '2rem 1rem', display: 'grid', gap: '1.5rem', color: 'text.primary' }),
+  title: css({ margin: '0', fontSize: '1.75rem', lineHeight: '1.2' }),
+  description: css({ marginTop: '0.375rem', color: 'text.muted' }),
+  success: css({ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.input', color: 'text.primary' }),
+  error: css({ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'critical.border', borderRadius: 'l2', background: 'critical.surface', color: 'critical' }),
+  statusInner: css({ display: 'flex', alignItems: 'center', gap: '0.75rem' }),
+  statusIcon: css({ width: '1.5rem', height: '1.5rem', flexShrink: '0' }),
+  card: css({ width: '100%' }),
+  cardBody: css({ display: 'grid', gap: '1.25rem', padding: 'clamp(1.25rem, 4vw, 2rem)' }),
+  cardTitle: css({ display: 'flex', alignItems: 'center', gap: '0.625rem', margin: '0', fontSize: '1.25rem' }),
+  cardDescription: css({ color: 'text.muted', '& p': { margin: '0' } }),
+  stack: css({ display: 'grid', justifyItems: 'start', gap: '1rem' }),
+  enabled: css({ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'text.primary', fontWeight: '600' }),
+  note: css({ margin: '0', color: 'text.muted' }),
+  setup: css({ display: 'grid', gap: '1.5rem', minWidth: '0' }),
+  step: css({ display: 'grid', gap: '0.75rem', minWidth: '0' }),
+  stepTitle: css({ margin: '0', fontSize: '1rem', fontWeight: '600' }),
+  stepCopy: css({ margin: '0', color: 'text.muted' }),
+  qr: css({ justifySelf: 'start', maxWidth: '100%', padding: '0.75rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.input', '& svg': { maxWidth: '100%', height: 'auto' } }),
+  secret: css({ display: 'inline-block', marginTop: '0.5rem', padding: '0.375rem 0.625rem', borderRadius: 'l1', background: 'bg.input', color: 'text.primary', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', userSelect: 'all' }),
+  verifyForm: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '0.75rem' }),
+  codeField: css({ display: 'grid', gap: '0.375rem', minWidth: '12rem', flex: '1' }),
+  codeLabel: css({ fontWeight: '600' }),
+  codeInput: css({ maxWidth: '14rem', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' }),
+};
 
 export function SecurityProfilePage() {
   const { user, logout, setAuth, sessionGeneration, sessionAnnouncement, clearSessionAnnouncement } = useAuthStore();
@@ -103,25 +131,25 @@ export function SecurityProfilePage() {
   if (!user) return null;
 
   return (
-    <div className="tocyn-security-page">
+    <div className={securityStyles.page}>
       <TocynConfirmDialog open={disableOpen} onOpenChange={setDisableOpen} busy={isLoading}
         title="Disable two-factor authentication?" description="This will make your account less secure and sign you out. You will need to sign in again."
         confirmLabel="Disable 2FA" error={error ?? undefined} onConfirm={() => { void disableMfa(); }}
         finalFocusEl={() => user.mfa_enabled ? disableButton.current : heading.current} />
       <div>
-        <h1 ref={heading} tabIndex={-1} className="tocyn-security-page-title">Security Profile</h1>
-        <p className="tocyn-security-page-description">
+        <h1 ref={heading} tabIndex={-1} className={securityStyles.title}>Security Profile</h1>
+        <p className={securityStyles.description}>
           Manage your account security and two-factor authentication settings.
         </p>
       </div>
 
       {successMessage && (
-        <div role="status" className="tocyn-security-status tocyn-security-status--success">
-          <div className="tocyn-security-status-inner">
-            <div className="tocyn-security-status-icon-wrap">
-              <IconShieldHalved className="tocyn-security-status-icon" />
+        <div role="status" className={securityStyles.success}>
+          <div className={securityStyles.statusInner}>
+            <div className={securityStyles.statusInner}>
+              <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
             </div>
-            <div className="tocyn-security-status-copy">
+            <div >
               <p>{successMessage}</p>
             </div>
           </div>
@@ -129,39 +157,39 @@ export function SecurityProfilePage() {
       )}
 
       {error && !disableOpen && (
-        <div role="alert" className="tocyn-security-status tocyn-security-status--error">
-          <div className="tocyn-security-status-inner">
-            <div className="tocyn-security-status-icon-wrap">
-              <IconTriangleExclamation className="tocyn-security-status-icon" />
+        <div role="alert" className={securityStyles.error}>
+          <div className={securityStyles.statusInner}>
+            <div className={securityStyles.statusInner}>
+              <IconTriangleExclamation className={securityStyles.statusIcon} aria-hidden="true" />
             </div>
-            <div className="tocyn-security-status-copy">
+            <div >
               <p>{error}</p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="tocyn-security-card">
-        <div className="tocyn-security-card-body">
-          <h3 className="tocyn-security-card-title">
-            <IconShieldHalved className="tocyn-security-heading-icon" />
+      <ParkCard.Root className={securityStyles.card}>
+        <ParkCard.Body className={securityStyles.cardBody}>
+          <ParkCard.Title className={securityStyles.cardTitle}>
+            <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
             Two-Factor Authentication (2FA)
-          </h3>
-          <div className="tocyn-security-card-description">
+          </ParkCard.Title>
+          <div className={securityStyles.cardDescription}>
             <p>
               Add an additional layer of security to your account by requiring more than just a password to sign in.
             </p>
           </div>
 
-          <div className="tocyn-security-card-content">
+          <div >
             {user.mfa_enabled ? (
-              <div className="tocyn-security-status-stack">
-                <div className="tocyn-security-status-enabled">
-                  <IconShieldHalved className="tocyn-security-status-icon" />
+              <div className={securityStyles.stack}>
+                <div className={securityStyles.enabled}>
+                  <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
                   2FA is currently enabled
                 </div>
                 {(user.role === 'admin' || user.role === 'agent') ? (
-                  <p className="tocyn-security-role-note">
+                  <p className={securityStyles.note}>
                     Two-Factor Authentication is mandatory for your role and cannot be disabled.
                   </p>
                 ) : (
@@ -170,9 +198,9 @@ export function SecurityProfilePage() {
                     ref={disableButton}
                     onClick={() => { setError(null); setDisableOpen(true); }}
                     disabled={isLoading}
-                    variant="destructive" className="tocyn-security-action tocyn-security-action-danger"
+                    variant="destructive"
                   >
-                    <IconShield className="tocyn-security-action-icon" />
+                    <IconShield className={securityStyles.statusIcon} aria-hidden="true" />
                     Disable 2FA
                   </ParkButton>
                 )}
@@ -185,32 +213,32 @@ export function SecurityProfilePage() {
                     ref={setupButton}
                     onClick={startSetup}
                     disabled={isLoading}
-                    variant="solid" className="tocyn-security-action tocyn-security-action-primary"
+                    variant="solid"
                   >
-                    <IconKey className="tocyn-security-action-icon" />
+                    <IconKey className={securityStyles.statusIcon} aria-hidden="true" />
                     Set up 2FA
                   </ParkButton>
                 ) : (
-                  <div className="tocyn-security-setup">
-                    <div className="tocyn-security-setup-step">
-                      <h4 className="tocyn-security-setup-title">Step 1: Scan QR Code</h4>
-                      <p className="tocyn-security-setup-copy">
+                  <div className={securityStyles.setup}>
+                    <div className={securityStyles.step}>
+                      <h4 className={securityStyles.stepTitle}>Step 1: Scan QR Code</h4>
+                      <p className={securityStyles.stepCopy}>
                         Scan the QR code below with your authenticator app (like Google Authenticator, Authy, or Microsoft Authenticator).
                       </p>
-                      <div className="tocyn-security-qr">
+                      <div className={securityStyles.qr}>
                         <QRCodeSVG value={setupData.provisioning_uri} size={200} />
                       </div>
-                      <p className="tocyn-security-setup-note">
+                      <p className={securityStyles.stepCopy}>
                         If you can't scan the QR code, you can manually enter this secret key:<br/>
-                        <code className="tocyn-security-secret">{getSecretFromUri(setupData.provisioning_uri)}</code>
+                        <code className={securityStyles.secret}>{getSecretFromUri(setupData.provisioning_uri)}</code>
                       </p>
                     </div>
 
-                    <div className="tocyn-security-verify-section">
-                      <h4 className="tocyn-security-verify-title">Step 2: Verify Code</h4>
-                      <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className="tocyn-security-verify-form">
-                        <div className="tocyn-security-code-field">
-                          <label htmlFor="code" className="tocyn-security-code-label">
+                    <div className={securityStyles.step}>
+                      <h4 className={securityStyles.stepTitle}>Step 2: Verify Code</h4>
+                      <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className={securityStyles.verifyForm}>
+                        <div className={securityStyles.codeField}>
+                          <label htmlFor="code" className={securityStyles.codeLabel}>
                             Authentication Code
                           </label>
                           <ParkInput
@@ -218,7 +246,7 @@ export function SecurityProfilePage() {
                             id="code" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
                             value={code}
                             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className="tocyn-form-control tocyn-form-control--code tocyn-security-code-input"
+                            className={securityStyles.codeInput}
                             placeholder="000000"
                             maxLength={6}
                             required
@@ -227,7 +255,7 @@ export function SecurityProfilePage() {
                         <ParkButton
                           type="submit"
                           disabled={isLoading || code.length !== 6}
-                          className="tocyn-security-verify-submit"
+                          variant="solid"
                         >
                           Verify & Enable
                         </ParkButton>
@@ -235,7 +263,7 @@ export function SecurityProfilePage() {
                           type="button"
                           onClick={() => { setSetupData(null); setCode(''); setError(null); requestAnimationFrame(() => setupButton.current?.focus()); }}
                           disabled={isLoading}
-                          className="tocyn-security-verify-cancel"
+                          variant="outline"
                         >
                           Cancel
                         </ParkButton>
@@ -246,8 +274,8 @@ export function SecurityProfilePage() {
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </ParkCard.Body>
+      </ParkCard.Root>
     </div>
   );
 }

@@ -3,7 +3,14 @@ import type { ConditionalValue } from '../types/index';
 import type { DistributiveOmit, Pretty } from '../types/system-types';
 
 interface TextareaVariant {
-  
+  /**
+ * @default "surface"
+ */
+variant: "outline" | "surface" | "subtle" | "flushed"
+/**
+ * @default "md"
+ */
+size: "xs" | "sm" | "md" | "lg" | "xl"
 }
 
 type TextareaVariantMap = {

@@ -269,6 +269,14 @@ const pageSlotNames = [
     "page__inboxPagination"
   ],
   [
+    "dashboardHeading",
+    "page__dashboardHeading"
+  ],
+  [
+    "dashboardAction",
+    "page__dashboardAction"
+  ],
+  [
     "metricStrip",
     "page__metricStrip"
   ],
@@ -277,12 +285,40 @@ const pageSlotNames = [
     "page__metricCard"
   ],
   [
+    "metricCardHeader",
+    "page__metricCardHeader"
+  ],
+  [
+    "metricCardBody",
+    "page__metricCardBody"
+  ],
+  [
     "metricIcon",
     "page__metricIcon"
   ],
   [
+    "metricLabel",
+    "page__metricLabel"
+  ],
+  [
+    "metricValue",
+    "page__metricValue"
+  ],
+  [
     "panels",
     "page__panels"
+  ],
+  [
+    "panelHeader",
+    "page__panelHeader"
+  ],
+  [
+    "panelIcon",
+    "page__panelIcon"
+  ],
+  [
+    "panelTitle",
+    "page__panelTitle"
   ],
   [
     "priorityList",
@@ -293,20 +329,24 @@ const pageSlotNames = [
     "page__priorityRow"
   ],
   [
-    "progressTrack",
-    "page__progressTrack"
-  ],
-  [
-    "progressFill",
-    "page__progressFill"
-  ],
-  [
     "overviewGrid",
     "page__overviewGrid"
   ],
   [
     "overviewCard",
     "page__overviewCard"
+  ],
+  [
+    "overviewCardBody",
+    "page__overviewCardBody"
+  ],
+  [
+    "overviewCardLabel",
+    "page__overviewCardLabel"
+  ],
+  [
+    "overviewCardValue",
+    "page__overviewCardValue"
   ],
   [
     "overviewFooter",

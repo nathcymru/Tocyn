@@ -2,4 +2,3 @@
    authored by each surface's layout primitives; this entry intentionally has
    no legacy component overrides. */
 @import './panda.css';
-@import './auth-splash.css';

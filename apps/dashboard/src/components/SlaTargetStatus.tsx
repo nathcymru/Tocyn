@@ -1,4 +1,10 @@
 import type { SlaTarget } from '../hooks/useTicketSla';
+import { css } from '@luminatick/ui/styled-system/css';
+
+const statusStyles = {
+  breached: css({ color: 'critical', fontWeight: 'semibold' }),
+  onTrack: css({ color: 'text.muted' }),
+};
 
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -23,5 +29,5 @@ export function slaTargetLabel(target: SlaTarget) {
 }
 
 export function SlaTargetStatus({ target }: { target: SlaTarget }) {
-  return <span className={target.state === 'breached' ? 'tocyn-sla-target-breached' : 'tocyn-sla-target-on-track'}>{slaTargetLabel(target)}</span>;
+  return <span data-state={target.state} className={target.state === 'breached' ? statusStyles.breached : statusStyles.onTrack}>{slaTargetLabel(target)}</span>;
 }

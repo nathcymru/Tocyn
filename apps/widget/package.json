@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "predev": "npm run panda:generate --workspace=@luminatick/ui",
+    "prebuild": "npm run panda:generate --workspace=@luminatick/ui"
   },
   "dependencies": {
     "react": "^18.2.0",

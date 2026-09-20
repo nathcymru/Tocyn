@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -88,7 +89,7 @@ it('restores sort, sends it with the server-paginated query, and saves custom an
   showFeed();
   const sort = await screen.findByRole('combobox', { name: 'Sort tickets' });
   await waitFor(() => expect(ticketQueries.at(-1)?.get('page')).toBe('3'));
-  expect(sort).toHaveValue('priority_asc');
+  expect(sort).toHaveTextContent('Lowest priority');
   expect(ticketQueries.at(-1)?.get('sort')).toBe('priority_asc');
 
   fireEvent.click(screen.getByRole('button', { name: 'Priority follow-up' }));
@@ -100,7 +101,8 @@ it('restores sort, sends it with the server-paginated query, and saves custom an
   fireEvent.click(screen.getByRole('button', { name: 'All Tickets' }));
   await waitFor(() => expect(workspaceWrites.at(-1)).toMatchObject({ view: 'all', filters: { filterId: null }, listAnchor: 'page:1' }));
 
-  fireEvent.change(sort, { target: { value: 'created_desc' } });
+  await userEvent.click(sort);
+  await userEvent.click(await screen.findByRole('option', { name: 'Newest created' }));
   await waitFor(() => expect(ticketQueries.at(-1)?.get('sort')).toBe('created_desc'));
   expect(ticketQueries.at(-1)?.get('page')).toBe('1');
   await waitFor(() => expect(workspaceWrites.at(-1)).toMatchObject({ sort: 'created_desc', listAnchor: 'page:1', view: 'all' }));
@@ -141,6 +143,8 @@ it('keeps navigation on the list after an autosave has already failed', async ()
   const search = screen.getByRole('textbox', { name: 'Search all tickets in this list view' });
   fireEvent.change(search, { target: { value: 'retained query' } });
   fireEvent.keyDown(search, { key: 'Enter' });
+  await userEvent.click(screen.getByRole('combobox', { name: 'Sort tickets' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Newest created' }));
   await screen.findByText('Workspace preferences were not saved. Retry to keep this version.');
   fireEvent.click(screen.getByRole('link', { name: ticket.subject }));
   await screen.findByText('Workspace preferences are not saved. Stay on this list, retry saving, then navigate again.');

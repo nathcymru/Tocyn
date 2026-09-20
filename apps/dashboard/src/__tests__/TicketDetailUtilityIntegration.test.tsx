@@ -68,7 +68,7 @@ it('rejects a manifest for the previous ticket after route navigation, then show
   wrongTicket=false;fireEvent.click(retry);
   expect(await screen.findByRole('button',{name:'Copy ticket reference'})).toBeDisabled();
   fireEvent.click(screen.getByText('More ticket actions'));
-  expect(screen.getByRole('button',{name:'View ticket reference'})).toBeDisabled();
+  expect(await screen.findByRole('button',{name:'View ticket reference'})).toBeDisabled();
   expect(screen.queryByRole('link',{name:'Open action safety guidance'})).not.toBeInTheDocument();
   expect(screen.getAllByText('Reference access denied by policy.')).toHaveLength(3);
 });
@@ -79,7 +79,7 @@ it('unmounts the active reference dialog and discards an unresolved copy result 
   const {router}=show(id=>json(manifest(id)));
   fireEvent.click(await screen.findByRole('button',{name:'Copy ticket reference'}));
   fireEvent.click(screen.getByText('More ticket actions'));
-  const opener=screen.getByRole('button',{name:'View ticket reference'});opener.focus();fireEvent.click(opener);
+  const opener=await screen.findByRole('button',{name:'View ticket reference'});opener.focus();fireEvent.click(opener);
   const dialog=await screen.findByRole('dialog',{name:'Ticket reference'});
   expect(within(dialog).getByText('#1')).toBeInTheDocument();
   await act(async()=>{await router.navigate('/tickets/two');finishCopy();});
@@ -87,7 +87,7 @@ it('unmounts the active reference dialog and discards an unresolved copy result 
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByText('Ticket reference copied.')).not.toBeInTheDocument();
   fireEvent.click(await screen.findByText('More ticket actions'));
-  const currentOpener=screen.getByRole('button',{name:'View ticket reference'});currentOpener.focus();fireEvent.click(currentOpener);
+  const currentOpener=await screen.findByRole('button',{name:'View ticket reference'});currentOpener.focus();fireEvent.click(currentOpener);
   const currentDialog=await screen.findByRole('dialog');
   expect(within(currentDialog).getByText('#2')).toBeInTheDocument();
   fireEvent.click(within(currentDialog).getByRole('button',{name:'Close ticket reference'}));

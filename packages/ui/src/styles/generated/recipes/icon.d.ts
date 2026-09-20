@@ -3,7 +3,10 @@ import type { ConditionalValue } from '../types/index';
 import type { DistributiveOmit, Pretty } from '../types/system-types';
 
 interface IconVariant {
-  
+  /**
+ * @default "md"
+ */
+size: "2xs" | "xs" | "sm" | "md" | "lg" | "xl"
 }
 
 type IconVariantMap = {

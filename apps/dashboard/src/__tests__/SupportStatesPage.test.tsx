@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -43,7 +44,8 @@ it('keeps labels distinct, retains failed input, and requires an explicit safe r
   fireEvent.click(screen.getByRole('button', { name: 'Deactivate Waiting on customer' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remap and deactivate' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Choose an active replacement');
-  fireEvent.change(screen.getByLabelText('Replacement state'), { target: { value: 'legacy-open' } });
+  await userEvent.click(screen.getByRole('combobox', { name: 'Replacement state' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Open (open)' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remap and deactivate' }));
   await waitFor(() => expect(requests).toContainEqual({ path: '/api/support-states/awaiting-customer/deactivate', body: { replacementId: 'legacy-open' } }));
 });

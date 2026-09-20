@@ -2,10 +2,11 @@ import { MfaPage } from './MfaPage';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
 import { ParkButton, ParkField, ParkInput } from '@luminatick/ui/park';
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { dashboardApi } from '../api/client';
 import { AuthResponse } from '../types';
+import { authStyles } from './auth-styles';
 
 export function LoginPage() {
   const [email, setEmail] = React.useState('');
@@ -14,6 +15,8 @@ export function LoginPage() {
   const [loading, setLoading] = React.useState(false);
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const logoutWarning = typeof location.state?.logoutWarning === 'string' ? location.state.logoutWarning : '';
   const mfaRequired = useAuthStore(state => state.mfaRequired);
   const enrolled = useAuthStore(state => state.user?.mfa_enabled);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -48,21 +51,21 @@ export function LoginPage() {
   if (mfaRequired && enrolled) return <MfaPage />;
 
   return (
-    <div className="tocyn-auth-page">
-      <div className="tocyn-auth-card">
-        <div className="tocyn-auth-heading">
+    <div className={authStyles.page}>
+      <div className={authStyles.card}>
+        <div className={authStyles.heading}>
 
           <h1>Welcome Back</h1>
           <p>Sign in to your {PRODUCT_BRAND.name} account</p>
         </div>
 
-        {error && (
-          <div id="staff-login-error" role="alert" aria-atomic="true" className="tocyn-auth-alert">
-            {error}
+        {(error || logoutWarning) && (
+          <div id="staff-login-error" role="alert" aria-atomic="true" className={authStyles.alert}>
+            {error || logoutWarning}
           </div>
         )}
 
-        <form aria-busy={loading} onSubmit={handleSubmit} className="tocyn-auth-form">
+        <form aria-busy={loading} onSubmit={handleSubmit} className={authStyles.form}>
           <ParkField label="Email Address" required>
             <ParkInput
               id="staff-login-email"
@@ -72,7 +75,6 @@ export function LoginPage() {
               aria-describedby={error ? "staff-login-error" : undefined}
               type="email"
               required
-              className="tocyn-form-control tocyn-auth-control"
               placeholder="agent@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -87,7 +89,6 @@ export function LoginPage() {
               aria-describedby={error ? "staff-login-error" : undefined}
               type="password"
               required
-              className="tocyn-form-control tocyn-auth-control"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -97,12 +98,12 @@ export function LoginPage() {
             type="submit"
             variant="solid"
             aria-disabled={loading}
-            className="tocyn-auth-submit"
+            className={authStyles.submit}
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </ParkButton>
         </form>
-        <p role="status" aria-live="polite" className="tocyn-auth-status">{loading ? 'Signing in…' : ''}</p>
+        <p role="status" aria-live="polite" className={authStyles.status}>{loading ? 'Signing in…' : ''}</p>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import { dashboardApi } from '../api/client';
 import { AuthResponse } from '../types';
 import { IconShieldHalved, IconKey, IconTriangleExclamation } from '@luminatick/ui/icons';
+import { authStyles } from './auth-styles';
 
 interface SetupResponse {
   provisioning_uri: string;
@@ -95,20 +96,20 @@ export function MfaPage() {
   const isSetupMode = !user.mfa_enabled;
 
   return (
-    <div className="tocyn-auth-page">
-      <div className="tocyn-auth-card">
-        <div className="tocyn-auth-heading">
-          <div className="tocyn-mfa-icon-wrap">
+    <div className={authStyles.page}>
+      <div className={authStyles.card}>
+        <div className={authStyles.heading}>
+          <div className={authStyles.iconWrap}>
             {isSetupMode ? (
-              <IconKey className="tocyn-mfa-icon" />
+              <IconKey className={authStyles.icon} aria-hidden="true" />
             ) : (
-              <IconShieldHalved className="tocyn-mfa-icon" />
+              <IconShieldHalved className={authStyles.icon} aria-hidden="true" />
             )}
           </div>
-          <h1 className="tocyn-mfa-title">
+          <h1>
             {isSetupMode ? 'Set up Two-Factor Authentication' : 'Two-Factor Authentication'}
           </h1>
-          <p id="mfa-instructions" className="tocyn-mfa-instructions">
+          <p id="mfa-instructions">
             {isSetupMode
               ? 'Your account requires an additional layer of security. Please scan the QR code with your authenticator app.'
               : 'Enter the 6-digit code from your authenticator app'}
@@ -116,8 +117,8 @@ export function MfaPage() {
         </div>
 
         {error && (
-          <div id="mfa-error" role="alert" aria-atomic="true" className="tocyn-auth-alert tocyn-mfa-alert">
-            <IconTriangleExclamation className="tocyn-mfa-alert-icon" />
+          <div id="mfa-error" role="alert" aria-atomic="true" className={authStyles.alert}>
+            <IconTriangleExclamation className={authStyles.icon} aria-hidden="true" />
             <p>{error}</p>
           </div>
         )}
@@ -130,27 +131,27 @@ export function MfaPage() {
               retryingSetup.current = true;
               setupPromise.current = null;
               setSetupAttempt(previous => previous + 1);
-            }} className="tocyn-mfa-retry">
+            }}>
             Retry authenticator setup
           </ParkButton>
         )}
 
         {isSetupMode && setupData && (
-          <div className="tocyn-mfa-setup">
-            <div className="tocyn-mfa-qr">
+          <div className={authStyles.setup}>
+            <div className={authStyles.qr}>
               <QRCodeSVG role="img" aria-label="Authenticator setup QR code; a text key follows" value={setupData.provisioning_uri} size={180} />
             </div>
-            <p className="tocyn-mfa-secret-help">
+            <p className={authStyles.secretHelp}>
               If you can't scan the QR code, manually enter this secret key:<br/>
-              <code className="tocyn-mfa-secret">
+              <code className={authStyles.secret}>
                 {getSecretFromUri(setupData.provisioning_uri)}
               </code>
             </p>
           </div>
         )}
 
-        <form aria-busy={loading} onSubmit={handleSubmit} className="tocyn-auth-form">
-          <div>
+        <form aria-busy={loading} onSubmit={handleSubmit} className={authStyles.form}>
+          <div className={authStyles.pinWrap}>
             <ParkPinInput
               id="mfa-code"
               ref={codeInput}
@@ -165,7 +166,7 @@ export function MfaPage() {
               name="code"
               placeholder="0"
             >
-              <span className="tocyn-visually-hidden">Authentication Code</span>
+              <span className={authStyles.visuallyHidden}>Authentication Code</span>
               {Array.from({ length: 6 }, (_, index) => <ParkPinInputSlot key={index} index={index}
                 aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
                 aria-describedby={error ? 'mfa-instructions mfa-error' : 'mfa-instructions'}
@@ -177,13 +178,13 @@ export function MfaPage() {
             type="submit"
             variant="solid"
             aria-disabled={loading || code.length !== 6 || (isSetupMode && !setupData)}
-            className="tocyn-auth-submit"
+            className={authStyles.submit}
           >
             {loading ? 'Verifying...' : isSetupMode ? 'Verify & Enable' : 'Verify Code'}
           </ParkButton>
         </form>
-        {!isSetupMode && <ParkButton type="button" variant="ghost" disabled={loading} className="tocyn-auth-secondary" onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</ParkButton>}
-        <p role="status" aria-live="polite" className="tocyn-auth-status">{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
+        {!isSetupMode && <ParkButton type="button" variant="ghost" disabled={loading} className={authStyles.secondary} onClick={() => { useAuthStore.getState().logout(); navigate('/login', { replace: true }); }}>Back to credentials</ParkButton>}
+        <p role="status" aria-live="polite" className={authStyles.status}>{loading ? (isSetupMode && !setupData ? 'Preparing authenticator setup…' : 'Verifying code…') : setupStatus}</p>
       </div>
     </div>
   );

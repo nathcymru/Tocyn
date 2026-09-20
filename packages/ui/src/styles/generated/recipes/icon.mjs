@@ -1,9 +1,20 @@
 import { memo, splitProps } from '../helpers.mjs';
 import { createRecipe, mergeRecipes } from './create-recipe.mjs';
 
-const iconFn = /* @__PURE__ */ createRecipe('icon', {}, [])
+const iconFn = /* @__PURE__ */ createRecipe('icon', {
+  "size": "md"
+}, [])
 
-const iconVariantMap = {}
+const iconVariantMap = {
+  "size": [
+    "2xs",
+    "xs",
+    "sm",
+    "md",
+    "lg",
+    "xl"
+  ]
+}
 
 const iconVariantKeys = Object.keys(iconVariantMap)
 

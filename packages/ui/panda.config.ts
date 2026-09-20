@@ -1,7 +1,30 @@
+import { green } from './src/theme/colors/green';
+import { red } from './src/theme/colors/red';
+import { blue } from './src/theme/colors/blue';
+import { animationStyles } from './src/theme/animation-styles';
+import { zIndex } from './src/theme/tokens/z-index';
+import { shadows } from './src/theme/tokens/shadows';
+import { durations } from './src/theme/tokens/durations';
+import { colors } from './src/theme/tokens/colors';
+import { textStyles } from './src/theme/text-styles';
+import { layerStyles } from './src/theme/layer-styles';
+import { keyframes } from './src/theme/keyframes';
+import { globalCss as parkGlobalCss } from './src/theme/global-css';
+import { conditions } from './src/theme/conditions';
+import { slate } from './src/theme/colors/slate';
 import { absoluteCenter, badge, button, code, group, heading, icon, input, inputAddon, kbd, link, skeleton, spinner, text, textarea, accordion, alert, avatar, breadcrumb, card, carousel, checkbox, clipboard, collapsible, colorPicker, combobox, datePicker, dialog, drawer, editable, field, fieldset, fileUpload, hoverCard, inputGroup, menu, numberInput, pagination, pinInput, popover, progress, radioCardGroup, radioGroup, ratingGroup, scrollArea, segmentGroup, select, slider, splitter, switchRecipe, table, tabs, tagsInput, toast, toggleGroup, tooltip } from './src/theme/recipes/index';
 
 const parkRegistryRecipes = { absoluteCenter: absoluteCenter, badge: badge, button: button, code: code, group: group, heading: heading, icon: icon, input: input, inputAddon: inputAddon, kbd: kbd, link: link, skeleton: skeleton, spinner: spinner, text: text, textarea: textarea };
 const parkRegistrySlotRecipes = { accordion: accordion, alert: alert, avatar: avatar, breadcrumb: breadcrumb, card: card, carousel: carousel, checkbox: checkbox, clipboard: clipboard, collapsible: collapsible, colorPicker: colorPicker, combobox: combobox, datePicker: datePicker, dialog: dialog, drawer: drawer, editable: editable, field: field, fieldset: fieldset, fileUpload: fileUpload, hoverCard: hoverCard, inputGroup: inputGroup, menu: menu, numberInput: numberInput, pagination: pagination, pinInput: pinInput, popover: popover, progress: progress, radioCardGroup: radioCardGroup, radioGroup: radioGroup, ratingGroup: ratingGroup, scrollArea: scrollArea, segmentGroup: segmentGroup, select: select, slider: slider, splitter: splitter, switchRecipe: switchRecipe, table: table, tabs: tabs, tagsInput: tagsInput, toast: toast, toggleGroup: toggleGroup, tooltip: tooltip };
+
+// The dashboard may supply validated tenant values. Portal and the widget do
+// not restore operator themes, so each alias needs a usable static fallback.
+const tocynColor = (name: string, light: string, dark: string) => ({
+  value: {
+    base: `var(--tocyn-color-${name}, ${light})`,
+    _dark: `var(--tocyn-color-${name}, ${dark})`,
+  },
+});
 
 /**
  * Build-time Panda configuration for the shared Park-compatible layer.
@@ -11,12 +34,31 @@ const parkRegistrySlotRecipes = { accordion: accordion, alert: alert, avatar: av
 export default {
   preflight: false,
   jsxFramework: 'react',
+
   globalCss: {
-    'html, body, #root': { fontFamily: 'primary', color: 'text.primary', background: 'bg.canvas' },
+    ...parkGlobalCss.extend,
+    'html, body, #root': { width: '100%', minHeight: '100%', margin: '0', fontFamily: 'primary', color: 'text.primary', background: 'bg.canvas' },
+    '#root': { minHeight: '100dvh' },
+    ':root': { colorScheme: 'light' },
+    '[data-tocyn-theme-mode="dark"], [data-tocyn-inverse]': { colorScheme: 'dark' },
+    'body': { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' },
+    '[data-tocyn-appearance]': { paddingBlock: '0.25rem' },
+    '[data-tocyn-appearance] button, [data-tocyn-appearance] label': { minHeight: '44px' },
+    '[data-tocyn-appearance] label': { display: 'flex', alignItems: 'center', gap: '0.5rem' },
+    '[data-tocyn-appearance] label + label': { marginTop: '0.25rem' },
+    '[data-tocyn-appearance] fieldset': { padding: '0', marginTop: '0.5rem' },
+    '[data-tocyn-appearance] fieldset + div': { display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' },
+    '[data-tocyn-appearance] fieldset + div button': { padding: '0.25rem 0.75rem' },
+    '[data-tocyn-appearance] > p[role="status"]': { marginTop: '0.5rem' },
+    ':root[data-tocyn-focus-mode="true"] [data-tocyn-focus-decoration]': { display: 'none' },
+    '[data-tocyn-density="compact"] main[aria-label="Workspace"]': { padding: '1rem' },
+    ':is(button, input, textarea, select, a, [role="button"], [role="combobox"], [role="tab"], [role="checkbox"], [role="switch"], [role="menuitem"], [role="option"]):focus-visible': { outlineWidth: '2px !important', outlineStyle: 'solid !important', outlineColor: 'border.focus', outlineOffset: '2px !important' },
     '[data-tabular]': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' },
   },
-  include: ['./src/**/*.{ts,tsx}', '../../apps/dashboard/src/**/*.{ts,tsx}'],
+
+  include: ['./src/**/*.{ts,tsx}', '../../apps/dashboard/src/**/*.{ts,tsx}', '../../apps/portal/src/**/*.{ts,tsx}', '../../apps/widget/src/**/*.{ts,tsx}'],
   outdir: './src/styles/generated',
+
   theme: {
     extend: {
       semanticTokens: {
@@ -35,37 +77,81 @@ export default {
           'icon.selected': { value: { base: '#3b82f6', _dark: '#60a5fa' } },
           'icon.critical': { value: { base: '#b91c1c', _dark: '#fca5a5' } },
           'icon.inverse': { value: { base: '#f8fafc', _dark: '#e2e8f0' } },
-          'gray.surface.bg': { value: { base: '#ffffff', _dark: '#1a1d23' } },
-          'gray.subtle.bg': { value: { base: '#f1f5f9', _dark: '#1e293b' } },
-          canvas: { value: 'var(--tocyn-color-surface)' },
-          panel: { value: 'var(--tocyn-color-surface-panel)' },
-          muted: { value: 'var(--tocyn-color-surface-muted)' },
-          text: { value: 'var(--tocyn-color-text)' },
-          textMuted: { value: 'var(--tocyn-color-text-muted)' },
-          focus: { value: 'var(--tocyn-color-focus)' },
-          selected: { value: 'var(--tocyn-color-selected)' },
-          divider: { value: 'var(--tocyn-color-divider)' },
-          critical: { value: 'var(--tocyn-color-critical)' },
-          'critical.surface': { value: 'var(--tocyn-color-critical-surface)' },
-          'critical.border': { value: 'var(--tocyn-color-critical-border)' },
-          warning: { value: 'var(--tocyn-color-warning-text)' },
-          'warning.surface': { value: 'var(--tocyn-color-warning-surface)' },
-          'warning.border': { value: 'var(--tocyn-color-warning-border)' },
-          'info.surface': { value: 'var(--tocyn-color-info-surface)' },
-          'info.text': { value: 'var(--tocyn-color-info-text)' },
-          inverse: { value: 'var(--tocyn-color-inverse)' },
-          'bg.default': { value: 'var(--tocyn-color-surface-panel)' },
-          'bg.subtle': { value: 'var(--tocyn-color-surface-muted)' },
-          'fg.default': { value: 'var(--tocyn-color-text)' },
-          'fg.muted': { value: 'var(--tocyn-color-text-muted)' },
-          'border.default': { value: 'var(--tocyn-color-divider)' },
+          canvas: tocynColor('surface', '#ffffff', '#1a1d23'),
+          panel: tocynColor('surface-panel', '#f8fafc', '#0f1115'),
+          muted: tocynColor('surface-muted', '#f1f5f9', '#1e293b'),
+          text: tocynColor('text', '#1e293b', '#e2e8f0'),
+          textMuted: tocynColor('text-muted', '#64748b', '#94a3b8'),
+          focus: tocynColor('focus', '#3b82f6', '#60a5fa'),
+          selected: tocynColor('selected', '#eff6ff', '#1e3a5f'),
+          divider: tocynColor('divider', '#cbd5e1', '#334155'),
+          critical: tocynColor('critical', '#b91c1c', '#fca5a5'),
+          'critical.surface': tocynColor('critical-surface', '#fef2f2', '#3b1f25'),
+          'critical.border': tocynColor('critical-border', '#fecaca', '#7f1d1d'),
+          warning: tocynColor('warning-text', '#92400e', '#fcd34d'),
+          'warning.surface': tocynColor('warning-surface', '#fffbeb', '#3d2b0a'),
+          'warning.border': tocynColor('warning-border', '#fde68a', '#92400e'),
+          'info.surface': tocynColor('info-surface', '#eff6ff', '#172554'),
+          'info.text': tocynColor('info-text', '#1d4ed8', '#bfdbfe'),
+          inverse: tocynColor('inverse', '#0f172a', '#0b1220'),
+          'bg.default': tocynColor('surface-panel', '#f8fafc', '#0f1115'),
+          'bg.subtle': tocynColor('surface-muted', '#f1f5f9', '#1e293b'),
+          'fg.default': tocynColor('text', '#1e293b', '#e2e8f0'),
+          'fg.muted': tocynColor('text-muted', '#64748b', '#94a3b8'),
+          'border.default': tocynColor('divider', '#cbd5e1', '#334155'),
+          gray: slate,
+
+          fg: {
+            default: {
+              value: {
+                _light: "{colors.gray.12}",
+                _dark: "{colors.gray.12}"
+              }
+            },
+
+            muted: {
+              value: {
+                _light: "{colors.gray.11}",
+                _dark: "{colors.gray.11}"
+              }
+            },
+
+            subtle: {
+              value: {
+                _light: "{colors.gray.10}",
+                _dark: "{colors.gray.10}"
+              }
+            }
+          },
+
+          border: {
+            value: {
+              _light: "{colors.gray.4}",
+              _dark: "{colors.gray.4}"
+            }
+          },
+
+          error: {
+            value: {
+              _light: "{colors.red.9}",
+              _dark: "{colors.red.9}"
+            }
+          },
+
+          blue: blue,
+          red: red,
+          green: green
         },
+
+        shadows: shadows
       },
+
       tokens: {
         fonts: {
           primary: { value: "'Atkinson Hyperlegible', sans-serif" },
           tabular: { value: "'Inter', sans-serif" },
         },
+
         radii: {
           l1: { value: '0.25rem' },
           l2: { value: '0.5rem' },
@@ -73,6 +159,7 @@ export default {
           control: { value: '{radii.l2}' },
           panel: { value: '{radii.l3}' },
         },
+
         shadows: {
           xs: { value: '0 1px 2px rgb(15 23 42 / 6%)' },
           sm: { value: '0 2px 6px rgb(15 23 42 / 8%)' },
@@ -81,12 +168,19 @@ export default {
           xl: { value: '0 20px 40px rgb(15 23 42 / 14%)' },
           '2xl': { value: '0 24px 48px rgb(15 23 42 / 16%)' },
         },
-        sizes: { target: { value: 'var(--tocyn-target-min)' } },
+
+        sizes: { target: { value: 'var(--tocyn-target-min, 44px)' } },
+        colors: colors,
+        durations: durations,
+        zIndex: zIndex
       },
+
       textStyles: {
+        ...textStyles,
         body: { value: { fontFamily: 'primary', fontSize: '1rem', lineHeight: '1.5' } },
         tabular: { value: { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', lineHeight: '1.4' } },
       },
+
       slotRecipes: {
         ...parkRegistrySlotRecipes,
         page: {
@@ -98,12 +192,12 @@ export default {
             'knowledgeCategoryRow', 'knowledgeCategoryRowSelected', 'knowledgeCategoryMain', 'knowledgeCategoryActions', 'knowledgeCategoryChildren', 'knowledgeCategoryList', 'knowledgeCategorySpacer', 'knowledgeCategoryButton', 'knowledgeDeleteActions', 'knowledgeStatusBadge',
             'accountGrid', 'accountIdentityName', 'accountIdentityEmail',
             'inboxWorkspace', 'inboxList', 'inboxDetail', 'inboxHeader', 'inboxHiddenHeading', 'inboxMetrics', 'inboxToolbar', 'inboxRows', 'inboxRow', 'inboxTable', 'inboxTableWrap', 'inboxTableRow', 'inboxPresentationButton', 'inboxPresentationActive', 'inboxPresentationInactive', 'inboxEmpty', 'inboxMobileHidden', 'inboxTableMobileHidden', 'inboxStatus', 'inboxPriority', 'inboxMobileNote', 'inboxTableResponsive', 'inboxTitleRow', 'inboxRowCopy', 'inboxRowSubject', 'inboxRowCustomer', 'inboxRowDate', 'inboxRowPreview', 'inboxRowMeta', 'inboxToolbarGroup', 'inboxPagination',
-            'metricStrip', 'metricCard', 'metricIcon', 'panels', 'priorityList', 'priorityRow', 'progressTrack', 'progressFill', 'overviewGrid', 'overviewCard', 'overviewFooter',
+            'dashboardHeading', 'dashboardAction', 'metricStrip', 'metricCard', 'metricCardHeader', 'metricCardBody', 'metricIcon', 'metricLabel', 'metricValue', 'panels', 'panelHeader', 'panelIcon', 'panelTitle', 'priorityList', 'priorityRow', 'overviewGrid', 'overviewCard', 'overviewCardBody', 'overviewCardLabel', 'overviewCardValue', 'overviewFooter',
           ],
           base: {
             root: { width: '100%', minWidth: '0', minHeight: '100%', background: 'bg.canvas', color: 'text.primary', fontFamily: 'primary' },
             header: { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1.5rem', marginBottom: '2rem' },
-            content: { width: '100%', minWidth: '0', maxWidth: '72rem', marginInline: 'auto', padding: '2rem 1rem' },
+            content: { width: '100%', minWidth: '0', maxWidth: '72rem', boxSizing: 'border-box', marginInline: 'auto', padding: '2rem 1rem' },
             grid: { display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
             section: { minWidth: '0' },
             settingsSections: { display: 'grid', gap: '1rem' },
@@ -127,12 +221,12 @@ export default {
             knowledgeCategoryButton: { display: 'inline-flex', minWidth: '0', minHeight: '2.5rem', flex: '1', alignItems: 'center', justifyContent: 'flex-start', gap: '0.5rem', overflow: 'hidden', border: '0', background: 'transparent', color: 'fg.default', padding: '0.5rem', textAlign: 'start', _hover: { background: 'bg.subtle' } },
             knowledgeDeleteActions: { display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' },
             knowledgeStatusBadge: { display: 'inline-flex', minHeight: '1.75rem', alignItems: 'center', borderRadius: 'full', background: 'bg.subtle', color: 'text.muted', padding: '0.25rem 0.625rem', fontSize: '0.8125rem', fontWeight: '600', '&[data-status="active"]': { background: 'info.surface', color: 'info.text' }, '&[data-status="processing"]': { background: 'warning.surface', color: 'warning' }, '&[data-status="error"]': { background: 'critical.surface', color: 'critical' }, '&[data-tier="sop"]': { background: 'bg.input', color: 'text.primary' } },
-            accountGrid: { display: 'grid', gridTemplateColumns: { base: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: '1rem', marginBlock: '1rem' },
+            accountGrid: { display: 'grid', minWidth: '0', gridTemplateColumns: { base: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: '1rem', marginBlock: '1rem', '& > *': { minWidth: '0' } },
             accountIdentityName: { margin: '0', fontWeight: '600' },
             accountIdentityEmail: { overflow: 'hidden', margin: '0.25rem 0 0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-            inboxWorkspace: { display: 'flex', minWidth: '0', minHeight: '0', width: '100%', height: '100%', flex: '1' },
-            inboxList: { display: 'flex', minWidth: '0', minHeight: '0', height: '100%', flex: '1', flexDirection: 'column', overflow: 'hidden', width: '100%', maxWidth: 'none', margin: '0', padding: '0', boxSizing: 'border-box', '&[data-park="splitter-panel"]': { overflow: 'hidden' } },
-            inboxDetail: { display: 'flex', minWidth: '0', minHeight: '0', height: '100%', flex: '1', flexDirection: 'column', overflow: 'hidden', background: 'bg.canvas', width: '100%', maxWidth: 'none', margin: '0', padding: '0', boxSizing: 'border-box', '&[data-park="splitter-panel"]': { overflow: 'hidden' } },
+            inboxWorkspace: { display: 'flex', minWidth: '0', minHeight: '0', width: '100%', height: '100%', flex: '1', '& [data-part="resize-trigger"]': { display: { base: 'none', lg: 'flex' } } },
+            inboxList: { display: 'flex', minHeight: '0', height: '100%', flex: { base: '1 1 100% !important', lg: '1' }, minWidth: { base: '0 !important', lg: '0' }, maxWidth: { base: 'none !important', lg: 'none' }, flexDirection: 'column', overflow: 'hidden', width: '100%', margin: '0', padding: '0', boxSizing: 'border-box' },
+            inboxDetail: { display: 'flex', minHeight: '0', height: '100%', flex: { base: '1 1 100% !important', lg: '1' }, minWidth: { base: '0 !important', lg: '0' }, maxWidth: { base: 'none !important', lg: 'none' }, flexDirection: 'column', overflow: 'hidden', background: 'bg.canvas', width: '100%', margin: '0', padding: '0', boxSizing: 'border-box' },
             inboxHeader: { display: 'grid', flexShrink: '0', gap: '0.75rem', padding: { base: '0.75rem', md: '0.875rem 1rem 0.75rem' }, borderBottom: '1px solid', borderColor: 'border.default', background: 'bg.surface', '& > p': { margin: '0', color: 'text.muted', fontSize: '0.8125rem' } },
             inboxMetrics: { display: 'grid', gridTemplateColumns: { base: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: '0.5rem', '& [data-part="body"]': { minWidth: '0', padding: '0.625rem 0.75rem' }, '& strong': { display: 'block', marginTop: '0.125rem', fontSize: '1.25rem' } },
             inboxHiddenHeading: { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' },
@@ -146,7 +240,7 @@ export default {
             inboxPresentationActive: { background: 'bg.subtle', color: 'text.primary' },
             inboxPresentationInactive: { background: 'bg.surface', color: 'text.muted', _hover: { background: 'bg.subtle', color: 'text.primary' } },
             inboxEmpty: { display: 'flex', minHeight: '16rem', alignItems: 'center', justifyContent: 'center', padding: '2rem' },
-            inboxMobileHidden: { display: { base: 'none', lg: 'block' } },
+            inboxMobileHidden: { '&[data-part="panel"]': { display: { base: 'none !important', lg: 'flex !important' } } },
             inboxTableMobileHidden: { display: { base: 'block', md: 'none' } },
             inboxStatus: { display: 'inline-flex', minHeight: '1.75rem', alignItems: 'center', borderRadius: 'full', background: 'bg.subtle', color: 'text.muted', padding: '0.25rem 0.625rem', fontSize: '0.8125rem', fontWeight: '600', '&[data-status="open"]': { background: 'info.surface', color: 'info.text' }, '&[data-status="pending"]': { background: 'warning.surface', color: 'warning' } },
             inboxPriority: { display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: 'text.muted', textTransform: 'capitalize', '&[data-priority="normal"]': { color: 'info.text' }, '&[data-priority="high"]': { color: 'warning' }, '&[data-priority="urgent"]': { color: 'critical' } },
@@ -161,21 +255,31 @@ export default {
             inboxRowMeta: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', color: 'text.muted', fontSize: '0.8125rem' },
             inboxToolbarGroup: { display: 'flex', minWidth: '0', alignItems: 'center', gap: '0.5rem' },
             inboxPagination: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', borderTop: '1px solid', borderColor: 'border.default', padding: '0.75rem 1.5rem' },
-            metricStrip: { display: 'grid', gridTemplateColumns: { base: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: '1rem' },
-            metricCard: { minWidth: '0' },
-            metricIcon: { display: 'inline-flex', width: '2.25rem', height: '2.25rem', alignItems: 'center', justifyContent: 'center', borderRadius: 'l2', background: 'bg.subtle', color: 'text.primary', '&[data-tone="blue"]': { background: 'info.surface', color: 'info.text' }, '&[data-tone="green"]': { background: 'rgba(16,185,129,0.12)', color: 'rgba(5,150,105,1)' }, '&[data-tone="amber"]': { background: 'warning.surface', color: 'warning' }, '&[data-tone="neutral"]': { background: 'bg.input', color: 'text.muted' } },
-            panels: { display: 'grid', gridTemplateColumns: { base: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }, gap: '1rem' },
-            priorityList: { display: 'grid', gap: '0.75rem' },
-            priorityRow: { display: 'grid', gap: '0.375rem' },
-            progressTrack: { width: '100%', height: '0.5rem', overflow: 'hidden', borderRadius: 'full', background: 'bg.subtle' },
-            progressFill: { height: '100%', width: 'var(--tocyn-progress, 0%)', borderRadius: 'full', background: 'accent.primary', transition: 'width 150ms ease', '&[data-tone="urgent"]': { background: 'critical' }, '&[data-tone="high"]': { background: 'warning' }, '&[data-tone="normal"]': { background: 'border.focus' }, '&[data-tone="low"]': { background: 'border.default' } },
-            overviewGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' },
+            dashboardHeading: { display: 'grid', minWidth: '0', flex: '1 1 auto', gap: '0.25rem', '& h1': { margin: '0', fontSize: '2rem', lineHeight: '1.15' }, '& p': { margin: '0', color: 'text.muted' } },
+            dashboardAction: { flexShrink: '0' },
+            metricStrip: { display: 'grid', gridTemplateColumns: { base: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: '1rem' },
+            metricCard: { minWidth: '0', height: '100%' },
+            metricCardHeader: { '&.card__header': { flexDirection: 'row', alignItems: 'center', gap: '0.75rem', paddingBottom: '0.5rem' } },
+            metricCardBody: { '&.card__body': { paddingTop: '0', justifyContent: 'flex-end' } },
+            metricIcon: { display: 'inline-flex', width: '2.25rem', height: '2.25rem', flexShrink: '0', alignItems: 'center', justifyContent: 'center', borderRadius: 'l2', background: 'bg.subtle', color: 'text.primary', '& svg': { width: '1.25rem', height: '1.25rem' }, '&[data-tone="blue"]': { background: 'info.surface', color: 'info.text' }, '&[data-tone="green"]': { background: 'green.3', color: 'green.11' }, '&[data-tone="amber"]': { background: 'warning.surface', color: 'warning' }, '&[data-tone="neutral"]': { background: 'bg.input', color: 'text.muted' } },
+            metricLabel: { '&.card__title': { minWidth: '0', margin: '0', fontSize: '0.875rem', fontWeight: '600', lineHeight: '1.25rem' } },
+            metricValue: { margin: '0', fontSize: '2rem', fontWeight: '700', lineHeight: '1.1' },
+            panels: { display: 'grid', gridTemplateColumns: { base: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' }, gap: '1rem', '& > *': { minWidth: '0' } },
+            panelHeader: { '&.card__header': { flexDirection: 'row', alignItems: 'center', gap: '0.75rem', paddingBottom: '1rem' } },
+            panelIcon: { width: '1.25rem', height: '1.25rem', flexShrink: '0', color: 'text.muted' },
+            panelTitle: { '&.card__title': { minWidth: '0', margin: '0', fontSize: '1.125rem', lineHeight: '1.5rem' } },
+            priorityList: { display: 'grid', minWidth: '0', gap: '0.75rem' },
+            priorityRow: { display: 'grid', minWidth: '0', gap: '0.375rem', '& > div:first-child': { display: 'flex', minWidth: '0', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', textTransform: 'capitalize' } },
+            overviewGrid: { display: 'grid', gridTemplateColumns: { base: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: '0.75rem' },
             overviewCard: { minWidth: '0' },
+            overviewCardBody: { '&.card__body': { minWidth: '0', gap: '0.5rem', padding: '1rem' } },
+            overviewCardLabel: { display: 'flex', minWidth: '0', alignItems: 'center', gap: '0.5rem', color: 'text.muted', fontSize: '0.875rem', '& svg': { width: '1rem', height: '1rem', flexShrink: '0' } },
+            overviewCardValue: { margin: '0', fontSize: '1.5rem', fontWeight: '700', lineHeight: '1.25' },
             overviewFooter: { margin: '1rem 0 0', color: 'text.muted', fontSize: '0.875rem' },
           },
           variants: {
             kind: {
-              dashboard: { content: { maxWidth: '88rem', display: 'grid', gap: '2rem' } },
+              dashboard: { header: { alignItems: 'center', marginBottom: '0' }, content: { maxWidth: '88rem', display: 'grid', gap: '1.5rem' } },
               knowledge: { content: { maxWidth: '96rem', display: 'grid', gap: '1.5rem' } },
               inbox: { content: { maxWidth: 'none', padding: '0' } },
               settings: { content: { maxWidth: '56rem' } },
@@ -330,12 +434,12 @@ export default {
           base: {
             root: { position: 'relative', display: 'flex', flex: '1', minWidth: '0', width: '100%', maxWidth: '32rem', marginInline: 'auto', alignItems: 'center', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.input', color: 'text.primary' },
             inputShell: { position: 'relative', display: 'flex', flex: '1', minWidth: '0', alignItems: 'center' },
-            icon: { position: 'absolute', insetInlineStart: '0.75rem', width: '1rem', height: '1rem', color: 'icon.muted', pointerEvents: 'none', zIndex: '1' },
-            input: { minWidth: '0', minHeight: '2.75rem', border: '0', borderRadius: 'l2', background: 'transparent', paddingInline: '2.5rem 3rem', outline: '0', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '-2px' } },
-            shortcut: { position: 'absolute', insetInlineEnd: '0.75rem', color: 'text.muted', fontSize: '0.75rem', pointerEvents: 'none', whiteSpace: 'nowrap' },
+            icon: { position: 'static', flexShrink: '0', width: '1rem', height: '1rem', marginInlineStart: '0.75rem', color: 'icon.muted', pointerEvents: 'none' },
+            input: { flex: '1', width: '0', minWidth: '0', minHeight: '2.75rem', border: '0', borderRadius: 'l2', background: 'transparent', paddingInline: '0.5rem', outline: '0', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '-2px' } },
+            shortcut: { position: 'static', flexShrink: '0', marginInlineEnd: '0.75rem', color: 'text.muted', fontSize: '0.75rem', pointerEvents: 'none', whiteSpace: 'nowrap' },
             divider: { width: '1px', height: '1.5rem', flexShrink: '0', background: 'border.input' },
             scope: { display: 'flex', flexShrink: '0', width: '5.25rem', minWidth: '0', alignItems: 'stretch' },
-            clear: { position: 'absolute', insetInlineEnd: '0.375rem', minHeight: '2rem', paddingInline: '0.5rem', color: 'text.muted', background: 'transparent', _hover: { background: 'bg.subtle', color: 'text.primary' } },
+            clear: { position: 'static', flexShrink: '0', minWidth: '2.5rem', minHeight: '2.5rem', paddingInline: '0.5rem', color: 'text.muted', background: 'transparent', _hover: { background: 'bg.subtle', color: 'text.primary' } },
             popover: { position: 'absolute', insetBlockStart: 'calc(100% + 0.5rem)', insetInline: '0', zIndex: '50', maxHeight: 'min(24rem, 60vh)', overflowY: 'auto', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', color: 'text.primary', padding: '0.75rem', boxShadow: 'sm' },
             status: { color: 'text.muted', fontSize: '0.875rem' },
             results: { maxHeight: '16rem', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '0.125rem' },
@@ -356,7 +460,7 @@ export default {
             navIcon: { flexShrink: '0', width: '1.25rem', height: '1.25rem', color: 'currentColor' },
             sectionTitle: { margin: '0.75rem 0 0', color: 'text.muted', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase' },
             main: { minWidth: '0', minHeight: '0' },
-            content: { width: '100%', maxWidth: '72rem', marginInline: 'auto', padding: { base: '1.25rem 1rem', md: '2rem 1.5rem' } },
+            content: { width: '100%', minWidth: '0', maxWidth: '72rem', boxSizing: 'border-box', marginInline: 'auto', padding: { base: '1.25rem 1rem', md: '2rem 1.5rem' } },
           },
         },
         knowledgeEditor: {
@@ -391,7 +495,7 @@ export default {
             toolbarButton: { minWidth: '2.5rem', minHeight: '2.5rem', padding: '0.5rem', color: 'icon.primary', background: 'transparent', _hover: { background: 'bg.subtle' } },
             toolbarButtonActive: { background: 'bg.subtle', color: 'text.primary' },
             input: { minHeight: '12rem', resize: 'vertical' },
-            editor: { minHeight: '12rem', padding: '1rem', color: 'text.primary', fontFamily: 'primary', lineHeight: '1.5', _focusWithin: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, '& .ProseMirror': { minHeight: '10rem', outline: '0' }, '& .ProseMirror code': { fontFamily: 'tabular' } },
+            editor: { minHeight: '12rem', padding: '1rem', bg: 'bg.input', color: 'text.primary', fontFamily: 'primary', lineHeight: '1.5', '& .ProseMirror': { minHeight: '10rem', bg: 'bg.input', color: 'text.primary', fontFamily: 'primary', overflowWrap: 'anywhere', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } }, '& .ProseMirror code': { fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' } },
             autocomplete: { position: 'absolute', zIndex: '10', maxWidth: '24rem', maxHeight: '15rem', overflowY: 'auto', border: '1px solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.surface', padding: '0.25rem', boxShadow: 'sm' },
             autocompleteOption: { display: 'flex', width: '100%', minHeight: '2.5rem', alignItems: 'center', borderRadius: 'l2', padding: '0.5rem 0.75rem', textAlign: 'start', _hover: { background: 'bg.subtle' } },
             dropHelp: { margin: '0', color: 'text.muted', fontSize: '0.875rem' },
@@ -504,82 +608,38 @@ export default {
             contentPadded: { padding: { base: '1rem', lg: '2rem' } },
           },
         },
-        tabs: {
-          className: 'tabs', slots: ['root', 'list', 'trigger', 'content', 'indicator'],
-          base: { root: { display: 'flex', flexDirection: 'column', minWidth: '0' }, list: { display: 'flex', alignItems: 'center', gap: '0.25rem', borderBottom: '1px solid', borderColor: 'border.default' }, trigger: { minHeight: '2.5rem', border: '0', borderBottom: '2px solid transparent', background: 'transparent', color: 'fg.muted', padding: '0.5rem 0.75rem', fontFamily: 'primary', cursor: 'pointer', _hover: { color: 'fg.default' }, _selected: { color: 'fg.default', borderColor: 'accent.primary' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } }, content: { minWidth: '0', paddingBlock: '1rem' }, indicator: { display: 'none' } },
-        },
-        splitter: {
-          className: 'splitter', slots: ['root', 'panel', 'resizeTrigger'],
-          base: { root: { display: 'flex', minWidth: '0', minHeight: '0', width: '100%', height: '100%' }, panel: { minWidth: '0', minHeight: '0', overflow: 'auto' }, resizeTrigger: { flex: '0 0 0.25rem', width: '0.25rem', cursor: 'col-resize', background: 'border.default', transition: 'background 150ms ease', _hover: { background: 'border.focus' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } } },
-        },
-        scrollArea: {
-          className: 'scrollArea', slots: ['root', 'viewport', 'content', 'scrollbar', 'thumb'],
-          base: { root: { position: 'relative', overflow: 'hidden' }, viewport: { width: '100%', height: '100%', overflow: 'auto' }, content: { minWidth: '0' }, scrollbar: { display: 'flex', width: '0.5rem', padding: '0.125rem', background: 'bg.subtle' }, thumb: { flex: '1', borderRadius: 'full', background: 'border.default' } },
-        },
         emptyState: {
           className: 'emptyState', slots: ['root', 'title', 'description', 'action'],
           base: { root: { display: 'flex', minHeight: '10rem', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', border: '1px dashed', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.subtle', color: 'fg.default', padding: '1.5rem', textAlign: 'center' }, title: { margin: '0', fontFamily: 'primary', fontWeight: '600' }, description: { margin: '0', color: 'fg.muted', fontFamily: 'primary' }, action: { display: 'flex', marginTop: '0.5rem' } },
         },
-        select: {
-          className: 'select',
-          slots: ['root', 'label', 'control', 'trigger', 'valueText', 'indicatorGroup', 'indicator', 'positioner', 'content', 'list', 'item', 'itemText', 'itemIndicator'],
+        authShell: {
+          className: 'authShell', slots: ['root', 'splash', 'image', 'main', 'form', 'logo'],
           base: {
-            root: { display: 'flex', flexDirection: 'column', gap: '0.375rem', width: '100%' },
-            label: { color: 'text.muted', fontSize: '0.75rem', fontWeight: '600', userSelect: 'none' },
-            control: { position: 'relative', display: 'flex', alignItems: 'center', width: '100%' },
-            trigger: { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%', minHeight: '2.75rem', minWidth: '0', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 2.5rem 0.625rem 0.75rem', fontFamily: 'primary', textAlign: 'start', cursor: 'pointer', userSelect: 'none', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
-            valueText: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', _placeholderShown: { color: 'text.muted' } },
-            indicatorGroup: { position: 'absolute', insetInlineEnd: '0.75rem', insetBlock: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
-            indicator: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'text.muted', pointerEvents: 'none' },
-            positioner: { zIndex: 70 },
-            content: { minWidth: 'var(--reference-width)', maxHeight: 'min(var(--available-height), 24rem)', overflowY: 'auto', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.surface', padding: '0.25rem', boxShadow: '0 0.75rem 1.5rem rgb(15 23 42 / 12%)' },
-            list: { display: 'flex', flexDirection: 'column', gap: '0.125rem' },
-            item: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', minHeight: '2.5rem', borderRadius: '0.375rem', padding: '0.5rem 0.625rem', color: 'text.primary', cursor: 'pointer', userSelect: 'none', _hover: { background: 'bg.subtle' }, _highlighted: { background: 'bg.subtle' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' } },
-            itemText: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-            itemIndicator: { color: 'accent.primary', display: 'inline-flex', alignItems: 'center' },
+            root: { display: 'flex', minHeight: '100dvh', background: 'bg.canvas', color: 'text.primary', fontFamily: 'primary' },
+            splash: { position: 'relative', flex: '0 0 45%', maxWidth: '45vw', overflow: 'hidden' },
+            image: { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'left top' },
+            main: { display: 'flex', flex: '1', minWidth: '0', alignItems: 'center', justifyContent: 'center', padding: { base: '1rem', md: '2rem' } },
+            form: { width: '100%', maxWidth: '32rem' },
+            logo: { display: 'block', width: '12rem', maxWidth: '100%', height: 'auto', marginBottom: '2rem' },
           },
         },
       },
+
       recipes: {
         ...parkRegistryRecipes,
-        button: {
-          className: 'button',
-          base: { appearance: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '2.75rem', minWidth: '2.75rem', flexShrink: '0', isolation: 'isolate', position: 'relative', verticalAlign: 'middle', whiteSpace: 'nowrap', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', color: 'text.primary', padding: '0.5rem 0.875rem', fontFamily: 'primary', fontWeight: '600', cursor: 'pointer', userSelect: 'none', outline: '0', transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease', _hover: { background: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6', cursor: 'not-allowed' }, '& svg': { flexShrink: '0' } },
-          variants: {
-            variant: {
-              solid: { background: 'accent.primary', borderColor: 'accent.primary', color: 'bg.surface', _hover: { background: 'text.primary', borderColor: 'text.primary' } },
-              subtle: { background: 'bg.subtle', borderColor: 'border.default', color: 'text.primary', _hover: { background: 'bg.input' } },
-              surface: { background: 'bg.surface', borderColor: 'border.input', color: 'text.primary', _hover: { background: 'bg.subtle' } },
-              outline: { background: 'transparent', borderColor: 'border.input', color: 'text.primary', _hover: { background: 'bg.subtle' } },
-              plain: { background: 'transparent', borderColor: 'transparent', color: 'text.primary', _hover: { background: 'bg.subtle', borderColor: 'transparent' } },
-              ghost: { background: 'transparent', borderColor: 'transparent', color: 'text.primary', _hover: { background: 'bg.subtle', borderColor: 'border.input' } },
-              destructive: { background: 'critical', borderColor: 'critical', color: 'bg.surface', _hover: { filter: 'brightness(0.92)' } },
-            },
-            size: {
-              xs: { minHeight: '2rem', minWidth: '2rem', padding: '0.375rem 0.625rem', fontSize: '0.75rem' },
-              sm: { minHeight: '2.25rem', minWidth: '2.25rem', padding: '0.5rem 0.75rem', fontSize: '0.875rem' },
-              md: { minHeight: '2.5rem', minWidth: '2.5rem', padding: '0.5rem 0.875rem', fontSize: '0.9375rem' },
-              lg: { minHeight: '2.75rem', minWidth: '2.75rem', padding: '0.625rem 1rem', fontSize: '1rem' },
-              xl: { minHeight: '3rem', minWidth: '3rem', padding: '0.75rem 1.125rem', fontSize: '1.125rem' },
-              '2xl': { minHeight: '4rem', minWidth: '4rem', padding: '1rem 1.5rem', fontSize: '1.25rem' },
-            },
-          },
-          defaultVariants: { variant: 'surface', size: 'md' },
-        },
-        input: {
-          className: 'input',
-          base: { boxSizing: 'border-box', width: '100%', minHeight: '2.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'primary', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
-        },
-        textarea: {
-          className: 'textarea',
-          base: { boxSizing: 'border-box', width: '100%', minHeight: '6rem', border: '1px solid', borderColor: 'border.input', borderRadius: '0.5rem', background: 'bg.input', color: 'text.primary', padding: '0.625rem 0.75rem', fontFamily: 'primary', resize: 'vertical', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' }, _disabled: { opacity: '0.6' } },
-        },
-        icon: {
-          className: 'icon',
-          base: { display: 'inline-block', flexShrink: '0', width: '1.25rem', height: '1.25rem', color: 'icon.primary', verticalAlign: 'middle' },
-        },
       },
+
+      animationStyles: animationStyles,
+      keyframes: keyframes,
+      layerStyles: layerStyles
     },
   },
-  staticCss: { css: [{ properties: { color: ['canvas', 'panel', 'muted', 'text', 'textMuted', 'focus', 'selected', 'divider', 'critical', 'icon.primary', 'icon.muted', 'icon.disabled', 'icon.selected', 'icon.critical', 'icon.inverse'] } }] },
+
+  staticCss: {
+    css: [{ properties: { color: ['canvas', 'panel', 'muted', 'text', 'textMuted', 'focus', 'selected', 'divider', 'critical', 'icon.primary', 'icon.muted', 'icon.disabled', 'icon.selected', 'icon.critical', 'icon.inverse'] } }],
+    // Installed Park components receive variant props at runtime. Emit their
+    // official slot and recipe classes so every public component is styled.
+    recipes: '*',
+  },
+  conditions: conditions
 };

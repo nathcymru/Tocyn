@@ -1,3 +1,4 @@
+import { p } from '../portalStyles';
 import { ParkButton, ParkInput } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -78,22 +79,22 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
   // If we're verifying a magic link from URL, show a loading state
   if (tokenParam && !error) {
     return (
-      <div className="tocyn-portal-auth-shell">
-        <div role="status" aria-live="polite" className="tocyn-portal-auth-heading tocyn-portal-verify-loading">
-          <IconSpinner className="tocyn-portal-verify-spinner" />
-          <h2 className="tocyn-portal-verify-loading-title">Verifying your login...</h2>
+      <div className={p.authShell}>
+        <div role="status" aria-live="polite" className={[p.authHeading, p.verifyLoading].join(' ')}>
+          <IconSpinner className={p.verifySpinner} />
+          <h2 className={p.verifyLoadingTitle}>Verifying your login...</h2>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="tocyn-portal-auth-shell">
-      <div className="tocyn-portal-auth-heading tocyn-portal-verify-heading">
-        <h2 className="tocyn-portal-verify-title">
+    <div className={p.authShell}>
+      <div className={[p.authHeading, p.verifyHeading].join(' ')}>
+        <h2 className={p.verifyTitle}>
           Enter Verification Code
         </h2>
-        <p className="tocyn-portal-verify-copy">
+        <p className={p.verifyCopy}>
           {initialEmail ? (
             <>We sent a 6-digit code to <strong>{initialEmail}</strong></>
           ) : (
@@ -102,20 +103,20 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
         </p>
       </div>
 
-      <div className="tocyn-portal-auth-card">
-        <div className="tocyn-portal-auth-card-body">
+      <div className={p.authCard}>
+        <div className={p.authCardBody}>
           {error && (
-            <div id="portal-verify-error" role="alert" aria-atomic="true" className="tocyn-portal-auth-error">
+            <div id="portal-verify-error" role="alert" aria-atomic="true" className={p.authError}>
               {error}
             </div>
           )}
 
-          <form aria-busy={loading} className="tocyn-portal-auth-form" onSubmit={handleSubmit}>
+          <form aria-busy={loading} className={p.authForm} onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="code" className="tocyn-portal-auth-label">
+              <label htmlFor="code" className={p.authLabel}>
                 Authentication Code
               </label>
-              <div className="tocyn-portal-verify-input">
+              <div className={p.verifyInput}>
                 <ParkInput
                   id="code"
                   ref={codeInput}
@@ -126,7 +127,7 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
                   required
                   value={code}
                   onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
-                  className="tocyn-form-control tocyn-form-control--code"
+                  className={[p.formControl, p.formControlCode].join(' ')}
                   placeholder="123456"
                   maxLength={6}
                   disabled={loading}
@@ -139,20 +140,20 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
               <ParkButton
                 type="submit"
                 aria-disabled={loading || code.length !== 6}
-                variant="solid" className="tocyn-portal-auth-submit"
+                variant="solid" className={p.authSubmit}
               >
-                {loading ? <IconSpinner className="tocyn-portal-auth-spinner" /> : <IconCircleCheck className="tocyn-portal-auth-icon" />}
+                {loading ? <IconSpinner className={p.authSpinner} /> : <IconCircleCheck className={p.authIcon} />}
                 {loading ? 'Verifying...' : 'Verify Code'}
               </ParkButton>
             </div>
           </form>
-          <p role="status" aria-live="polite" className="tocyn-portal-auth-status">{loading ? 'Verifying code…' : ''}</p>
+          <p role="status" aria-live="polite" className={p.authStatus}>{loading ? 'Verifying code…' : ''}</p>
 
-          <div className="tocyn-portal-verify-back">
+          <div className={p.verifyBack}>
             <ParkButton
               onClick={() => { if (!loading) { if (onBack) onBack(); else { const key = getWidgetKey(); navigate('/login' + (key ? '?key=' + encodeURIComponent(key) : '')); } } }}
               disabled={loading}
-              className="tocyn-portal-verify-request"
+              className={p.verifyRequest}
             >
               Request a new code
             </ParkButton>

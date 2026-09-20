@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -46,14 +47,19 @@ function show(remoteResolved = false) {
 }
 afterEach(() => {cleanup();client?.clear();useAuthStore.getState().logout();presentation.enabled=true;presentation.contextDefault='remember';localStorage.clear();vi.unstubAllGlobals();vi.restoreAllMocks();});
 
+async function resolveTicket() {
+  await userEvent.click(await screen.findByRole('combobox', { name: 'Status' }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Resolved' }));
+}
+
 it('advances once only after local resolve acknowledgement and a successful explicit confirmation retry', async () => {
   const fixture = show();
-  fireEvent.change(await screen.findByRole('combobox', {name:'Status'}), {target:{value:'resolved'}});
+  await resolveTicket();
   await screen.findByText('Ticket details saved. Refresh the ticket before making another change.');
   expect(fixture.writes).toEqual([{status:'resolved'}]);
   expect(fixture.onResolved).not.toHaveBeenCalled();
   fixture.restore();
-  fireEvent.click(screen.getByRole('button', {name:'Retry loading ticket'}));
+  await userEvent.click(screen.getByRole('button', {name:'Retry loading ticket'}));
   await waitFor(() => expect(fixture.onResolved).toHaveBeenCalledExactlyOnceWith('workspace-ticket'));
   await client.invalidateQueries({queryKey:['ticket', 'workspace-ticket']});
   expect(fixture.onResolved).toHaveBeenCalledTimes(1);
@@ -61,7 +67,7 @@ it('advances once only after local resolve acknowledgement and a successful expl
 
 it('does not advance from a remotely resolved ticket without an acknowledged local resolve', async () => {
   const fixture = show(true);
-  expect(await screen.findByRole('combobox', {name:'Status'})).toHaveValue('resolved');
+  await waitFor(() => expect(screen.getByRole('combobox', {name:'Status'})).toHaveTextContent('Resolved'));
   await client.invalidateQueries({queryKey:['ticket', 'workspace-ticket']});
   expect(fixture.writes).toHaveLength(0);
   expect(fixture.onResolved).not.toHaveBeenCalled();
@@ -70,10 +76,10 @@ it('does not advance from a remotely resolved ticket without an acknowledged loc
 
 it('does not advance on confirmation retry after the preference is turned off', async()=>{
   const fixture=show();
-  fireEvent.change(await screen.findByRole('combobox',{name:'Status'}),{target:{value:'resolved'}});
+  await resolveTicket();
   await screen.findByText('Ticket details saved. Refresh the ticket before making another change.');
   presentation.enabled=false;fixture.restore();
-  fireEvent.click(screen.getByRole('button',{name:'Retry loading ticket'}));
+  await userEvent.click(screen.getByRole('button',{name:'Retry loading ticket'}));
   await waitFor(()=>expect(screen.queryByRole('button',{name:'Retry loading ticket'})).not.toBeInTheDocument());
   expect(fixture.onResolved).not.toHaveBeenCalled();
 });

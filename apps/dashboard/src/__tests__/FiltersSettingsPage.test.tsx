@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FiltersSettingsPage } from '../pages/FiltersSettingsPage';
 
@@ -60,4 +60,13 @@ it('renders loading state when filters are being fetched', () => {
   render(<FiltersSettingsPage />);
 
   expect(screen.getByText('Loading filters...')).toBeInTheDocument();
+});
+
+it('uses an actionable Park empty state when no filters exist', async () => {
+  render(<FiltersSettingsPage />);
+
+  const empty = screen.getByRole('region', { name: 'No filters created yet.' });
+  fireEvent.click(screen.getByRole('button', { name: 'Create filter' }));
+  expect(empty).toBeInTheDocument();
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
 });

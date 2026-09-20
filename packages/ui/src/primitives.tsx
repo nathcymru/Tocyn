@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { ComposableState, PrimitiveProps } from './types';
-import { button as buttonRecipe, input as inputRecipe, textarea as textareaRecipe } from './styles/generated/recipes';
+import { ParkButton, ParkInput, ParkTextarea, ParkEmptyState } from './park';
 
 export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, PrimitiveProps, ComposableState<'idle' | 'loading' | 'disabled'> {
   ref?: React.Ref<HTMLButtonElement>;
@@ -8,18 +8,16 @@ export interface TocynButtonProps extends React.ButtonHTMLAttributes<HTMLButtonE
 export const TocynButton = React.forwardRef<HTMLButtonElement, TocynButtonProps>(function TocynButton(
   { children, className, disabled, loading, state, ...props }, ref,
 ) {
-  return <button {...props} ref={ref} data-tocyn-primitive="button" data-park="button" data-scope="button" data-part="root" disabled={disabled || loading || state === 'loading' || state === 'disabled'} className={[buttonRecipe(), className].filter(Boolean).join(' ')} aria-busy={loading || state === 'loading' || props['aria-busy']}>
-    {children}
-  </button>;
+  return <ParkButton {...props} ref={ref} data-tocyn-primitive="button" disabled={disabled || loading || state === 'loading' || state === 'disabled'} loading={loading || state === 'loading'} className={className} aria-busy={loading || state === 'loading' || props['aria-busy']}>{children}</ParkButton>;
 });
 
-export interface TocynInputProps extends React.InputHTMLAttributes<HTMLInputElement>, PrimitiveProps, ComposableState<'idle' | 'error' | 'success'> {
+export interface TocynInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>, PrimitiveProps, ComposableState<'idle' | 'error' | 'success'> {
   ref?: React.Ref<HTMLInputElement>;
 }
 export const TocynInput = React.forwardRef<HTMLInputElement, TocynInputProps>(function TocynInput(
   { className, disabled, loading, state, ...props }, ref,
 ) {
-  return <input {...props} data-tocyn-primitive="input" data-park="input" data-scope="input" data-part="root" ref={ref} disabled={disabled || loading} className={[inputRecipe(), className].filter(Boolean).join(' ')} aria-busy={loading || props['aria-busy']} data-state={state} />;
+  return <ParkInput {...props} data-tocyn-primitive="input" ref={ref} disabled={disabled || loading} className={className} aria-busy={loading || props['aria-busy']} data-state={state} />;
 });
 
 export interface TocynPanelProps extends React.HTMLAttributes<HTMLElement>, PrimitiveProps, ComposableState<'open' | 'closed'> {
@@ -33,11 +31,7 @@ export const TocynPanel = React.forwardRef<HTMLElement, TocynPanelProps>(functio
 
 /** A stable, labelled surface for no-data and recoverable empty views. */
 export function TocynEmptyState({ title, description, action, className }: { title: string; description?: string; action?: React.ReactNode; className?: string }) {
-  return <section aria-label={title} data-tocyn-primitive="empty-state" className={['tocyn-empty-state', className].filter(Boolean).join(' ')}>
-    <h2 className="tocyn-empty-state-title">{title}</h2>
-    {description && <p className="tocyn-empty-state-description">{description}</p>}
-    {action}
-  </section>;
+  return <ParkEmptyState title={title} description={description} action={action} className={className} data-tocyn-primitive="empty-state" />;
 }
 
 export interface WorkspaceRegionProps extends React.HTMLAttributes<HTMLElement> {
@@ -56,7 +50,7 @@ export interface TocynTextareaProps extends React.TextareaHTMLAttributes<HTMLTex
   ref?: React.Ref<HTMLTextAreaElement>;
 }
 export const TocynTextarea = React.forwardRef<HTMLTextAreaElement, TocynTextareaProps>(function TocynTextarea(props, ref) {
-  return <textarea {...props} data-tocyn-primitive="textarea" data-park="textarea" data-scope="textarea" data-part="root" ref={ref} className={[textareaRecipe(), props.className].filter(Boolean).join(' ')} />;
+  return <ParkTextarea {...props} data-tocyn-primitive="textarea" ref={ref} />;
 });
 
 export interface TocynSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement>, PrimitiveProps {

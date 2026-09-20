@@ -1,14 +1,15 @@
+import { w } from '../widgetStyles';
 import { ParkButton, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { IconCircleCheck } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
 
 interface Props {
-  config: any;
+  config?: unknown;
   userEmail: string;
 }
 
-const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
+const TicketForm: React.FC<Props> = ({ userEmail }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: userEmail,
@@ -53,15 +54,15 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
 
   if (status === 'success') {
     return (
-      <div className="tocyn-widget-success">
-        <div className="tocyn-widget-success-icon">
-          <IconCircleCheck className="tocyn-widget-success-mark" aria-hidden="true" />
+      <div className={w.success}>
+        <div className={w.successIcon}>
+          <IconCircleCheck className={w.successMark} aria-hidden="true" />
         </div>
-        <h3 ref={successHeading} tabIndex={-1} className="tocyn-widget-success-title">Ticket Submitted!</h3>
-        <p role="status" className="tocyn-widget-success-copy">We've received your request and will get back to you soon.</p>
+        <h3 ref={successHeading} tabIndex={-1} className={w.successTitle}>Ticket Submitted!</h3>
+        <p role="status" className={w.successCopy}>We've received your request and will get back to you soon.</p>
         <ParkButton
           onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
-          className="tocyn-widget-success-action"
+          className={w.successAction}
         >
           Submit another ticket
         </ParkButton>
@@ -70,47 +71,47 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
   }
 
   return (
-    <form onSubmit={handleSubmit} aria-label="Submit a support ticket" aria-busy={status === 'submitting'} className="tocyn-widget-form">
-      <fieldset disabled={status === 'submitting'} className="tocyn-widget-form">
+    <form onSubmit={handleSubmit} aria-label="Submit a support ticket" aria-busy={status === 'submitting'} className={w.form}>
+      <fieldset disabled={status === 'submitting'} className={w.form}>
       <div>
-        <label htmlFor={`${formId}-name`} className="tocyn-widget-label">Your Name</label>
+        <label htmlFor={`${formId}-name`} className={w.label}>Your Name</label>
         <ParkInput
           type="text"
           required
-          className="tocyn-form-control"
+          className={w.formControl}
           placeholder="John Doe"
           id={`${formId}-name`} ref={nameInput} value={formData.name}
           onChange={e => setFormData({ ...formData, name: e.target.value })}
         />
       </div>
       <div>
-        <label htmlFor={`${formId}-email`} className="tocyn-widget-label">Email Address</label>
+        <label htmlFor={`${formId}-email`} className={w.label}>Email Address</label>
         <ParkInput
           type="email"
           required
-          className="tocyn-form-control"
+          className={w.formControl}
           placeholder="john@example.com"
           id={`${formId}-email`} value={formData.email}
           readOnly
         />
       </div>
       <div>
-        <label htmlFor={`${formId}-subject`} className="tocyn-widget-label">Subject</label>
+        <label htmlFor={`${formId}-subject`} className={w.label}>Subject</label>
         <ParkInput
           type="text"
           required
-          className="tocyn-form-control"
+          className={w.formControl}
           placeholder="How can we help?"
           id={`${formId}-subject`} value={formData.subject}
           onChange={e => setFormData({ ...formData, subject: e.target.value })}
         />
       </div>
       <div>
-        <label htmlFor={`${formId}-message`} className="tocyn-widget-label">Message</label>
+        <label htmlFor={`${formId}-message`} className={w.label}>Message</label>
         <ParkTextarea
           required
           rows={3}
-          className="tocyn-form-control tocyn-widget-textarea"
+          className={[w.formControl, w.textarea].join(' ')}
           placeholder="Tell us more about your issue..."
           id={`${formId}-message`} value={formData.message}
           onChange={e => setFormData({ ...formData, message: e.target.value })}
@@ -119,13 +120,12 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
       </fieldset>
       {status === 'submitting' && <p role="status">Submitting your ticket...</p>}
       {status === 'error' && (
-        <p ref={errorMessage} tabIndex={-1} role="alert" className="tocyn-widget-error">Submission could not be confirmed. Your message has been kept; try again.</p>
+        <p ref={errorMessage} tabIndex={-1} role="alert" className={w.error}>Submission could not be confirmed. Your message has been kept; try again.</p>
       )}
       <ParkButton
         type="submit"
         disabled={status === 'submitting'}
-        className="tocyn-widget-submit"
-        style={{ backgroundColor: config.primaryColor }}
+        className={w.submit}
       >
         {status === 'submitting' ? 'Submitting...' : 'Send Message'}
       </ParkButton>

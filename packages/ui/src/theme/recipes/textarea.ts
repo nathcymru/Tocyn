@@ -4,6 +4,9 @@ export const textarea = defineRecipe({
   className: 'textarea',
   base: {
     appearance: 'none',
+    bg: 'bg.input',
+    color: 'text.primary',
+    fontFamily: 'primary',
     borderRadius: 'l2',
     minWidth: '0',
     outline: '0',
@@ -31,7 +34,7 @@ export const textarea = defineRecipe({
         },
       },
       surface: {
-        bg: 'gray.surface.bg',
+        bg: 'bg.input',
         borderWidth: '1px',
         borderColor: 'gray.surface.border',
         focusVisibleRing: 'inside',

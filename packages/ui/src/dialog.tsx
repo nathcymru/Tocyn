@@ -1,6 +1,5 @@
 import * as React from 'react';
-import { ParkButton } from './park';
-import { Dialog } from '@ark-ui/react/dialog';
+import { ParkButton, ParkDialog } from './park';
 
 export interface TocynDialogProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
@@ -15,16 +14,16 @@ export interface TocynDialogProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /** Modal focus/escape behavior is shared; the caller owns state and form content. */
 export const TocynDialog = React.forwardRef<HTMLDivElement, TocynDialogProps>(function TocynDialog({ open, onOpenChange, busy, labelledBy, describedBy, initialFocusEl, finalFocusEl, children, ...props }, ref) {
-  return <Dialog.Root ids={props.id ? { content: props.id } : undefined} open={open} onOpenChange={details => { if (!busy) onOpenChange(details.open); }}
+  return <ParkDialog.Root ids={props.id ? { content: props.id } : undefined} open={open} onOpenChange={details => { if (!busy) onOpenChange(details.open); }}
     initialFocusEl={initialFocusEl} finalFocusEl={finalFocusEl} closeOnEscape={!busy}
     closeOnInteractOutside={false} lazyMount unmountOnExit>
-    <Dialog.Backdrop data-tocyn-dialog-backdrop="" />
-    <Dialog.Positioner data-tocyn-dialog-positioner="">
-      <Dialog.Content {...props} ref={ref} aria-labelledby={labelledBy} aria-describedby={describedBy ?? props['aria-describedby']}>
+    <ParkDialog.Backdrop data-tocyn-dialog-backdrop="" />
+    <ParkDialog.Positioner data-tocyn-dialog-positioner="">
+      <ParkDialog.Content {...props} ref={ref} aria-labelledby={labelledBy} aria-describedby={describedBy ?? props['aria-describedby']}>
         {children}
-      </Dialog.Content>
-    </Dialog.Positioner>
-  </Dialog.Root>;
+      </ParkDialog.Content>
+    </ParkDialog.Positioner>
+  </ParkDialog.Root>;
 });
 
 export interface TocynConfirmDialogProps extends Omit<TocynDialogProps, 'labelledBy' | 'describedBy' | 'initialFocusEl' | 'children'> {
@@ -44,14 +43,14 @@ export const TocynConfirmDialog = React.forwardRef<HTMLDivElement, TocynConfirmD
   const descriptionId = React.useId();
   const cancel = React.useRef<HTMLButtonElement>(null);
   return <TocynDialog {...dialog} ref={ref} labelledBy={titleId} describedBy={descriptionId} initialFocusEl={() => cancel.current}>
-    <div data-tocyn-confirm-body="">
-      <h2 id={titleId}>{title}</h2>
-      <p id={descriptionId}>{description}</p>
+    <ParkDialog.Body data-tocyn-confirm-body="">
+      <ParkDialog.Title id={titleId}>{title}</ParkDialog.Title>
+      <ParkDialog.Description id={descriptionId}>{description}</ParkDialog.Description>
       {error && <p role="alert">{error}</p>}
-      <div data-tocyn-confirm-actions="">
+      <ParkDialog.Footer data-tocyn-confirm-actions="">
         <ParkButton type="button" ref={cancel} disabled={dialog.busy} onClick={() => dialog.onOpenChange(false)} className={cancelClassName}>{cancelLabel}</ParkButton>
         <ParkButton type="button" disabled={dialog.busy} onClick={onConfirm} className={confirmClassName}>{confirmLabel}</ParkButton>
-      </div>
-    </div>
+      </ParkDialog.Footer>
+    </ParkDialog.Body>
   </TocynDialog>;
 });

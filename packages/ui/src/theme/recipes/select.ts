@@ -10,6 +10,13 @@ export const select = defineSlotRecipe({
       flexDirection: 'column',
       gap: '1.5',
       width: 'full',
+      minWidth: '0',
+    },
+    control: {
+      position: 'relative',
+      display: 'flex',
+      minWidth: '0',
+      alignItems: 'center',
     },
     content: {
       background: 'gray.surface.bg',
@@ -54,6 +61,10 @@ export const select = defineSlotRecipe({
       alignItems: 'center',
       gap: '1',
       pointerEvents: 'none',
+      position: 'absolute',
+      insetInlineEnd: '3',
+      top: '50%',
+      transform: 'translateY(-50%)',
     },
     indicator: {
       display: 'flex',
@@ -86,6 +97,9 @@ export const select = defineSlotRecipe({
     },
     trigger: {
       alignItems: 'center',
+      bg: 'bg.input',
+      color: 'text.primary',
+      fontFamily: 'primary',
       borderRadius: 'l2',
       cursor: 'pointer',
       display: 'flex',
@@ -96,6 +110,7 @@ export const select = defineSlotRecipe({
       transition: 'common',
       userSelect: 'none',
       width: 'full',
+      paddingInlineEnd: '10',
       _placeholderShown: {
         color: 'fg.subtle',
       },
@@ -104,6 +119,7 @@ export const select = defineSlotRecipe({
       },
     },
     valueText: {
+      minWidth: '0',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
@@ -125,7 +141,7 @@ export const select = defineSlotRecipe({
       },
       surface: {
         trigger: {
-          bg: 'gray.surface.bg',
+          bg: 'bg.input',
           borderWidth: '1px',
           borderColor: 'gray.surface.border',
 
@@ -139,35 +155,35 @@ export const select = defineSlotRecipe({
         item: { px: '1', minH: '8', gap: '2', _icon: { boxSize: '3.5' } },
         itemGroup: { gap: '0.5' },
         itemGroupLabel: { px: '1', height: '8' },
-        trigger: { px: '2', h: '8', textStyle: 'sm', gap: '2', _icon: { boxSize: '3.5' } },
+        trigger: { px: '2', paddingInlineEnd: '10', h: '8', textStyle: 'sm', gap: '2', _icon: { boxSize: '3.5' } },
       },
       sm: {
         content: { p: '1', gap: '0.5', textStyle: 'sm' },
         item: { px: '1.5', minH: '9', gap: '2', _icon: { boxSize: '4' } },
         itemGroup: { gap: '0.5' },
         itemGroupLabel: { px: '1.5', height: '9' },
-        trigger: { px: '2.5', h: '9', textStyle: 'sm', gap: '2', _icon: { boxSize: '4' } },
+        trigger: { px: '2.5', paddingInlineEnd: '10', h: '9', textStyle: 'sm', gap: '2', _icon: { boxSize: '4' } },
       },
       md: {
         content: { p: '1', gap: '0.5', textStyle: 'md' },
         item: { px: '2', minH: '10', gap: '2', _icon: { boxSize: '4' } },
         itemGroup: { gap: '0.5' },
         itemGroupLabel: { px: '2', height: '10' },
-        trigger: { px: '3', h: '10', textStyle: 'md', gap: '2', _icon: { boxSize: '4' } },
+        trigger: { px: '3', paddingInlineEnd: '10', h: '10', textStyle: 'md', gap: '2', _icon: { boxSize: '4' } },
       },
       lg: {
         content: { p: '1', gap: '0.5', textStyle: 'md' },
         item: { px: '2.5', minH: '11', gap: '2', _icon: { boxSize: '4.5' } },
         itemGroup: { gap: '0.5' },
         itemGroupLabel: { px: '2.5', height: '11' },
-        trigger: { px: '3.5', h: '11', textStyle: 'md', gap: '2', _icon: { boxSize: '4.5' } },
+        trigger: { px: '3.5', paddingInlineEnd: '10', h: '11', textStyle: 'md', gap: '2', _icon: { boxSize: '4.5' } },
       },
       xl: {
         content: { p: '1', gap: '1', textStyle: 'lg' },
         item: { px: '3', minH: '12', gap: '3', _icon: { boxSize: '5' } },
         itemGroup: { gap: '1' },
         itemGroupLabel: { px: '3', height: '12' },
-        trigger: { px: '4', h: '12', textStyle: 'lg', gap: '3', _icon: { boxSize: '5' } },
+        trigger: { px: '4', paddingInlineEnd: '10', h: '12', textStyle: 'lg', gap: '3', _icon: { boxSize: '5' } },
       },
     },
   },

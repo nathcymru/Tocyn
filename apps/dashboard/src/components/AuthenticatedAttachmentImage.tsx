@@ -1,4 +1,5 @@
 import { ParkButton } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useEffect, useRef, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -126,11 +127,11 @@ export function AuthenticatedAttachmentImage({
     }
   };
 
-  return <div className="tocyn-attachment-preview">
-    <ParkButton type="button" onClick={() => status === 'ready' ? hidePreview() : void preview()} aria-label={status === 'ready' ? `Hide image preview ${label}` : `Preview image ${label}`} aria-busy={status === 'loading'} disabled={status === 'loading'} className="tocyn-attachment-preview-button">
+  return <div className={css({ display: 'grid', gap: '2', mt: '2' })}>
+    <ParkButton type="button" onClick={() => status === 'ready' ? hidePreview() : void preview()} aria-label={status === 'ready' ? `Hide image preview ${label}` : `Preview image ${label}`} aria-busy={status === 'loading'} disabled={status === 'loading'}>
       {status === 'ready' ? 'Hide image preview' : status === 'loading' ? 'Loading image preview…' : 'Preview image'}
     </ParkButton>
-    {status === 'error' && <p role="alert" className="tocyn-attachment-preview-error">Image preview could not be loaded. <ParkButton type="button" onClick={() => void preview()} aria-label={`Retry image preview ${label}`} className="tocyn-inline-link">Retry preview</ParkButton></p>}
-    {previewUrl && <img src={previewUrl} alt={`Preview of ${label}`} onError={previewError} className="tocyn-attachment-preview-image" />}
+    {status === 'error' && <p role="alert" className={css({ color: 'critical', fontSize: 'sm' })}>Image preview could not be loaded. <ParkButton type="button" variant="plain" onClick={() => void preview()} aria-label={`Retry image preview ${label}`}>Retry preview</ParkButton></p>}
+    {previewUrl && <img src={previewUrl} alt={`Preview of ${label}`} onError={previewError} className={css({ display: 'block', maxW: 'full', maxH: '80', objectFit: 'contain', rounded: 'md', borderWidth: '1px', borderColor: 'border.default' })} />}
   </div>;
 }

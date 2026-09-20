@@ -1,8 +1,22 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { ParkButton, ParkInput } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkInput } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../api/client';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import type { KnowledgeDoc } from '../types';
+
+const styles = {
+  root: css({ display: 'grid', gap: '1rem', minWidth: '0', color: 'text.primary' }),
+  search: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '0.75rem' }),
+  label: css({ display: 'grid', gap: '0.375rem', flex: '1 1 15rem', fontWeight: 'medium' }),
+  input: css({ width: 'full' }),
+  help: css({ flexBasis: '100%', margin: '0', color: 'text.muted', fontSize: 'sm' }),
+  results: css({ display: 'grid', gap: '0.5rem', margin: '0', padding: '0', listStyle: 'none' }),
+  result: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', padding: '0.75rem' }),
+  preview: css({ display: 'grid', gap: '0.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', padding: '1rem' }),
+  previewTitle: css({ margin: '0', fontSize: 'lg', fontWeight: 'semibold' }),
+  previewBody: css({ margin: '0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }),
+};
 
 export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: {
   articles: KnowledgeDoc[]; disabled: boolean; insertingId?: string | null; onInsert: (article: KnowledgeDoc) => void;
@@ -32,24 +46,24 @@ export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: 
     } catch { if (current()) setPreview({ article, status: 'error' }); }
   };
   const close = () => { generation.current++; setPreview(null); if (trigger.current?.isConnected) trigger.current.focus(); };
-  return <div className="tocyn-knowledge-browser">
+  return <div className={styles.root}>
     {inserting && <p role="status">Loading {inserting.title} for insertion…</p>}
-    <form onSubmit={event => { event.preventDefault(); setQuery(input.trim()); setSearched(true); }} className="tocyn-knowledge-search-form">
-      <label className="tocyn-knowledge-search-label">Search knowledge titles<ParkInput value={input} onChange={event => setInput(event.target.value)} className="tocyn-knowledge-search-input" /></label>
-      <p className="tocyn-knowledge-search-help">Searches titles of the available internal knowledge articles.</p>
+    <form onSubmit={event => { event.preventDefault(); setQuery(input.trim()); setSearched(true); }} className={styles.search}>
+      <label className={styles.label}>Search knowledge titles<ParkInput value={input} onChange={event => setInput(event.target.value)} className={styles.input} /></label>
+      <p className={styles.help}>Searches titles of the available internal knowledge articles.</p>
       <ParkButton type="submit">Search titles</ParkButton>{searched && <ParkButton type="button" onClick={() => { setInput(''); setQuery(''); setSearched(true); }}>Clear knowledge search</ParkButton>}
     </form>
     {searched && <p role="status">{visible.length} matching knowledge article{visible.length === 1 ? '' : 's'}.</p>}
-    {visible.length === 0 && <p>No knowledge titles match this search.</p>}
-    <ul className="tocyn-knowledge-search-form">{visible.map(article => <li key={article.id} className="tocyn-knowledge-result">
+    {visible.length === 0 && <ParkEmptyState headingLevel={false} title={searched ? 'No knowledge titles match this search.' : 'No knowledge articles are available.'} action={searched ? <ParkButton type="button" variant="outline" onClick={() => { setInput(''); setQuery(''); }}>Clear search</ParkButton> : undefined} />}
+    <ul className={styles.results}>{visible.map(article => <li key={article.id} className={styles.result}>
       <ParkButton type="button" onClick={event => { trigger.current = event.currentTarget; void load(article); }} aria-label={`Preview ${article.title}`}>Preview {article.title}</ParkButton>
       <ParkButton type="button" disabled={disabled} onClick={() => onInsert(article)} aria-label={`Insert ${article.title} into reply`}>Insert {article.title}</ParkButton>
     </li>)}</ul>
-    {preview && <section aria-label="Knowledge preview" className="tocyn-knowledge-search-form tocyn-knowledge-preview">
-      <h4 ref={heading} tabIndex={-1} className="tocyn-knowledge-preview-title">Preview: {preview.article.title}</h4>
+    {preview && <section aria-label="Knowledge preview" className={styles.preview}>
+      <h4 ref={heading} tabIndex={-1} className={styles.previewTitle}>Preview: {preview.article.title}</h4>
       {preview.status === 'loading' && <p role="status">Loading knowledge preview…</p>}
       {preview.status === 'error' && <><p role="alert">Knowledge preview could not be loaded. Your draft is unchanged.</p><ParkButton type="button" onClick={() => void load(preview.article)}>Retry preview</ParkButton></>}
-      {preview.status === 'ready' && <><p className="tocyn-knowledge-preview-body">{preview.text || 'This article has no preview content.'}</p>{preview.truncated && <p>Preview shows the first 4,000 characters. Insertion requests the article again.</p>}</>}
+      {preview.status === 'ready' && <><p className={styles.previewBody}>{preview.text || 'This article has no preview content.'}</p>{preview.truncated && <p>Preview shows the first 4,000 characters. Insertion requests the article again.</p>}</>}
       <ParkButton type="button" onClick={close}>Close preview</ParkButton>
     </section>}
   </div>;

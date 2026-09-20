@@ -64,7 +64,8 @@ it('round-trips the supported markdown-v1 nodes and marks without changing meani
 it('highlights supported fenced code after sanitization and leaves code HTML as text', () => {
   const { container } = render(<SafeMarkdown>{'```ts\nconst safe = true;\n```\n\n```not-a-language\n<img src="https://tracker.invalid/pixel" onerror="alert(1)">\n```'}</SafeMarkdown>);
   const highlighted = container.querySelector('code.language-ts');
-  expect(highlighted).toHaveClass('code-highlight', 'tocyn-markdown-code-block');
+  expect(highlighted).toHaveClass('code-highlight');
+  expect(highlighted?.className).not.toContain('tocyn-');
   expect(highlighted?.querySelector('.token.keyword')).toHaveTextContent('const');
   const fallback = container.querySelector('code.language-not-a-language');
   expect(fallback).toHaveTextContent('<img src="https://tracker.invalid/pixel" onerror="alert(1)">');

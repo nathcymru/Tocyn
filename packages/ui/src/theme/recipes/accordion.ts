@@ -26,7 +26,7 @@ export const accordion = defineSlotRecipe({
       width: 'full',
       _focusVisible: {
         outline: '2px solid',
-        outlineColor: 'colorPalette.focusRing',
+        outlineColor: 'colorPalette.solid.bg',
       },
       _disabled: {
         layerStyle: 'disabled',

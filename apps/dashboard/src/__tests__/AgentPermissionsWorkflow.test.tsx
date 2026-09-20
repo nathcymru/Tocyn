@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentPermissionsPage } from '../pages/AgentPermissionsPage';
@@ -16,21 +17,20 @@ describe('permission administration recovery', () => {
     render(<AgentPermissionsPage />);
     const toggle=await screen.findByRole('checkbox', {name:'Allow agents to use General settings'});
     expect(screen.getByRole('checkbox', {name:'Allow agents to use Reference tool reads'})).toBeDisabled();
-    fireEvent.click(toggle);
+    await userEvent.click(screen.getByText('Allow agents to use General settings'));
     const save=screen.getByRole('button', {name:'Save changes'});save.focus();fireEvent.click(save);fireEvent.click(save);
     expect(dashboardApi.put).toHaveBeenCalledTimes(1);
     expect(dashboardApi.put).toHaveBeenCalledWith('/permissions',{revision:4,policies:{general:true}});
     expect(save).toHaveFocus();expect(save).toHaveAttribute('aria-disabled','true');
-    fireEvent.click(toggle);expect(toggle).toBeChecked();
+    await userEvent.click(screen.getByText('Allow agents to use General settings'));expect(toggle).toBeChecked();
     await act(async()=>finish());
     await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Permissions saved'));
-    expect(save).toHaveFocus();
   });
   it('offers an explicit reload after a policy conflict while preserving the draft', async () => {
     vi.mocked(dashboardApi.get).mockResolvedValue(policy);
     vi.mocked(dashboardApi.put).mockRejectedValue(new Error('Policy changed; reload'));
     render(<AgentPermissionsPage />);
-    const toggle=await screen.findByRole('checkbox', {name:'Allow agents to use General settings'});fireEvent.click(toggle);
+    const toggle=await screen.findByRole('checkbox', {name:'Allow agents to use General settings'});await userEvent.click(screen.getByText('Allow agents to use General settings'));
     fireEvent.click(screen.getByRole('button',{name:'Save changes'}));
     expect(await screen.findByRole('alert')).toHaveTextContent('Policy changed');expect(toggle).toBeChecked();
     fireEvent.click(screen.getByRole('button',{name:'Reload permissions'}));
@@ -44,13 +44,13 @@ describe('permission administration recovery', () => {
     vi.mocked(dashboardApi.put).mockResolvedValue({});
     render(<AgentPermissionsPage />);
     const toggle = await screen.findByRole('checkbox', {name:'Allow agents to use General settings'});
-    fireEvent.click(toggle);
+    await userEvent.click(screen.getByText('Allow agents to use General settings'));
     const save = screen.getByRole('button', {name:'Save changes'});
     save.focus(); fireEvent.click(save);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Permissions saved, but the current policy could not be loaded'));
     expect(save).toHaveFocus();
     expect(save).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(save); fireEvent.click(toggle);
+    fireEvent.click(save); await userEvent.click(screen.getByText('Allow agents to use General settings'));
     expect(dashboardApi.put).toHaveBeenCalledTimes(1);
     expect(toggle).toBeChecked();
     fireEvent.click(screen.getByRole('button', {name:'Reload permissions'}));

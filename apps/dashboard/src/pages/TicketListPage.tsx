@@ -3,7 +3,8 @@ import { useTicketSlaBatch } from '../hooks/useTicketSla';
 import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { Popover } from '@luminatick/ui/ark';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkGlobalSearch, ParkInput, ParkTextarea, ParkSelect } from '@luminatick/ui/park';
+import { ParkButton, ParkGlobalSearch, ParkInput, ParkTextarea, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { DashboardSelect } from '../components/DashboardSelect';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import React, { useState } from 'react';
 import { ticketReference } from '../utils/ticket-reference';
@@ -298,25 +299,26 @@ export function TicketListPage() {
               <ParkButton type="button" aria-label="Clear list ticket search" disabled={!searchInput} onClick={()=>{navigate('/tickets');workspace.update({listAnchor:pageAnchor(1)});}}
                 className={searchStyles.clear}>Clear</ParkButton>
               </div>
-              <p id="global-ticket-results-scope" className="tocyn-visually-hidden">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</p>
+              <ParkVisuallyHidden id="global-ticket-results-scope">Search results include all tickets you are authorised to access. Current-view filters do not limit these results.</ParkVisuallyHidden>
             </div>
             <div className="tocyn-ticket-table-controls">
               <label className="tocyn-ticket-sort-label">
                 <span>Sort tickets</span>
-                <ParkSelect
+                <DashboardSelect
                   aria-label="Sort tickets"
                   value={workspace.sort}
-                  onChange={(event) => handleSortChange(event.target.value as WorkspacePreference['sort'])}
+                  onValueChange={(value) => handleSortChange(value as WorkspacePreference['sort'])}
                   className="tocyn-form-control tocyn-ticket-sort-select"
-                >
-                  <option value="updated_desc">Recently updated</option>
-                  <option value="updated_asc">Least recently updated</option>
-                  <option value="created_desc">Newest created</option>
-                  <option value="created_asc">Oldest created</option>
-                  <option value="priority_desc">Highest priority</option>
-                  <option value="priority_asc">Lowest priority</option>
-                  <option value="sla_priority">Earliest SLA deadline</option>
-                </ParkSelect>
+                  options={[
+                    { value: 'updated_desc', label: 'Recently updated' },
+                    { value: 'updated_asc', label: 'Least recently updated' },
+                    { value: 'created_desc', label: 'Newest created' },
+                    { value: 'created_asc', label: 'Oldest created' },
+                    { value: 'priority_desc', label: 'Highest priority' },
+                    { value: 'priority_asc', label: 'Lowest priority' },
+                    { value: 'sla_priority', label: 'Earliest SLA deadline' },
+                  ]}
+                />
               </label>
               <div className="tocyn-ticket-total">
                 Total: {meta.total}
@@ -506,48 +508,41 @@ export function TicketListPage() {
                 </div>
                 <div>
                   <label htmlFor="create-ticket-priority" className="tocyn-ticket-create-label">Priority</label>
-                  <ParkSelect
+                  <DashboardSelect
                     className="tocyn-ticket-create-control"
                     id="create-ticket-priority"
-                    aria-disabled={createTicket.isPending}
+                    disabled={createTicket.isPending}
                     value={formData.priority}
-                    onChange={(e) => { if (!createTicket.isPending) setFormData({ ...formData, priority: e.target.value }); }}
-                  >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </ParkSelect>
+                    onValueChange={(value) => { if (!createTicket.isPending) setFormData({ ...formData, priority: value }); }}
+                    options={[
+                      { value: 'low', label: 'Low' },
+                      { value: 'normal', label: 'Normal' },
+                      { value: 'high', label: 'High' },
+                      { value: 'urgent', label: 'Urgent' },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label htmlFor="create-ticket-group_id" className="tocyn-ticket-create-label">Group</label>
-                  <ParkSelect
+                  <DashboardSelect
                     className="tocyn-ticket-create-control"
                     id="create-ticket-group_id"
-                    aria-disabled={createTicket.isPending}
+                    disabled={createTicket.isPending}
                     value={formData.group_id}
-                    onChange={(e) => { if (!createTicket.isPending) setFormData({ ...formData, group_id: e.target.value }); }}
-                  >
-                    <option value="">No Group</option>
-                    {groups?.map((group) => (
-                      <option key={group.id} value={group.id}>{group.name}</option>
-                    ))}
-                  </ParkSelect>
+                    onValueChange={(value) => { if (!createTicket.isPending) setFormData({ ...formData, group_id: value }); }}
+                    options={[{ value: '', label: 'No Group' }, ...(groups?.map((group) => ({ value: group.id, label: group.name })) ?? [])]}
+                  />
                 </div>
                 <div>
                   <label htmlFor="create-ticket-assigned_to" className="tocyn-ticket-create-label">Assignee</label>
-                  <ParkSelect
+                  <DashboardSelect
                     className="tocyn-ticket-create-control"
                     id="create-ticket-assigned_to"
-                    aria-disabled={createTicket.isPending}
+                    disabled={createTicket.isPending}
                     value={formData.assigned_to}
-                    onChange={(e) => { if (!createTicket.isPending) setFormData({ ...formData, assigned_to: e.target.value }); }}
-                  >
-                    <option value="">Unassigned</option>
-                    {agents?.map((agent) => (
-                      <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>
-                    ))}
-                  </ParkSelect>
+                    onValueChange={(value) => { if (!createTicket.isPending) setFormData({ ...formData, assigned_to: value }); }}
+                    options={[{ value: '', label: 'Unassigned' }, ...(agents?.map((agent) => ({ value: agent.id, label: agent.full_name || agent.email })) ?? [])]}
+                  />
                 </div>
               </div>
               <div>

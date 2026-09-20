@@ -64,3 +64,4 @@ export * from './composer';
 export * from './ticket-fields';
 export * from './shell';
 export * from './empty-state';
+export * from './auth-shell';

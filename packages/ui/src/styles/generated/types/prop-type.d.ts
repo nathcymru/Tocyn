@@ -5,6 +5,7 @@ import type { Tokens } from '../tokens/index';
 
 export interface UtilityValues {
 	aspectRatio: Tokens["aspectRatios"];
+	zIndex: Tokens["zIndex"];
 	top: Tokens["spacing"];
 	left: Tokens["spacing"];
 	inset: "auto" | Tokens["spacing"];
@@ -152,7 +153,7 @@ export interface UtilityValues {
 	transitionProperty: "common" | "colors" | "size" | "position" | "background";
 	transition: "all" | "common" | "size" | "position" | "background" | "colors" | "opacity" | "shadow" | "transform";
 	animation: Tokens["animations"];
-	animationName: "spin" | "ping" | "pulse" | "bounce";
+	animationName: "spin" | "ping" | "pulse" | "bounce" | "expand-height" | "collapse-height" | "expand-width" | "collapse-width" | "fade-in" | "fade-out" | "slide-from-left-full" | "slide-from-right-full" | "slide-from-top-full" | "slide-from-bottom-full" | "slide-to-left-full" | "slide-to-right-full" | "slide-to-top-full" | "slide-to-bottom-full" | "slide-from-top" | "slide-from-bottom" | "slide-from-left" | "slide-from-right" | "slide-to-top" | "slide-to-bottom" | "slide-to-left" | "slide-to-right" | "scale-in" | "scale-out" | "bg-position" | "position";
 	animationTimingFunction: Tokens["easings"];
 	animationDuration: Tokens["durations"];
 	animationDelay: Tokens["durations"];
@@ -204,8 +205,10 @@ export interface UtilityValues {
 	srOnly: boolean;
 	debug: boolean;
 	containerName: CssProperties["containerName"];
-	colorPalette: "current" | "black" | "white" | "transparent" | "rose" | "pink" | "fuchsia" | "purple" | "violet" | "indigo" | "blue" | "sky" | "cyan" | "teal" | "emerald" | "green" | "lime" | "yellow" | "amber" | "orange" | "red" | "neutral" | "stone" | "zinc" | "gray" | "slate" | "bg.canvas" | "bg.surface" | "bg.input" | "text.primary" | "text.muted" | "border.input" | "border.focus" | "accent.primary" | "icon.primary" | "icon.muted" | "icon.disabled" | "icon.selected" | "icon.critical" | "icon.inverse" | "gray.surface.bg" | "gray.subtle.bg" | "canvas" | "panel" | "muted" | "text" | "textMuted" | "focus" | "selected" | "divider" | "critical" | "critical.surface" | "critical.border" | "warning" | "warning.surface" | "warning.border" | "info.surface" | "info.text" | "inverse" | "bg.default" | "bg.subtle" | "fg.default" | "fg.muted" | "border.default";
-	textStyle: "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | "7xl" | "8xl" | "9xl" | "body" | "tabular";
+	colorPalette: "current" | "transparent" | "rose" | "pink" | "fuchsia" | "purple" | "violet" | "indigo" | "blue" | "sky" | "cyan" | "teal" | "emerald" | "green" | "lime" | "yellow" | "amber" | "orange" | "red" | "neutral" | "stone" | "zinc" | "gray" | "slate" | "black" | "white" | "bg.canvas" | "bg.surface" | "bg.input" | "text.primary" | "text.muted" | "border.input" | "border.focus" | "accent.primary" | "icon.primary" | "icon.muted" | "icon.disabled" | "icon.selected" | "icon.critical" | "icon.inverse" | "canvas" | "panel" | "muted" | "text" | "textMuted" | "focus" | "selected" | "divider" | "critical" | "critical.surface" | "critical.border" | "warning" | "warning.surface" | "warning.border" | "info.surface" | "info.text" | "inverse" | "bg.default" | "bg.subtle" | "fg.default" | "fg.muted" | "border.default" | "gray.solid.bg" | "gray.solid" | "gray.solid.fg" | "gray.subtle.bg" | "gray.subtle" | "gray.subtle.fg" | "gray.surface.bg" | "gray.surface" | "gray.surface.border" | "gray.surface.fg" | "gray.outline" | "gray.outline.bg" | "gray.outline.border" | "gray.outline.fg" | "gray.plain" | "gray.plain.bg" | "gray.plain.fg" | "fg" | "border" | "error" | "blue.solid.bg" | "blue.solid" | "blue.solid.fg" | "blue.subtle.bg" | "blue.subtle" | "blue.subtle.fg" | "blue.surface.bg" | "blue.surface" | "blue.surface.border" | "blue.surface.fg" | "blue.outline" | "blue.outline.bg" | "blue.outline.border" | "blue.outline.fg" | "blue.plain" | "blue.plain.bg" | "blue.plain.fg" | "red.solid.bg" | "red.solid" | "red.solid.fg" | "red.subtle.bg" | "red.subtle" | "red.subtle.fg" | "red.surface.bg" | "red.surface" | "red.surface.border" | "red.surface.fg" | "red.outline" | "red.outline.bg" | "red.outline.border" | "red.outline.fg" | "red.plain" | "red.plain.bg" | "red.plain.fg" | "green.solid.bg" | "green.solid" | "green.solid.fg" | "green.subtle.bg" | "green.subtle" | "green.subtle.fg" | "green.surface.bg" | "green.surface" | "green.surface.border" | "green.surface.fg" | "green.outline" | "green.outline.bg" | "green.outline.border" | "green.outline.fg" | "green.plain" | "green.plain.bg" | "green.plain.fg";
+	textStyle: "8xl" | "9xl" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl" | "7xl" | "label" | "body" | "tabular";
+	layerStyle: "disabled";
+	animationStyle: "slide-fade-in" | "slide-fade-out" | "scale-fade-in" | "scale-fade-out";
 }
 
 

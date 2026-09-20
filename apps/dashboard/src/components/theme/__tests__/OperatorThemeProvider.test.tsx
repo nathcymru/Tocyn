@@ -1,4 +1,5 @@
 import React from 'react';
+import userEvent from '@testing-library/user-event';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OperatorThemeControl, OperatorThemeProvider } from '../OperatorThemeProvider';
@@ -18,7 +19,7 @@ const theme = (status: string, overrides: Record<string, unknown> = {}) => ({
 }) as ReturnType<typeof useOperatorTheme>;
 
 describe('OperatorThemeProvider', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(useOperatorTheme).mockReset(); });
 
   it('keeps the workspace usable with Park skeleton and progress feedback, then resolves it', () => {
     const hook = vi.mocked(useOperatorTheme);
@@ -27,7 +28,7 @@ describe('OperatorThemeProvider', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading appearance');
     expect(screen.getByRole('textbox', { name: 'composer' })).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
-    expect(document.querySelector('[data-park="skeleton"]')).not.toBeNull();
+    expect(document.querySelector('[class~="skeleton"]')).not.toBeNull();
     act(() => view.rerender(<OperatorThemeProvider><input aria-label="composer" /></OperatorThemeProvider>));
     const composer = screen.getByRole('textbox', { name: 'composer' });
     expect(composer).toBeInTheDocument();
@@ -62,7 +63,7 @@ describe('OperatorThemeProvider', () => {
     expect(scope.remove).toHaveBeenCalledTimes(1);
   });
 
-  it('provides keyboard reachable controls without remounting workspace inputs', () => {
+  it('provides keyboard reachable controls without remounting workspace inputs', async () => {
     const hook = vi.mocked(useOperatorTheme);
     const first = theme('restored');
     const second = theme('unsaved', { mode: 'dark', resolvedMode: 'dark' });
@@ -73,7 +74,7 @@ describe('OperatorThemeProvider', () => {
     const dark = screen.getByRole('radio', { name: 'Dark' });
     dark.focus();
     expect(document.activeElement).toBe(dark);
-    fireEvent.click(dark);
+    await userEvent.click(screen.getByText('Dark'));
     expect(first.updateMode).toHaveBeenCalledWith('dark');
     hook.mockReturnValue(second);
     act(() => view.rerender(<OperatorThemeProvider><><OperatorThemeControl /><input aria-label="composer" /></></OperatorThemeProvider>));

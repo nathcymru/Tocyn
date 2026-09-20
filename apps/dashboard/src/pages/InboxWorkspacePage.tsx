@@ -1,6 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSplitter } from '@luminatick/ui/park';
+import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSplitter, ParkTable } from '@luminatick/ui/park';
+import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ChevronDown,ChevronLeft,ChevronRight,Filter,IconChartBar } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
@@ -20,6 +21,16 @@ import { utcTimestamp } from '../utils/utcTimestamp';
 import { TicketDetailPage } from './TicketDetailPage';
 
 const queueViews={mentions:{label:'Mentions',description:'Actionable conversations with a mention for you that has not been dismissed.'},mine:{label:'Mine',description:'Open and pending conversations assigned to you and ready for work.'},unassigned:{label:'Unassigned',description:'Open and pending conversations without an assignee and ready for work.'},drafts:{label:'Drafts',description:'Conversations with your saved drafts.'},actionable:{label:'Needs Action',description:'Open and pending conversations ready for work.'},snoozed:{label:'Snoozed',description:'Conversations paused until their authoritative resurface time.'}} as const;
+const queueOrder=['mentions','mine','unassigned','drafts','actionable','snoozed'] as const;
+const sortOptions=[
+  {value:'updated_desc',label:'Recently updated'},
+  {value:'updated_asc',label:'Least recently updated'},
+  {value:'created_desc',label:'Newest created'},
+  {value:'created_asc',label:'Oldest created'},
+  {value:'priority_desc',label:'Highest priority'},
+  {value:'priority_asc',label:'Lowest priority'},
+  {value:'sla_priority',label:'Service level priority'},
+];
 type QueueView=keyof typeof queueViews;
 function isQueueView(value:string|undefined):value is QueueView{return value==='actionable'||value==='snoozed'||value==='drafts'||value==='mine'||value==='unassigned'||value==='mentions';}
 function pageFromAnchor(anchor:string){const match=/^page:([1-9]\d*)$/.exec(anchor);const page=match?Number(match[1]):1;return Number.isSafeInteger(page)?page:1;}
@@ -102,7 +113,7 @@ function InboxWorkspace(){
   </ParkSplitter.Root>;
 }
 
-function EmptyConversation(){return <div><ParkEmptyState title="Choose a conversation" description="The selected view and your place in the list stay here while you read and reply." /></div>;}
+function EmptyConversation(){return <div className={css({ display: 'grid', minH: 'full', placeItems: 'center', p: '6' })}><div className={css({ w: 'full', maxW: 'lg' })}><ParkEmptyState title="Choose a conversation" description="The selected view and your place in the list stay here while you read and reply." /></div></div>;}
 
 function FilterKeyword({ label, options, onSelect }: { label: string; options: readonly string[]; onSelect: (value: string) => void }) {
   return <ParkMenu.Root positioning={{ placement: 'bottom-start' }}><ParkMenu.Trigger asChild><ParkButton type="button" variant="plain" className={css({ display: 'inline-flex', minH: 'auto', borderBottomWidth: '2px', borderStyle: 'dashed', borderColor: 'border.default', px: '0.5', py: '0', fontWeight: 'bold' })}>{label}<ChevronDown aria-hidden="true" /></ParkButton></ParkMenu.Trigger><ParkMenu.Positioner><ParkMenu.Content className={css({ zIndex: 30, minW: '40', rounded: 'md', bg: 'bg.surface', p: '1', boxShadow: 'lg' })}>{options.map(option => <ParkMenu.Item key={option} value={option} onClick={() => onSelect(option)}>{option}</ParkMenu.Item>)}</ParkMenu.Content></ParkMenu.Positioner></ParkMenu.Root>;
@@ -126,13 +137,21 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   const [recoveringView,setRecoveringView]=useState<string|null>(null);
   const [focusedIndex,setFocusedIndex]=useState(0);
   const [filterOpen,setFilterOpen]=useState(false);
+  const [filterText,setFilterText]=useState(workspace.listQuery);
+  const [presentation,setPresentation]=useState<'list'|'table'>('list');
   const [semanticFilters,setSemanticFilters]=useState({ owner: 'All tickets', created: 'anytime', customer: 'anyone', sort: workspace.sort });
-  const rowRefs=useRef<Array<HTMLAnchorElement|null>>([]);
+  const rowRefs=useRef<Array<HTMLElement|null>>([]);
   const heading=useRef<HTMLHeadingElement>(null);
   const paging=useRef(false);
   const [status,setStatus]=useState('');
   const [expandedTicketId,setExpandedTicketId]=useState<string|null>(null);
   const ticketMutation=useUpdateTicket();
+  useEffect(()=>setFilterText(workspace.listQuery),[workspace.listQuery]);
+  const clearCurrentViewFilter=()=>{
+    setFilterText('');
+    workspace.update({listQuery:'',listAnchor:'page:1'});
+    setStatus('Current-view filter cleared.');
+  };
   const applySemanticFilter = (patch: Partial<typeof semanticFilters>) => {
     setSemanticFilters(current => ({ ...current, ...patch }));
     workspace.update({ listAnchor: 'page:1' });
@@ -248,6 +267,40 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
           <ParkButton type="button" variant="plain" aria-expanded={filterOpen} aria-controls="inbox-natural-filter" onClick={()=>setFilterOpen(open=>!open)}><Filter aria-hidden="true" /></ParkButton>
         </div>
       </div>
+      <nav aria-label="Standard inbox queues" className={css({ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: '1', overflowX: 'auto', px: '4', pb: '2', '& > button': { flexShrink: '0' } })}>
+        <ParkButton type="button" variant="plain" aria-label="All tickets" aria-pressed={activeView==='all'} onClick={()=>navigate('/inbox/all')}>All tickets</ParkButton>
+        {queueOrder.map(id=>{
+          const count=queueCounts.data?.[id];
+          const countId=`inbox-queue-count-${id}`;
+          return <React.Fragment key={id}>
+            <ParkButton type="button" variant="plain" aria-label={queueViews[id].label} aria-pressed={activeView===id}
+              aria-describedby={count===undefined?undefined:countId} onClick={()=>navigate(`/inbox/${id}`)}>
+              {queueViews[id].label}{count!==undefined&&<span aria-hidden="true" className={css({ ml: '1', color: 'text.muted', fontSize: 'xs' })}>{count}</span>}
+            </ParkButton>
+            {count!==undefined&&<span id={countId} className={pageStyles.inboxHiddenHeading}>{count} conversations in this standard queue</span>}
+          </React.Fragment>;
+        })}
+        {filters?.map(filter=><ParkButton key={filter.id} type="button" variant="plain" aria-pressed={activeView===filter.id} onClick={()=>navigate(`/inbox/${filter.id}`)}>{filter.name}</ParkButton>)}
+        {queueCounts.isError&&<ParkButton type="button" variant="plain" onClick={()=>void queueCounts.refetch()}>Retry queue totals</ParkButton>}
+      </nav>
+      <div className={css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2', px: '4', pb: '2', color: 'text.muted', fontSize: 'sm' })}>
+        <span>Current view: {activeView==='all'?'All tickets':queue?queueViews[queue].label:filters?.find(filter=>filter.id===activeView)?.name??'Saved view'}</span>
+        {!query.isPlaceholderData&&!query.isLoading&&!query.error&&<span>{meta.total} conversations</span>}
+        {queue&&!emptyPage&&<span>{queueViews[queue].description}</span>}
+      </div>
+      {queueCounts.data&&<p className={pageStyles.inboxHiddenHeading}>Queue totals cover standard views before search or custom filters.</p>}
+      <div className={css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '2', px: '4', pb: '3' })}>
+        <form role="search" aria-label="Filter the current inbox view" onSubmit={event=>{event.preventDefault();workspace.update({listQuery:filterText,listAnchor:'page:1'});setStatus('Current-view filter applied.');}} className={css({ display: 'flex', flex: '1 1 14rem', alignItems: 'center', gap: '1' })}>
+          <ParkInput aria-label="Filter this view" placeholder="Filter this view" value={filterText} onChange={event=>setFilterText(event.target.value)} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();clearCurrentViewFilter();}}} className={css({ minW: '0', flex: '1' })} />
+          <ParkButton type="submit" variant="outline">Filter</ParkButton>
+          {filterText&&<ParkButton type="button" variant="plain" aria-label="Clear current-view filter" onClick={clearCurrentViewFilter}>Clear</ParkButton>}
+        </form>
+        <DashboardSelect aria-label="Sort conversations" value={workspace.sort} onValueChange={sort=>{workspace.update({sort:sort as typeof workspace.sort,listAnchor:'page:1'});setSemanticFilters(current=>({...current,sort:sort as typeof workspace.sort}));}} options={sortOptions} className={css({ flex: '0 1 12rem', minW: '10rem' })} />
+        <div role="group" aria-label="Conversation presentation" className={css({ display: 'inline-flex', gap: '1' })}>
+          <ParkButton type="button" variant="plain" aria-label="List view" aria-pressed={presentation==='list'} onClick={()=>setPresentation('list')}>List</ParkButton>
+          <ParkButton type="button" variant="plain" aria-label="Table view" aria-pressed={presentation==='table'} onClick={()=>setPresentation('table')}>Table</ParkButton>
+        </div>
+      </div>
       {filterOpen && <div id="inbox-natural-filter" className={css({ borderTop: '1px solid', borderColor: 'border.default', bg: 'bg.subtle', p: '4' })}>
         <p className={css({ color: 'text.muted', lineHeight: 'tall' })}>Showing <FilterKeyword label={semanticFilters.owner} options={['All tickets','My tickets','Unassigned']} onSelect={owner=>{applySemanticFilter({owner});navigate(owner==='My tickets'?'/inbox/mine':owner==='Unassigned'?'/inbox/unassigned':'/inbox/all');}} />, created <FilterKeyword label={semanticFilters.created} options={['hour','day','week','month','quarter','anytime']} onSelect={created=>applySemanticFilter({created})} />, for <FilterKeyword label={semanticFilters.customer} options={['anyone',...Array.from(new Set(tickets.map(ticket=>ticket.customer_email))).slice(0,6)]} onSelect={customer=>applySemanticFilter({customer})} />, sorted by <FilterKeyword label={semanticFilters.sort==='created_desc'?'newest first':semanticFilters.sort==='created_asc'?'oldest first':'ticket number'} options={['ticket number','newest first','oldest first']} onSelect={sort=>{const next=sort==='newest first'?'created_desc':sort==='oldest first'?'created_asc':'updated_desc';workspace.update({sort:next,listAnchor:'page:1'});setSemanticFilters(current=>({...current,sort:next}));}} />.</p>
         <div className={css({ mt: '3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2', borderTopWidth: '1px', borderColor: 'border.default', pt: '3' })}><ParkInput aria-label="Filter by exact customer email" placeholder="customer@example.test" value={semanticFilters.customer==='anyone'?'':semanticFilters.customer} onChange={event=>applySemanticFilter({customer:event.target.value.trim()||'anyone'})} className={css({ maxW: '64' })} /><div className={css({ display: 'flex', gap: '1' })}><ParkButton type="button" variant="plain" onClick={()=>{setSemanticFilters({owner:'All tickets',created:'anytime',customer:'anyone',sort:'updated_desc'});workspace.update({sort:'updated_desc',listAnchor:'page:1'});navigate('/inbox/all');}}>Clear all</ParkButton><ParkButton type="button" variant="plain" onClick={()=>setFilterOpen(false)}>Filter</ParkButton></div></div>
@@ -260,12 +313,29 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     {workspace.status==='error'||workspace.status==='conflict'?<div role="alert">{workspace.error}
       <ParkButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave}>{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</ParkButton></div>:null}
     {drafts.status==='partial'&&<p role="status">Some draft indicators are still loading.</p>}
-    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={css({ flex: '1', overflowY: 'auto', bg: 'bg.subtle', p: '3', display: 'flex', flexDirection: 'column', gap: '3' })}>
+    {presentation==='table'&&<>
+      <p className={css({ m: '0', px: '4', py: '2', color: 'text.muted', fontSize: 'xs' })}>Table view uses the compact conversation list on small screens.</p>
+      <div className={css({ display: { base: 'none', md: 'block' }, minH: '0', flex: '1', overflow: 'auto', bg: 'bg.subtle' })}>
+        <ParkTable.Root aria-label="Tickets in the current view" className={pageStyles.inboxTable}>
+          <ParkTable.Head><ParkTable.Row><ParkTable.Header scope="col">Reference</ParkTable.Header><ParkTable.Header scope="col">Conversation</ParkTable.Header><ParkTable.Header scope="col">Customer</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header></ParkTable.Row></ParkTable.Head>
+          <ParkTable.Body>
+            {emptyPage&&<ParkTable.Row><ParkTable.Cell colSpan={4}><ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></ParkTable.Cell></ParkTable.Row>}
+            {!emptyPage&&!query.isLoading&&tickets.map(ticket=><ParkTable.Row key={ticket.id} data-selected={ticket.id===selectedTicketId?'true':undefined} className={pageStyles.inboxTableRow}>
+              <ParkTable.Cell>{ticketReference(ticket,prefix)}</ParkTable.Cell>
+              <ParkTable.Cell><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}}>{ticket.subject}</Link></ParkTable.Cell>
+              <ParkTable.Cell>{ticket.customer_email}</ParkTable.Cell>
+              <ParkTable.Cell>{ticket.status}</ParkTable.Cell>
+            </ParkTable.Row>)}
+          </ParkTable.Body>
+        </ParkTable.Root>
+      </div>
+    </>}
+    <div role="listbox" aria-label="Conversation list" aria-activedescendant={tickets[focusedIndex]?`conversation-${tickets[focusedIndex].id}`:undefined} className={css({ flex: '1', overflowY: 'auto', bg: 'bg.surface', display: presentation==='table'?{base:'flex',md:'none'}:'flex', flexDirection: 'column' })}>
       {query.isLoading?<p role="status">Loading conversations…</p>:emptyPage?<ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} />:tickets.map((ticket,index)=><InboxConversationCard
         key={ticket.id} ticket={ticket} reference={ticketReference(ticket,prefix)} index={index} activeView={activeView}
         selected={ticket.id===selectedTicketId} focused={index===focusedIndex} expanded={expandedTicketId===ticket.id}
         sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id] ?? undefined} slaLoading={ticketSla.isLoading}
-        hasDraft={drafts.ticketIds.has(ticket.id)} queueLabel={queue&&!query.isPlaceholderData?queueViews[queue].label:undefined}
+        hasDraft={drafts.ticketIds.has(ticket.id)} queueId={queue&&!query.isPlaceholderData?queue:undefined} queueLabel={queue&&!query.isPlaceholderData?queueViews[queue].label:undefined}
         rowRefs={rowRefs}
         onFocus={()=>setFocusedIndex(index)} onMoveFocus={moveFocus} onExpanded={setExpandedTicketId}
         onOpen={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}}
@@ -279,7 +349,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
   </div>;
 }
 
-function InboxConversationCard({ ticket, reference, index, activeView, selected, focused, expanded, sla, slaLoading, hasDraft, queueLabel, rowRefs, onFocus, onMoveFocus, onExpanded, onOpen, onResolve, onUrgent }: {
+function InboxConversationCard({ ticket, reference, index, activeView, selected, focused, expanded, sla, slaLoading, hasDraft, queueId, queueLabel, rowRefs, onFocus, onMoveFocus, onExpanded, onOpen, onResolve, onUrgent }: {
   ticket: Ticket;
   reference: string;
   index: number;
@@ -290,8 +360,9 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
   sla: TicketSla | undefined;
   slaLoading: boolean;
   hasDraft: boolean;
+  queueId: QueueView | undefined;
   queueLabel: string | undefined;
-  rowRefs: React.MutableRefObject<Array<HTMLAnchorElement | null>>;
+  rowRefs: React.MutableRefObject<Array<HTMLElement | null>>;
   onFocus: () => void;
   onMoveFocus: (index: number) => void;
   onExpanded: (id: string | null) => void;
@@ -302,6 +373,7 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
   const [dragX, setDragX] = useState(0);
   const pointerStart = useRef<number | null>(null);
   const didSwipe = useRef(false);
+  const linkRef = useRef<HTMLAnchorElement>(null);
   const breached = sla?.response.state === 'breached' || sla?.resolution.state === 'breached';
   const pills = [
     !ticket.assigned_to ? 'Unassigned' : undefined,
@@ -317,24 +389,27 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
     pointerStart.current = null;
     setDragX(0);
   };
-  return <article role="option" aria-selected={selected} data-selected={selected ? 'true' : undefined} className={css({ position: 'relative', overflow: 'hidden', rounded: 'md', bg: 'critical' })}
-    onMouseEnter={() => onExpanded(ticket.id)} onMouseLeave={() => onExpanded(null)}>
-    <div aria-hidden="true" className={css({ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bg: 'critical', px: '4', color: 'white', fontSize: 'sm', fontWeight: 'bold' })}><span>Resolve</span><span>Mark urgent</span></div>
-    <ParkCard.Root variant="outline" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={css({ position: 'relative', touchAction: 'pan-y', transition: 'transform 0.2s, box-shadow 0.2s', _hover: { bg: 'bg.hover', boxShadow: 'md' }, ...(selected ? { borderColor: 'border.focus' } : {}) })}>
+  return <article ref={node => { rowRefs.current[index] = node; }} id={`conversation-${ticket.id}`} role="option" aria-selected={selected} tabIndex={focused?0:-1} data-selected={selected ? 'true' : undefined}
+    className={css({ position: 'relative', flexShrink: '0', overflow: 'hidden', bg: 'bg.surface', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } })}
+    onMouseEnter={() => onExpanded(ticket.id)} onMouseLeave={() => onExpanded(null)}
+    onFocus={() => { onFocus(); onExpanded(ticket.id); }}
+    onClick={event => { if (!(event.target as Element).closest('a')) linkRef.current?.click(); }}
+    onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); onMoveFocus(index + 1); } else if (event.key === 'ArrowUp') { event.preventDefault(); onMoveFocus(index - 1); } else if (event.key === 'Enter') { event.preventDefault(); linkRef.current?.click(); } else if (event.altKey && event.key === 'ArrowRight') { event.preventDefault(); onResolve(); } else if (event.altKey && event.key === 'ArrowLeft') { event.preventDefault(); onUrgent(); } }}>
+    <div aria-hidden="true" style={{ visibility: dragX === 0 ? 'hidden' : 'visible' }} className={css({ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bg: 'critical', px: '4', color: 'white', fontSize: 'sm', fontWeight: 'bold' })}><span>Resolve</span><span>Mark urgent</span></div>
+    <ParkCard.Root variant="subtle" style={{ transform: `translateX(${dragX}px)` }} onPointerDown={event => { pointerStart.current = event.clientX; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerStart.current !== null) setDragX(Math.max(-112, Math.min(112, event.clientX - pointerStart.current))); }} onPointerUp={finishSwipe} onPointerCancel={() => { pointerStart.current = null; setDragX(0); }} className={css({ position: 'relative', touchAction: 'pan-y', rounded: 'none', borderWidth: '0', borderBottomWidth: '1px', borderColor: 'border.default', bg: 'bg.surface', transition: 'transform 0.2s, background-color 0.2s', _hover: { bg: 'bg.subtle' }, ...(selected ? { borderInlineStartWidth: '3px', borderInlineStartColor: 'border.focus', bg: 'bg.subtle' } : {}) })}>
       <ParkCard.Body className={css({ display: 'grid', gridTemplateColumns: '3.5rem minmax(0, 1fr) 5.5rem', gap: '3', p: '3', alignItems: 'start' })}>
         <div className={css({ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3' })}>
           <InboxSlaRing sla={sla} loading={slaLoading} priority={ticket.priority} />
           {expanded && <div className={css({ display: 'flex', flexDirection: 'column', gap: '1' })}>{pills.map(pill => <span key={pill} className={pillClass(pill)}>{pill}</span>)}</div>}
         </div>
-        <Link ref={node => { rowRefs.current[index] = node; }} id={`conversation-${ticket.id}`} tabIndex={focused ? 0 : -1}
-          to={`/inbox/${activeView}/${ticket.id}`} onClick={event => { if (didSwipe.current) { event.preventDefault(); didSwipe.current = false; return; } onOpen(); }} onFocus={() => { onFocus(); onExpanded(ticket.id); }}
-          onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); onMoveFocus(index + 1); } else if (event.key === 'ArrowUp') { event.preventDefault(); onMoveFocus(index - 1); } else if (event.altKey && event.key === 'ArrowRight') { event.preventDefault(); onResolve(); } else if (event.altKey && event.key === 'ArrowLeft') { event.preventDefault(); onUrgent(); } }}
-          className={css({ minW: 0, color: 'inherit', textDecoration: 'none', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } })}>
+        <Link ref={linkRef} tabIndex={-1}
+          to={`/inbox/${activeView}/${ticket.id}`} onClick={event => { if (didSwipe.current) { event.preventDefault(); didSwipe.current = false; return; } onOpen(); }}
+          className={css({ minW: 0, color: 'inherit', textDecoration: 'none' })}>
           <div className={css({ display: 'flex', alignItems: 'baseline', gap: '2' })}><span className={css({ flexShrink: 0, fontSize: 'xs', fontWeight: 'bold' })}>{reference}</span><ParkCard.Title className={css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'sm', fontWeight: 'normal' })}>{ticket.subject}</ParkCard.Title></div>
           <div className={css({ mt: '1', display: 'flex', minW: 0, gap: '2', color: 'text.muted', fontSize: 'xs' })}><span className={css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{ticket.customer_email}</span><span aria-hidden="true">•</span><time dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
           {expanded && <p className={css({ mt: '3', color: 'text.muted', fontSize: 'sm', lineClamp: 5 })}>{ticket.snippet || 'No conversation preview is available.'}</p>}
         </Link>
-        <div className={css({ display: 'flex', flexDirection: 'column', gap: '1', pt: '0.5' })}>{pills.map(pill => <span key={pill} className={pillClass(pill)}>{pill}</span>)}{queueLabel && <span className={css({ w: '22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', rounded: 'sm', borderWidth: '1px', borderColor: 'border.default', px: '1', py: '0.5', textAlign: 'center', fontSize: '2xs', fontWeight: 'bold', textTransform: 'uppercase' })}>{queueLabel}</span>}</div>
+        <div className={css({ display: 'flex', flexDirection: 'column', gap: '1', pt: '0.5' })}>{pills.map(pill => <span key={pill} className={pillClass(pill)}>{pill}</span>)}{queueLabel && <span aria-label={`Inclusion reason: ${queueId}`} className={css({ w: '22', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', rounded: 'sm', borderWidth: '1px', borderColor: 'border.default', px: '1', py: '0.5', textAlign: 'center', fontSize: '2xs', fontWeight: 'bold', textTransform: 'uppercase' })}>{queueLabel}</span>}</div>
       </ParkCard.Body>
     </ParkCard.Root>
   </article>;

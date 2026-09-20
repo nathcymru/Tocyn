@@ -13,6 +13,10 @@ const props = { ticketId: 'ticket', ownerId: null as string | null, fresh: true,
   agents: [{ id: 'operator', email: 'operator@example.test', full_name: 'Synthetic operator' }], onBlocked };
 const show = (extra: Partial<typeof props> = {}, refresh = vi.fn().mockResolvedValue(undefined)) => render(
   <QueryClientProvider client={client}><TicketAssignmentActions {...props} {...extra} refreshTicket={refresh} /></QueryClientProvider>);
+async function selectOperator() {
+  await userEvent.click(screen.getByRole('combobox', { name: 'Assign to operator' }));
+  await userEvent.click(screen.getByRole('option', { name: 'Synthetic operator' }));
+}
 beforeEach(() => {
   vi.resetAllMocks(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   useAuthStore.getState().setAuth('synthetic', { id: 'admin', tenant_id: 'a', role: 'admin', email: 'admin@example.test', full_name: 'Admin', mfa_enabled: true });
@@ -55,12 +59,12 @@ it('retains entered override values after conflict and submits a fresh explicit 
   vi.mocked(dashboardApi.patch).mockRejectedValueOnce(new ApiError('changed', 409)).mockResolvedValueOnce({ success: true, responsibleOwnerId: 'operator' });
   const view = show({}, refresh);
   await userEvent.click(screen.getByRole('button', { name: 'Override assignment capacity' }));
-  await userEvent.selectOptions(screen.getByLabelText('Assign to operator'), 'operator');
+  await selectOperator();
   await userEvent.type(screen.getByLabelText('Override reason'), 'Urgent approved exception');
   await userEvent.click(screen.getByRole('button', { name: 'Assign with audited override' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/entered values are retained/));
   expect(screen.getByLabelText('Override reason')).toHaveValue('Urgent approved exception');
-  expect(screen.getByLabelText('Assign to operator')).toHaveValue('operator');
+  expect(screen.getByRole('combobox', { name: 'Assign to operator' })).toHaveTextContent('Synthetic operator');
   expect(dashboardApi.patch).toHaveBeenCalledTimes(1);
   view.rerender(<QueryClientProvider client={client}><TicketAssignmentActions {...props} ownerId="new-owner" refreshTicket={refresh} /></QueryClientProvider>);
   await userEvent.click(screen.getByRole('button', { name: 'Assign with audited override' }));
@@ -70,7 +74,7 @@ it('retains entered override values after conflict and submits a fresh explicit 
 
 it('rejects an oversized multibyte reason and never exposes override controls to an agent', async () => {
   show(); await userEvent.click(screen.getByRole('button', { name: 'Override assignment capacity' }));
-  await userEvent.selectOptions(screen.getByLabelText('Assign to operator'), 'operator');
+  await selectOperator();
   await userEvent.type(screen.getByLabelText('Override reason'), 'é'.repeat(257));
   expect(screen.getByRole('button', { name: 'Assign with audited override' })).toBeDisabled();
   expect(screen.getByRole('alert')).toHaveTextContent('reason is too long');

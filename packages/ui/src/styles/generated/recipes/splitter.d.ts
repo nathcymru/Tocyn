@@ -10,7 +10,7 @@ type SplitterVariantMap = {
   [key in keyof SplitterVariant]: Array<SplitterVariant[key]>
 }
 
-type SplitterSlot = "root" | "panel" | "resizeTrigger"
+type SplitterSlot = "root" | "panel" | "resizeTrigger" | "resizeTriggerIndicator"
 
 export type SplitterVariantProps = {
   [key in keyof SplitterVariant]?: ConditionalValue<SplitterVariant[key]> | undefined

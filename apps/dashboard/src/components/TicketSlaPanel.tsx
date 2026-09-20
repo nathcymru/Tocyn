@@ -1,5 +1,6 @@
 import { useTicketSla, type SlaTarget } from '../hooks/useTicketSla';
-import { ParkButton, ParkEmptyState, ParkTicketDetail } from '@luminatick/ui/park';
+import { ParkButton, ParkTicketDetail } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 
 import { slaTargetLabel } from './SlaTargetStatus';
 
@@ -11,8 +12,12 @@ function Target({ label, target, detailStyles }: { label: string; target: SlaTar
 export function TicketSlaPanel({ ticketId }: { ticketId: string }) {
   const detailStyles = ParkTicketDetail();
   const { data, isLoading, isError, refetch, isFetching } = useTicketSla(ticketId);
-  if (isLoading) return <ParkEmptyState role="status" aria-busy="true" headingLevel={false} title="Loading service level…" className="tocyn-ticket-sla-state" />;
-  if (isError || !data) return <ParkEmptyState role="alert" headingLevel={false} title="Service level is unavailable." className="tocyn-ticket-sla-state" action={<ParkButton type="button" className="tocyn-inline-link" disabled={isFetching} onClick={() => void refetch()}>Retry</ParkButton>} />;
+  const compactState = css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2', minH: '9', px: '3', py: '1', borderWidth: '1px', borderColor: 'border.default', rounded: 'l2', bg: 'bg.subtle', color: 'text.muted', fontSize: 'sm' });
+  if (isLoading) return <section role="status" aria-busy="true" aria-label="Service level" className={compactState}>Loading service level…</section>;
+  if (isError || !data) return <section role="alert" aria-label="Service level" className={compactState}>
+    <span>Service level is unavailable.</span>
+    <ParkButton type="button" variant="plain" size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</ParkButton>
+  </section>;
   return <section aria-label="Service level" className={detailStyles.slaPanel}>
     <h2 className={detailStyles.slaTitle}>Service level</h2>
     <dl className={detailStyles.slaGrid}><Target label="First response" target={data.response} detailStyles={detailStyles}/><Target label="Resolution" target={data.resolution} detailStyles={detailStyles}/></dl>

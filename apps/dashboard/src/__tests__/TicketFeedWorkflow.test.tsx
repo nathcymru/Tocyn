@@ -144,7 +144,7 @@ it('retains focus while retrying a failed feed and moves it to recovered results
   expect(screen.getByRole('status', { name: 'Ticket list status' })).toHaveTextContent('Tickets refreshed');
 });
 
-it('keeps the pending creation draft and native controls focused until its failure is recoverable', async () => {
+it('keeps the pending creation draft and Park controls focused until its failure is recoverable', async () => {
   let finish!: (response: Response) => void;
   let posts = 0;
   transport(options => options.method === 'POST' ? (posts++, new Promise(resolve => { finish = resolve; })) : page());
@@ -160,13 +160,16 @@ it('keeps the pending creation draft and native controls focused until its failu
   await waitFor(() => expect(submit).toHaveAttribute('aria-disabled', 'true'));
   expect(submit).not.toBeDisabled(); expect(submit).toHaveFocus();
   fireEvent.change(subject, { target: { value: 'Changed while pending' } });
-  fireEvent.change(screen.getByRole('combobox', { name: 'Priority' }), { target: { value: 'urgent' } });
+  const priority = screen.getByRole('combobox', { name: 'Priority' });
+  expect(priority).toBeDisabled();
+  fireEvent.click(priority);
+  expect(screen.queryByRole('option', { name: 'Urgent' })).not.toBeInTheDocument();
   fireEvent.click(submit);
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   fireEvent.keyDown(document.activeElement!, {key:'Escape',code:'Escape'});
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(subject).toHaveValue('Submitted subject');
-  expect(screen.getByRole('combobox', { name: 'Priority' })).toHaveValue('normal');
+  expect(priority).toHaveTextContent('Normal');
   expect(screen.getByRole('status', { name: 'Ticket creation status' })).toHaveTextContent('Creating ticket');
   expect(posts).toBe(1);
   await act(async () => { finish(json({ error: 'Intake stopped' }, 503)); });
