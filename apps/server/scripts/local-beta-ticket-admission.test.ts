@@ -59,6 +59,10 @@ test('run-owned local-beta policy gets complete two-tenant authority for an eigh
     assert.equal(ownerRow.max_reservations, 1024, 'The finite local review capacity must allow extended browsing without changing production policy');
     assert.equal(ownerRow.authority_max_age_ms, 60_000);
     assert.deepEqual(policy.budgets.map(budget => budget.dimension), [...RESOURCE_DIMENSIONS]);
+    const expectedLimit = (dimension: typeof RESOURCE_DIMENSIONS[number]) => dimension === 'd1RowsRead'
+      ? 1_000_000_000 : dimension === 'logEvents' ? 200_000_000 : 10_000_000;
+    assert.deepEqual(Object.fromEntries(policy.budgets.map(budget => [budget.dimension, budget.limit])),
+      Object.fromEntries(RESOURCE_DIMENSIONS.map(dimension => [dimension, expectedLimit(dimension)])));
     assert.ok(policy.budgets.every(budget => STOCK_DIMENSIONS.includes(budget.dimension)
       ? budget.window.kind === 'stock'
       : budget.window.kind === 'interval' && budget.window.startsAt <= now && budget.window.endsAt >= now + 8 * 60 * 60 * 1000));
@@ -67,8 +71,13 @@ test('run-owned local-beta policy gets complete two-tenant authority for an eigh
     assert.deepEqual(allocations.map(row => row.tenant_id), ['fixture-tenant-a', 'fixture-tenant-b']);
     for (const allocation of allocations) {
       assert.equal(allocation.state, 'active');
-      const effective = effectiveTenantPolicy(policy, JSON.parse(allocation.restriction_json), allocation.tenant_id);
+      const restriction = JSON.parse(allocation.restriction_json);
+      assert.deepEqual(restriction.limits,
+        Object.fromEntries(RESOURCE_DIMENSIONS.map(dimension => [dimension, expectedLimit(dimension)])));
+      const effective = effectiveTenantPolicy(policy, restriction, allocation.tenant_id);
       assert.deepEqual(effective.budgets.map(budget => budget.dimension), [...RESOURCE_DIMENSIONS]);
+      assert.deepEqual(Object.fromEntries(effective.budgets.map(budget => [budget.dimension, budget.limit])),
+        Object.fromEntries(RESOURCE_DIMENSIONS.map(dimension => [dimension, expectedLimit(dimension)])));
     }
     const trusted = await new BudgetAuthorityRepository(d1ReadAdapter(db)).resolveForDeploymentIngress(now);
     assert.ok(trusted, 'The real owner authority resolver accepts the complete synthetic policy');

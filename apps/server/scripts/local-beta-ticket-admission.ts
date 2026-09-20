@@ -6,6 +6,9 @@ import { costPolicySchema, effectiveTenantPolicy } from '../src/utils/cost-polic
 const TENANTS = ['fixture-tenant-a', 'fixture-tenant-b'] as const;
 const PREVIEW_WINDOW_MS = 8 * 60 * 60 * 1000;
 const GRANT_LIFETIME_MS = 60_000;
+// Disposable eight-hour human review: D1 read grants reserve far more than
+// the rows actually read, so the former 10M limit exhausted during browsing.
+const PREVIEW_D1_ROWS_READ_LIMIT = 1_000_000_000;
 // The disposable review UI issues several admitted reads per route change.
 // Keep a finite ceiling without exhausting a human test session after 64 reads.
 const PREVIEW_MAX_RESERVATIONS = 1024;
@@ -28,7 +31,8 @@ export function initializeLocalBetaTicketAdmission(db: Database.Database, runId:
   assert.ok(Number.isSafeInteger(now) && now >= 1_000 && now <= Number.MAX_SAFE_INTEGER - PREVIEW_WINDOW_MS);
   const deploymentId = `${runId}-budget`;
   const policyId = 'local-beta-preview-policy';
-  const limitFor = (dimension: typeof RESOURCE_DIMENSIONS[number]) => dimension === 'logEvents' ? 200_000_000 : 10_000_000;
+  const limitFor = (dimension: typeof RESOURCE_DIMENSIONS[number]) => dimension === 'd1RowsRead'
+    ? PREVIEW_D1_ROWS_READ_LIMIT : dimension === 'logEvents' ? 200_000_000 : 10_000_000;
   const ownerPolicy = costPolicySchema.parse({
     schemaVersion: 1, policyId, revision: 1, deploymentId, mode: 'conservative',
     catalogueVersion: 'local-beta-preview-catalogue', maxGrantLifetimeMs: GRANT_LIFETIME_MS,
