@@ -256,7 +256,7 @@ export function comparePriorityTickets(view: PriorityView, a: PrioritySortTicket
     ? [compareRemaining, compareScore, compareCriticality, compareContract]
     : view === 'criticality-matrix'
       ? [compareEffectiveCriticality, compareRemaining, compareCriticality, compareContract, compareScore]
-      : [compareEffectiveContract, compareCriticality, compareRemaining, compareContract, compareScore];
+      : [compareEffectiveContract, compareEffectiveCriticality, compareRemaining, compareContract, compareCriticality, compareScore];
   for (const compare of keys) {
     const result = compare(a, b);
     if (result !== 0) return result;

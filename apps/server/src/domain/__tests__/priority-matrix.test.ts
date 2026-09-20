@@ -146,15 +146,31 @@ test('drift lets a long-window ticket join the stricter primary tier in each nam
     ['drifted', 'strict-contract']);
 });
 
-test('SLA Commitment promotes effective contract tier, then raw criticality and time', () => {
+test('SLA Commitment promotes effective contract and criticality tiers, then time', () => {
   const tickets = [
     snapshot('delta-25', 'delta', 1, 25), snapshot('delta-24', 'delta', 1, 24),
     snapshot('bravo', 'bravo', 3, 3), snapshot('delta-4', 'delta', 1, 4),
     snapshot('alpha', 'alpha', 4, 0.5), snapshot('delta-1', 'delta', 1, 0.25),
   ];
   assert.deepEqual(sortedIds('sla-commitment', tickets),
-    ['alpha', 'delta-1', 'bravo', 'delta-4', 'delta-24', 'delta-25']);
+    ['delta-1', 'alpha', 'bravo', 'delta-4', 'delta-24', 'delta-25']);
   assert.throws(() => comparePriorityTickets('sla-commitment', snapshot('a', 'alpha', 4, Number.NaN), snapshot('b', 'alpha', 4, 1)), RangeError);
+});
+
+test('SLA Commitment promotes criticality at each inclusive 24h, 4h and 1h drift threshold', () => {
+  const cases = [
+    { threshold: 24, contractTier: 'charlie', competingRemaining: 23.5 },
+    { threshold: 4, contractTier: 'bravo', competingRemaining: 3.5 },
+    { threshold: 1, contractTier: 'alpha', competingRemaining: 0.5 },
+  ] as const;
+  for (const { threshold, contractTier, competingRemaining } of cases) {
+    // Both tickets share the effective contract tier. The older Delta/Level 1
+    // ticket also inherits the stricter criticality tier for ordering.
+    const drifted = snapshot('drifted', 'delta', 1, threshold);
+    const routine = snapshot('routine', contractTier, 1, competingRemaining);
+    assert.deepEqual(sortedIds('sla-commitment', [routine, drifted]),
+      ['drifted', 'routine'], `${threshold}h drift must promote the criticality sort key`);
+  }
 });
 
 test('invalid view and every malformed sort snapshot fail even when an earlier key differs', () => {
