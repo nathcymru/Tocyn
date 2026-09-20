@@ -1,6 +1,6 @@
 import { css } from '@luminatick/ui/styled-system/css';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable, ParkTextarea } from '@luminatick/ui/park';
-import { Field as ParkField, InputGroup } from '@luminatick/ui/components';
+import { Field as ParkField, IconButton, InputGroup } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import {
   IconUsers,
@@ -122,7 +122,7 @@ export const GroupsPage: React.FC = () => {
         )}
       </div>
 
-      {groupStatus && <p role="status" className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{groupStatus}</p>}
+      {groupStatus && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{groupStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
       {groupsError && Boolean(groups?.length) && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>The group list could not be refreshed.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton></ParkAlert.Content></ParkAlert.Root>}
       <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!open && !creating) closeCreate(); }}
         initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current}
@@ -132,9 +132,9 @@ export const GroupsPage: React.FC = () => {
           <ParkDialog.Content aria-labelledby={createTitle}>
             <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
               <ParkDialog.Title id={createTitle}>New Support Group</ParkDialog.Title>
-              <ParkButton type="button" variant="plain" aria-label="Close group editor" disabled={creating} onClick={closeCreate}>
+              <IconButton type="button" variant="plain" aria-label="Close group editor" disabled={creating} onClick={closeCreate}>
                 <IconXmark aria-hidden="true" size={20} />
-              </ParkButton>
+              </IconButton>
             </ParkDialog.Header>
             <form onSubmit={handleCreateGroup} aria-labelledby={createTitle} className={css({ display: 'flex', flexDirection: 'column', gap: '4', w: 'full' })}>
               <ParkDialog.Body>
@@ -231,13 +231,13 @@ export const GroupsPage: React.FC = () => {
                       Members
                     </ParkButton>
                     {isAdmin && (
-                      <ParkButton type="button" variant="outline"
+                      <IconButton type="button" variant="outline" colorPalette="red"
                         aria-label={`Delete ${group.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setReturnFocusToHeading(false); setDeleteGroup(group); setDeleteError(''); setDeleteOpen(true); }}
-                        className={css({"display":"inline-flex","alignItems":"center","gap":"2","minW":0})}
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Delete Group"
                       >
                         <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
-                      </ParkButton>
+                      </IconButton>
                     )}
                   </div></ParkTable.Cell>
                 </ParkTable.Row>
@@ -315,14 +315,14 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
             <ParkDialog.Title id={titleId}>Manage Members: {group.name}</ParkDialog.Title>
             <ParkDialog.Description>Add or remove agents from this group.</ParkDialog.Description>
           </div>
-          <ParkButton type="button" variant="plain" ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close}>
+          <IconButton type="button" variant="plain" ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close}>
             <IconXmark aria-hidden="true" size={24} />
-          </ParkButton>
+          </IconButton>
         </ParkDialog.Header>
 
         <ParkDialog.Body className={css({ display: 'grid', gap: '5', minW: '0' })}>
           {operationError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{operationError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
-          {status && <p role="status" className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{status}</p>}
+          {status && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{status}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           {membersError && (members?.length ? <ParkAlert.Root role="alert" status="error">
             <ParkAlert.Content>
               <ParkAlert.Title>Group members could not be refreshed</ParkAlert.Title>
@@ -332,8 +332,8 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
           </ParkAlert.Root> : <ParkEmptyState role="alert" title="Group members could not be loaded" description="Retry before changing membership." action={<ParkButton type="button" onClick={() => void refetchMembers()}>Retry members</ParkButton>} />)}
           {removingId && <div role="group" aria-label="Confirm member removal" className={css({"minW":0})}>
             <p>Remove {members?.find(member => member.id === removingId)?.full_name || members?.find(member => member.id === removingId)?.email || 'this member'} from the group?</p>
-            <ParkButton ref={confirmRemovalButton} disabled={pending || isLoadingMembers || membersError} onClick={() => changeMember(removingId, true)}>Remove member</ParkButton>
-            <ParkButton disabled={pending} onClick={() => { setRemovingId(null); closeButton.current?.focus(); }}>Cancel removal</ParkButton>
+            <ParkButton type="button" colorPalette="red" ref={confirmRemovalButton} disabled={pending || isLoadingMembers || membersError} onClick={() => changeMember(removingId, true)}>Remove member</ParkButton>
+            <ParkButton type="button" variant="outline" disabled={pending} onClick={() => { setRemovingId(null); closeButton.current?.focus(); }}>Cancel removal</ParkButton>
           </div>}
           {/* Current Members Section */}
           <div>
@@ -360,13 +360,13 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                       </div>
                     </div>
                     {isAdmin && (
-                      <ParkButton
-                        disabled={pending || isLoadingMembers || membersError} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
+                      <IconButton
+                        type="button" variant="plain" colorPalette="red" disabled={pending || isLoadingMembers || membersError} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
                         className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Remove member"
                       >
                         <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
-                      </ParkButton>
+                      </IconButton>
                     )}
                   </div>
                 ))

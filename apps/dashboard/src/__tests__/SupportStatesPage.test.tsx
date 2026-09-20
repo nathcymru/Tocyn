@@ -62,6 +62,8 @@ it('keeps labels distinct, retains failed input, and requires an explicit safe r
   await userEvent.click(await screen.findByRole('option', { name: 'Open (open)' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remap and deactivate' }));
   await waitFor(() => expect(requests).toContainEqual({ path: '/api/support-states/awaiting-customer/deactivate', body: { replacementId: 'legacy-open' } }));
+  expect(await screen.findByRole('status')).toHaveClass('alert__root', 'alert__root--status_success');
+  expect(screen.getByRole('status')).toHaveTextContent('was deactivated and active tickets were remapped');
 });
 
 it('uses a retryable empty state when initial definitions fail to load', async () => {

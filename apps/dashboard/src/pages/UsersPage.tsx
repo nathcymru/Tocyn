@@ -1,16 +1,12 @@
 import { css } from '@luminatick/ui/styled-system/css';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { useAuthStore } from '../store/authStore';
-import { Badge } from '@luminatick/ui/components';
+import { Badge, IconButton } from '@luminatick/ui/components';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
 import { Shield, Calendar, ShieldCheck, X } from '../components/icons';
-
-function initials(name: string) {
-  return name.trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join('') || 'U';
-}
 
 export const UsersPage: React.FC = () => {
   const { data: users = [], isLoading, error, refetch, isFetching } = useUsers();
@@ -58,7 +54,7 @@ export const UsersPage: React.FC = () => {
         {users.map((user) => (
           <ParkCard.Root key={user.id} variant="outline">
             <ParkCard.Header className={css({ flexDirection: 'row', alignItems: 'center', gap: '3' })}>
-              <ParkAvatar size="md"><ParkAvatarFallback>{initials(user.full_name || user.email)}</ParkAvatarFallback></ParkAvatar>
+              <ParkAvatar size="md"><ParkAvatarFallback name={user.full_name || user.email} /></ParkAvatar>
               <div className={css({ minW: '0', flex: '1' })}>
                 <ParkCard.Title>{user.full_name || 'Unnamed User'}</ParkCard.Title>
                 <ParkCard.Description className={css({ overflowWrap: 'anywhere' })}>{user.email}</ParkCard.Description>
@@ -73,12 +69,12 @@ export const UsersPage: React.FC = () => {
               </div>
               <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
                 {user.mfa_enabled ? (
-                  <span className={css({"minW":0,"color":"fg.default"})}>
+                  <span className={css({ minW: '0', color: 'fg.default', display: 'inline-flex', alignItems: 'center', gap: '2' })}>
                     <ShieldCheck aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                     MFA Enabled
                   </span>
                 ) : (
-                  <span className={css({"minW":0})}>
+                  <span className={css({ minW: '0', display: 'inline-flex', alignItems: 'center', gap: '2' })}>
                     <Shield aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                     MFA Disabled
                   </span>
@@ -122,13 +118,13 @@ export const UsersPage: React.FC = () => {
                 <ParkDialog.Title id={dialogTitleId}>
                   {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'User Profile' : 'User Activity Log'}
                 </ParkDialog.Title>
-                <ParkButton type="button" variant="plain" ref={closeControl} aria-label="Close user details" onClick={closeDialog}>
+                <IconButton type="button" variant="plain" ref={closeControl} aria-label="Close user details" onClick={closeDialog}>
                   <X aria-hidden="true" className={css({ w: '4', h: '4' })} />
-                </ParkButton>
+                </IconButton>
               </ParkDialog.Header>
               <ParkDialog.Body className={css({ display: 'grid', gap: '4', minW: '0' })}>
                 <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: '0' })}>
-                  <ParkAvatar size="md"><ParkAvatarFallback>{initials(selectedUser.full_name || selectedUser.email)}</ParkAvatarFallback></ParkAvatar>
+                  <ParkAvatar size="md"><ParkAvatarFallback name={selectedUser.full_name || selectedUser.email} /></ParkAvatar>
                   <div className={css({ minW: '0' })}>
                     <p className={css({ m: '0', fontWeight: 'semibold', color: 'fg.default' })}>{selectedUser.full_name || 'Unnamed User'}</p>
                     <p className={css({ m: '0', color: 'fg.muted', overflowWrap: 'anywhere' })}>{selectedUser.email}</p>

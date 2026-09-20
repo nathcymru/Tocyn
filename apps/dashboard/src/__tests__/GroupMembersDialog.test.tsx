@@ -29,6 +29,7 @@ it('keeps the Park table structure and unifies the member search icon with its i
  const table=screen.getByRole('table');
  expect(table.querySelector('tbody tr td')).toBeInTheDocument();
  expect(table.querySelector('tbody tr')?.className).not.toMatch(/d_flex|display_flex/);
+ expect(screen.getByRole('button',{name:'Delete Support'})).toHaveClass('button', 'button--variant_outline', 'color-palette_red');
  fireEvent.click(screen.getByRole('button',{name:'Members'}));
  const dialog=await screen.findByRole('dialog',{name:'Manage Members: Support'});
  expect(within(dialog).getByRole('textbox',{name:'Search agents'}).closest('[class*="input-group__root"]')).toBeInTheDocument();
@@ -77,6 +78,7 @@ it('locks overlapping changes and dismissal, retains failed search, and retries 
  const memberError=await screen.findByRole('alert');
  expect(memberError).toHaveClass('alert__root');expect(memberError).toHaveTextContent('Member could not be added');expect(search).toHaveValue('Available');
  fireEvent.click(add);await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Member added.'));
+ expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_success');
  expect(fixture.add).toHaveBeenLastCalledWith({groupId:'group-a',userId:'candidate-a'});
  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Close group members'})).toHaveFocus());
 });
@@ -157,6 +159,7 @@ it('creates through labelled fields, retaining a failed draft and guarding dupli
  expect(createError).toHaveClass('alert__root');expect(createError).toHaveTextContent('Your draft has been kept');
  expect(name).toHaveValue('New team');fireEvent.submit(form);await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(fixture.create).toHaveBeenLastCalledWith({name:'New team',description:'Synthetic team'});await waitFor(()=>expect(opener).toHaveFocus());
+ expect(screen.getByRole('status')).toHaveClass('alert__root', 'alert__root--status_success');
 });
 it('preserves the existing cancelled group draft without submitting',async()=>{
  render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Create Group'});fireEvent.click(opener);
