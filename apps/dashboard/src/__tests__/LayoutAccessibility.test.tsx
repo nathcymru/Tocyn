@@ -98,7 +98,11 @@ it('names account/connection disclosures and restores focus when their child act
   const account = screen.getByRole('button', { name: 'Account options' });
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
   const accountItem = await screen.findByRole('menuitem', { name: 'Account' });
-  expect(accountItem).toBeVisible(); await userEvent.keyboard('{Escape}');
+  expect(accountItem).toBeVisible();
+  // Ark moves focus into the menu after it mounts. Wait for that transition
+  // before sending Escape so the test exercises the open menu, not its trigger.
+  await waitFor(() => expect(screen.getByRole('menu')).toContainElement(document.activeElement));
+  await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(account).toHaveFocus()); expect(account).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('button',{name:'Real-time'})).not.toBeInTheDocument();
   vi.mocked(useRealtime).mockReturnValue({...realtime,isConnected:false} as ReturnType<typeof useRealtime>);

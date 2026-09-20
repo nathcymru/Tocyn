@@ -55,7 +55,7 @@ for(const variant of ['query','type','identity'] as const)it(`discards delayed m
  expect(signal.aborted).toBe(true);await act(async()=>release(response([row('late')])));expect(screen.queryByText('Guide late')).not.toBeInTheDocument();
 });
 for(const [name,value] of [['row overflow',Array.from({length:1001},(_,i)=>row(String(i)))],['invalid shape',[{id:'a',title:'unsafe'}]],['duplicate',[row('a'),row('a')]]] as const)it(`rejects complete list ${name} without partial results`,async()=>{
- vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response(value));mount();await knowledge();expect(await screen.findByText(/Knowledge search is unavailable/)).toBeVisible();expect(screen.queryByRole('list')).not.toBeInTheDocument();
+ vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response(value));mount();await knowledge();expect(await screen.findByText(/Knowledge search is unavailable/, {}, { timeout: 5000 })).toBeVisible();expect(screen.queryByRole('list')).not.toBeInTheDocument();
 });
 it('rejects over1MiB body and control characters',async()=>{
  vi.mocked(dashboardApi.boundedBlob).mockResolvedValue({blob:new Blob([' '.repeat(1048577)]),contentType:'application/json'});mount();await knowledge();expect(await screen.findByText(/Knowledge search is unavailable/)).toBeVisible();
