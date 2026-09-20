@@ -88,10 +88,27 @@ it('rejects an oversized multibyte reason and never exposes override controls to
   await userEvent.type(screen.getByLabelText('Override reason'), 'é'.repeat(257));
   expect(screen.getByLabelText('Override reason')).toHaveValue('é'.repeat(257));
   expect(screen.getByRole('button', { name: 'Assign with audited override' })).toBeDisabled();
-  expect(screen.getByRole('alert')).toHaveTextContent('reason is too long');
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('reason is too long');
   expect(dashboardApi.patch).not.toHaveBeenCalled();
   cleanup(); act(() => useAuthStore.getState().updateUser({ role: 'agent' })); show();
   expect(screen.queryByRole('button', { name: 'Override assignment capacity' })).not.toBeInTheDocument();
+});
+
+it('keeps the uncertain assignment retry inside a Park alert', async () => {
+  vi.mocked(dashboardApi.post)
+    .mockRejectedValueOnce(new Error('Synthetic lost response'))
+    .mockResolvedValueOnce({ outcome: 'assigned', ownerId: 'operator', replayed: false });
+  show();
+  await userEvent.click(screen.getByRole('button', { name: 'Balance assignment' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('could not be confirmed');
+  await userEvent.click(screen.getByRole('button', { name: 'Retry same assignment' }));
+  await waitFor(() => expect(dashboardApi.post).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(dashboardApi.post).mock.calls[1][2]).toEqual(vi.mocked(dashboardApi.post).mock.calls[0][2]);
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
 });
 
 

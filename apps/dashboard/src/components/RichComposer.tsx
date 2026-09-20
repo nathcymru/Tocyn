@@ -1,5 +1,5 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
-import { ParkButton, ParkComposer, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkComposer, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { EditorContent, useEditor } from '@tiptap/react';
@@ -295,7 +295,7 @@ export function RichComposer({ id, value, onChange, onImageFiles, onRejectedImag
               <ParkInput ref={linkInputRef} id={linkInputId} type="text" inputMode="url" autoComplete="url" value={linkUrl}
                 onChange={event => { setLinkUrl(event.target.value); if (linkError) setLinkError(''); }}
                 aria-invalid={Boolean(linkError)} aria-describedby={linkError ? linkErrorId : undefined} />
-              {linkError && <p id={linkErrorId} role="alert" className={css({ color: 'critical', textStyle: 'sm' })}>{linkError}</p>}
+              {linkError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description id={linkErrorId}>{linkError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             </ParkDialog.Body>
             <ParkDialog.Footer>
               {editor?.isActive('link') && <ParkButton type="button" variant="outline" onClick={removeLink}><LinkBreak weight="duotone" aria-hidden="true" />Remove link</ParkButton>}

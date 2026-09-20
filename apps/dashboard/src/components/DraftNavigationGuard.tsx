@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
-import { ParkButton } from '@luminatick/ui/park';
-import { css } from '@luminatick/ui/styled-system/css';
-
-const alertStyle = css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', border: '1px solid', borderColor: 'critical.border', borderRadius: 'l2', background: 'critical.surface', color: 'critical', padding: '0.75rem' });
+import { ParkAlert, ParkButton } from '@luminatick/ui/park';
 
 /** Keep SPA navigation on the current ticket until its draft has durable acknowledgement. */
 export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your draft is not saved. Stay on this ticket, retry saving, then navigate again.', retryLabel = 'Retry saving' }: {
@@ -31,5 +28,8 @@ export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your dr
     });
     return () => { current = false; };
   }, [blocker, failed]);
-  return failed ? <p role="alert" className={alertStyle}><span>{failureMessage}</span>{' '}<ParkButton type="button" variant="outline" onClick={() => { void flushRef.current().then(saved => { if (saved && blocker.state === 'blocked') blocker.proceed(); else setFailed(true); }, () => setFailed(true)); }}>{retryLabel}</ParkButton></p> : null;
+  return failed ? <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+    <ParkAlert.Description>{failureMessage}</ParkAlert.Description>
+    <ParkButton type="button" variant="outline" onClick={() => { void flushRef.current().then(saved => { if (saved && blocker.state === 'blocked') blocker.proceed(); else setFailed(true); }, () => setFailed(true)); }}>{retryLabel}</ParkButton>
+  </ParkAlert.Content></ParkAlert.Root> : null;
 }

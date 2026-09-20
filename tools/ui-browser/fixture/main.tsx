@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { ParkButton, ParkInput, ParkSelect, ParkTextarea } from '../../../packages/ui/src/park';
 import { Tabs, Combobox, Splitter, Popover } from '../../../packages/ui/src/components/ui';
 import { Listbox, createListCollection } from '@ark-ui/react';
-import { WorkspaceShell } from '../../../packages/ui/src/workspace';
 import { composeEventHandlers } from '../../../packages/ui/src/types';
 import { TocynConfirmDialog } from '../../../packages/ui/src/dialog';
 
@@ -19,7 +18,7 @@ function Fixture(){
  const [form,setForm]=React.useState('');const [selected,setSelected]=React.useState('');const [tab,setTab]=React.useState('first');
  const [open,setOpen]=React.useState(false);const [busy,setBusy]=React.useState(false);const [error,setError]=React.useState('');
  const [calls,setCalls]=React.useState(0);const [cancelled,setCancelled]=React.useState(0);const pending=React.useRef(false);const opener=React.useRef<HTMLButtonElement>(null);
- return <WorkspaceShell><h1>Primitive interaction fixture</h1><span data-motion-probe style={{transitionDuration:"5s",animationDuration:"5s"}}>Motion probe</span>
+ return <main><h1>Primitive interaction fixture</h1><span data-motion-probe style={{transitionDuration:"5s",animationDuration:"5s"}}>Motion probe</span>
   <form aria-label="Park controls" onSubmit={event=>{event.preventDefault();setForm(JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))));}}>
    <label htmlFor="subject">Subject</label><ParkInput id="subject" name="subject" required />
    <ParkSelect.Root collection={priorities} defaultValue={['normal']}>
@@ -54,6 +53,6 @@ function Fixture(){
    <Splitter.Panel id="navigation">Navigation content</Splitter.Panel><Splitter.ResizeTrigger id="navigation:conversation" aria-label="Resize navigation" /><Splitter.Panel id="conversation">Conversation content</Splitter.Panel>
   </Splitter.Root><output aria-label="Panel sizes">{JSON.stringify(sizes)}</output>
   <Popover.Root><Popover.Trigger asChild><ParkButton>Open details</ParkButton></Popover.Trigger><Popover.Positioner><Popover.Content aria-label="Details"><Popover.Title>Details</Popover.Title><Popover.CloseTrigger asChild aria-label="Close details"><ParkButton size="lg">Close details</ParkButton></Popover.CloseTrigger></Popover.Content></Popover.Positioner></Popover.Root>
- </WorkspaceShell>;
+ </main>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture/>);

@@ -1,11 +1,9 @@
 import { Component, createRef, Suspense, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ParkButton, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 
 const styles = {
-  error: css({ display: 'grid', gap: '0.75rem', maxWidth: '42rem', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', padding: '1.5rem', color: 'text.primary' }),
-  errorTitle: css({ margin: '0', fontSize: 'xl', fontWeight: 'semibold' }),
   skeleton: css({ display: 'grid', gap: '0.75rem', width: 'full', maxWidth: '48rem', padding: '1.5rem', background: 'bg.surface', borderRadius: 'l2' }),
 };
 
@@ -16,11 +14,13 @@ class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: bool
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch() { this.heading.current?.focus(); }
   render() {
-    if (this.state.failed) return <section role="alert" className={styles.error}>
-      <h1 ref={this.heading} tabIndex={-1} className={styles.errorTitle}>This page could not be loaded</h1>
-      <p>Your sign-in has not been changed. Reload the page to try again.</p>
-      <ParkButton asChild variant="solid"><a href={this.props.reloadHref}>Reload this page</a></ParkButton>
-    </section>;
+    if (this.state.failed) return <ParkAlert.Root role="alert" status="error" variant="surface" className={css({ maxW: '42rem' })}>
+      <ParkAlert.Content>
+        <ParkAlert.Title asChild><h1 ref={this.heading} tabIndex={-1}>This page could not be loaded</h1></ParkAlert.Title>
+        <ParkAlert.Description>Your sign-in has not been changed. Reload the page to try again.</ParkAlert.Description>
+        <ParkButton asChild variant="solid"><a href={this.props.reloadHref}>Reload this page</a></ParkButton>
+      </ParkAlert.Content>
+    </ParkAlert.Root>;
     return this.props.children;
   }
 }

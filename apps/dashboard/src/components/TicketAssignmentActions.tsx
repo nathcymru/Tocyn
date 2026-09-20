@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useTicketAssignment } from '../hooks/useTicketAssignment';
 import { useAuthStore } from '../store/authStore';
@@ -33,10 +33,15 @@ function AssignmentPanel({ ticketId, ownerId, fresh, disabled, agents, refreshTi
   useEffect(() => { onBlocked(action.blocked); return () => onBlocked(false); }, [action.blocked, onBlocked]);
   const reasonValid = Boolean(reason.trim()) && new TextEncoder().encode(reason.trim()).length <= 512;
   const unavailable = disabled || !fresh || action.blocked;
+  const actionFailed = ['uncertain', 'denied', 'refresh-error'].includes(action.phase);
   const status = <>
-    {action.message && <p role={['uncertain', 'denied', 'refresh-error'].includes(action.phase) ? 'alert' : 'status'}>{action.message}</p>}
-    {action.phase === 'uncertain' && <ParkButton type="button" onClick={action.retry}>Retry same assignment</ParkButton>}
-    {['refresh-error', 'denied'].includes(action.phase) && <ParkButton type="button" onClick={action.refresh}>Refresh current ownership</ParkButton>}
+    {actionFailed ? <ParkAlert.Root role="alert" status="error" variant="surface">
+      <ParkAlert.Content>
+        {action.message && <ParkAlert.Description>{action.message}</ParkAlert.Description>}
+        {action.phase === 'uncertain' && <ParkButton type="button" onClick={action.retry}>Retry same assignment</ParkButton>}
+        {['refresh-error', 'denied'].includes(action.phase) && <ParkButton type="button" onClick={action.refresh}>Refresh current ownership</ParkButton>}
+      </ParkAlert.Content>
+    </ParkAlert.Root> : action.message && <p role="status">{action.message}</p>}
   </>;
   return <div className={assignmentStyles.panel}>
     <ParkButton type="button" disabled={unavailable || ownerId !== null} onClick={action.balance}>Balance assignment</ParkButton>
@@ -54,7 +59,9 @@ function AssignmentPanel({ ticketId, ownerId, fresh, disabled, agents, refreshTi
         <label htmlFor={reasonId}>Override reason</label>
         <ParkTextarea id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
         <p>A reason is required. Keep it brief.</p>
-        {reason.trim() && !reasonValid && <p role="alert">The reason is too long. Shorten it before assigning.</p>}
+        {reason.trim() && !reasonValid && <ParkAlert.Root role="alert" status="error" variant="surface">
+          <ParkAlert.Content><ParkAlert.Description>The reason is too long. Shorten it before assigning.</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>}
         <ParkButton type="button" disabled={!fresh || disabled || action.blocked || !selected || !reasonValid}
           onClick={() => action.override(selected, ownerId, reason)}>Assign with audited override</ParkButton>
         {status}

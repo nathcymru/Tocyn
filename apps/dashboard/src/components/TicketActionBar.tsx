@@ -1,4 +1,4 @@
-import { ParkButton, ParkTicketDetail } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkTicketDetail } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import type { TicketUtilityAction } from '@luminatick/shared';
@@ -66,7 +66,12 @@ export function TicketActionBar({ reference, actions, loading, error, retry }: T
 
   return <section aria-label="Ticket actions" className={detailStyles.actions}>
     {loading && <p role="status" className={detailStyles.actionStatus}>Loading ticket actions…</p>}
-    {error && <p role="alert" className={detailStyles.actionStatus}>Ticket actions are unavailable. <ParkButton type="button" onClick={retry}>Retry ticket actions</ParkButton></p>}
+    {error && <ParkAlert.Root role="alert" status="error" variant="surface">
+      <ParkAlert.Content>
+        <ParkAlert.Description>Ticket actions are unavailable.</ParkAlert.Description>
+        <ParkButton type="button" onClick={retry}>Retry ticket actions</ParkButton>
+      </ParkAlert.Content>
+    </ParkAlert.Root>}
     {!loading && !error && copy && renderAction(copy)}
     {!loading && !error && more.length > 0 && <ParkCollapsible.Root>
       <ParkCollapsible.Trigger className={detailStyles.actionSummary}>More ticket actions</ParkCollapsible.Trigger>

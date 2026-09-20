@@ -246,17 +246,19 @@ export function ApiKeyPage() {
       )}
 
       {uncertainKey && (
-        <div className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"text.primary"})} role="alert">
-          <h2 ref={uncertainHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>API key created; plaintext unavailable</h2>
-          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>
-            The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
-            but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
-          </p>
-          <ParkButton className={css({"display":"inline-flex","alignItems":"center","gap":"2"})} onClick={event => {
-            revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(uncertainKey);
-            setRevokeError(''); setRevokeOpen(true);
-          }}>Revoke unavailable key</ParkButton>
-        </div>
+        <ParkAlert.Root role="alert" status="warning" variant="surface">
+          <ParkAlert.Content>
+            <ParkAlert.Title asChild><h2 ref={uncertainHeading} tabIndex={-1}>API key created; plaintext unavailable</h2></ParkAlert.Title>
+            <ParkAlert.Description>
+              The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
+              but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
+            </ParkAlert.Description>
+            <ParkButton onClick={event => {
+              revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(uncertainKey);
+              setRevokeError(''); setRevokeOpen(true);
+            }}>Revoke unavailable key</ParkButton>
+          </ParkAlert.Content>
+        </ParkAlert.Root>
       )}
 
       {listError && <ParkAlert.Root role="alert" status="error" variant="surface">

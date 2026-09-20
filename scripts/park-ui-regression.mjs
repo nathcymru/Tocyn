@@ -15,6 +15,8 @@ for (const retired of [
   'apps/dashboard/src/components/ConversationSlaStatus.tsx',
   'apps/dashboard/vite.config.js',
   'packages/ui/src/primitives.tsx',
+  'packages/ui/src/workspace.tsx',
+  'packages/ui/src/workspace-region.tsx',
 ]) {
   if (fs.existsSync(path.join(root, retired))) failures.push(`Retired implementation returned: ${retired}`);
 }
@@ -106,6 +108,12 @@ function visit(relative) {
         if (['button', 'input', 'textarea', 'select'].includes(tag)) {
           failures.push(`Native ${tag} remains in active application source: ${relative}`);
         }
+        if (['p', 'div', 'section'].includes(tag)) {
+          const role = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.text === 'role');
+          const isAlert = role?.initializer && (ts.isStringLiteral(role.initializer) && role.initializer.text === 'alert'
+            || ts.isJsxExpression(role.initializer) && role.initializer.expression && ts.isStringLiteral(role.initializer.expression) && role.initializer.expression.text === 'alert');
+          if (isAlert) failures.push(`Raw ${tag} alert remains in active application source: ${relative}`);
+        }
       }
       if (ts.isCallExpression(node)) {
         const target = node.expression;
@@ -143,7 +151,7 @@ entries.forEach(visit);
 
 // The temporary native-control compatibility API must not be reintroduced.
 // Historical markdown and generated artifacts are intentionally outside this guard.
-const retiredPrimitives = /\bTocyn(?:Button|Input|Select|Textarea|Panel|EmptyState)(?:Props)?\b/;
+const retiredPrimitives = /\b(?:Tocyn(?:Button|Input|Select|Textarea|Panel|EmptyState|IconProps)(?:Props)?|WorkspaceShell|WorkspaceRegion|WorkViewNavigator|ActiveConversation|ContextPanel)\b/;
 for (const directory of ['apps/dashboard/src', 'apps/portal/src', 'apps/widget/src', 'packages/ui/src', 'tools/ui-browser']) {
   const pending = [path.join(root, directory)];
   while (pending.length) {

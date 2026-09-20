@@ -26,7 +26,9 @@ it('keeps browser-back navigation on the draft when saving fails', async () => {
   const flush = vi.fn(async () => false);
   const router = setup(flush);
   await act(async () => { await router.navigate(-1); });
-  expect(await screen.findByRole('alert')).toHaveTextContent('Your draft is not saved');
+  const failure = await screen.findByRole('alert');
+  expect(failure).toHaveClass('alert__root');
+  expect(failure).toHaveTextContent('Your draft is not saved');
   const retry = screen.getByRole('button', { name: 'Retry saving' });
   await act(async () => { fireEvent.click(retry); });
   expect(flush).toHaveBeenCalledTimes(2);

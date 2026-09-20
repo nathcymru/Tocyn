@@ -57,7 +57,7 @@ it('shows metadata-only uncertain creation and requires revocation before a repl
  api.post.mockRejectedValue({code:'api_key_plaintext_unavailable',body:{code:'api_key_plaintext_unavailable',key:{id:'key-u',name:'Uncertain',prefix:'uncertain',created_at:'2026-09-11'}}});
  api.delete.mockResolvedValue({});render(<ApiKeyPage/>);fireEvent.click(screen.getByRole('button',{name:'Create New Key'}));
  const input=await screen.findByRole('textbox',{name:'Key Name'});fireEvent.change(input,{target:{value:'Uncertain'}});fireEvent.submit(input.closest('form')!);
- const warning=await screen.findByRole('alert');expect(warning).toHaveTextContent('plaintext unavailable');expect(warning).toHaveTextContent('uncertain');
+ const warning=await screen.findByRole('alert');expect(warning).toHaveClass('alert__root', 'alert__root--status_warning', 'alert__root--variant_surface');expect(warning.querySelector('.alert__title')).toHaveTextContent('plaintext unavailable');expect(warning.querySelector('.alert__description')).toHaveTextContent('uncertain');
  await waitFor(()=>expect(within(warning).getByRole('heading',{name:'API key created; plaintext unavailable'})).toHaveFocus());
  expect(warning).not.toHaveTextContent('synthetic-one-time-value');expect(screen.getByRole('button',{name:'Create New Key'})).toBeDisabled();
  fireEvent.click(within(warning).getByRole('button',{name:'Revoke unavailable key'}));const dialog=await screen.findByRole('dialog',{name:'Revoke API key: Uncertain'});

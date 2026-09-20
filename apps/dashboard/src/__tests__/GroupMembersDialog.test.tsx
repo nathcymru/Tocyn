@@ -53,7 +53,8 @@ it('locks overlapping changes and dismissal, retains failed search, and retries 
  expect(within(dialog).getByRole('button',{name:'Close group members'})).toBeDisabled();expect(within(dialog).getByRole('button',{name:'Remove Existing agent'})).toBeDisabled();
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
  await act(async()=>reject(new Error('synthetic failure')));
- expect(await screen.findByRole('alert')).toHaveTextContent('Member could not be added');expect(search).toHaveValue('Available');
+ const memberError=await screen.findByRole('alert');
+ expect(memberError).toHaveClass('alert__root');expect(memberError).toHaveTextContent('Member could not be added');expect(search).toHaveValue('Available');
  fireEvent.click(add);await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Member added.'));
  expect(fixture.add).toHaveBeenLastCalledWith({groupId:'group-a',userId:'candidate-a'});
  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Close group members'})).toHaveFocus());
@@ -84,7 +85,8 @@ it('creates through labelled fields, retaining a failed draft and guarding dupli
  const form=within(dialog).getByRole('form');fireEvent.submit(form);fireEvent.submit(form);expect(fixture.create).toHaveBeenCalledTimes(1);
  expect(name).toBeDisabled();expect(within(dialog).getByRole('button',{name:'Close group editor'})).toBeDisabled();
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
- await act(async()=>reject(new Error('synthetic failure')));expect(await screen.findByRole('alert')).toHaveTextContent('Your draft has been kept');
+ await act(async()=>reject(new Error('synthetic failure')));const createError=await screen.findByRole('alert');
+ expect(createError).toHaveClass('alert__root');expect(createError).toHaveTextContent('Your draft has been kept');
  expect(name).toHaveValue('New team');fireEvent.submit(form);await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(fixture.create).toHaveBeenLastCalledWith({name:'New team',description:'Synthetic team'});await waitFor(()=>expect(opener).toHaveFocus());
 });
@@ -103,7 +105,8 @@ it('cancels group deletion safely and locks failed/retried deletion until comple
  fireEvent.click(opener);dialog=await screen.findByRole('dialog',{name:'Delete group: Support'});
  const remove=within(dialog).getByRole('button',{name:'Delete group'});fireEvent.click(remove);fireEvent.click(remove);expect(fixture.delete).toHaveBeenCalledTimes(1);
  expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
- await act(async()=>reject(new Error('synthetic failure')));expect(await screen.findByRole('alert')).toHaveTextContent('no active tickets');
+ await act(async()=>reject(new Error('synthetic failure')));const deleteError=await screen.findByRole('alert');
+ expect(deleteError).toHaveClass('alert__root');expect(deleteError).toHaveTextContent('no active tickets');
  fireEvent.click(within(dialog).getByRole('button',{name:'Delete group'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(fixture.delete).toHaveBeenLastCalledWith('group-a');expect(screen.getByRole('status')).toHaveTextContent('Group deleted.');
  await waitFor(()=>expect(screen.getByRole('heading',{name:'Group Management'})).toHaveFocus());

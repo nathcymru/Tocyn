@@ -8,7 +8,7 @@ import {
   List, ListBullets, MagnifyingGlass, Paperclip as PaperclipGlyph, PaperPlaneTilt, PencilSimple, Plus as PlusGlyph,
   Shield as ShieldGlyph, ShieldCheck as ShieldCheckGlyph, SignOut, TextT, Textbox, Ticket as TicketGlyph, TreeStructure,
   Trash, ToggleLeft, ToggleRight, User as UserGlyph, UserPlus, Users as UsersGlyph, Warning, WarningCircle,
-  WifiHigh, X as XGlyph, type IconProps,
+  WifiHigh, X as XGlyph,
 } from '@phosphor-icons/react';
 
 /** Park Icon contract for custom SVGs and library icons. */
@@ -23,7 +23,6 @@ function duotone(Icon: any) {
   ));
 }
 
-export type TocynIconProps = IconProps;
 export const IconAlignLeft = duotone(AlignLeft);
 export const IconArrowLeft = duotone(ArrowLeftGlyph);
 export const IconArrowRight = duotone(ArrowRight);

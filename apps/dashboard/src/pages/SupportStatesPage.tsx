@@ -54,7 +54,9 @@ export function SupportStatesPage() {
 
   return <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
     <div className={css({"display":"grid","gap":"1","mb":"2"})}><h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Support states</h1><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Name the operator workflow separately from the customer-facing label. State labels do not change access permissions.</p></div>
-    {notice && <p role="status">{notice}</p>}{errorMessage && <p role="alert">{errorMessage}</p>}
+    {notice && <p role="status">{notice}</p>}{errorMessage && <ParkAlert.Root role="alert" status="error" variant="surface">
+      <ParkAlert.Content><ParkAlert.Description>{errorMessage}</ParkAlert.Description></ParkAlert.Content>
+    </ParkAlert.Root>}
     {error && !isLoadMoreError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
       <ParkAlert.Title>Support states could not be refreshed</ParkAlert.Title>
       <ParkAlert.Description>These definitions are the last loaded version and may have changed.</ParkAlert.Description>

@@ -26,7 +26,11 @@ it('locks duplicate article deletion and dismissal, then retains the target on f
  const {dialog}=await openDelete(false);expect(dialog).toHaveTextContent('Synthetic article');
  const remove=within(dialog).getByRole('button',{name:'Delete'});fireEvent.click(remove);fireEvent.click(remove);expect(api.delete).toHaveBeenCalledTimes(1);
  expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
- await act(async()=>reject(new Error('synthetic failure')));expect(await screen.findByRole('alert')).toHaveTextContent('Deletion failed');expect(dialog).toHaveTextContent('Synthetic article');
+ await act(async()=>reject(new Error('synthetic failure')));
+ const alert=await within(dialog).findByRole('alert');
+ expect(alert).toHaveClass('alert__root');
+ expect(alert.querySelector('.alert__description')).toHaveTextContent('Deletion failed');
+ expect(dialog).toHaveTextContent('Synthetic article');
  fireEvent.click(remove);await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  expect(api.delete).toHaveBeenLastCalledWith('/knowledge/articles/article-a');expect(screen.getByRole('status')).toHaveTextContent('Deletion completed.');
  await waitFor(()=>expect(screen.getByRole('heading',{name:'Knowledge Base'})).toHaveFocus());

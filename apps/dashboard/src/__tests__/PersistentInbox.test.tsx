@@ -754,7 +754,12 @@ it('keeps a failed New Ticket draft and retries the same validated payload in th
   fireEvent.change(message,{target:{value:'Synthetic operator message'}});
   const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
   fireEvent.click(submit);
-  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Creation is temporarily unavailable');
+  const alert=await within(dialog).findByRole('alert');
+  expect(alert).toHaveAttribute('id','create-ticket-error');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('Creation is temporarily unavailable');
+  expect(subject).toHaveAttribute('aria-describedby','create-ticket-error');
+  expect(message).toHaveAttribute('aria-describedby','create-ticket-error');
   expect(subject).toHaveValue('Operator-created follow-up');
   expect(message).toHaveValue('Synthetic operator message');
   created=true;

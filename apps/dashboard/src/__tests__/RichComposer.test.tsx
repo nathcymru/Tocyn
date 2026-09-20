@@ -102,7 +102,11 @@ it('uses the Park link dialog and rejects unsafe URLs without changing the draft
   await waitFor(() => expect(input).toHaveFocus());
   fireEvent.change(input, { target: { value: 'javascript:alert(1)' } });
   fireEvent.click(screen.getByRole('button', { name: 'Apply link' }));
-  expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid HTTP or HTTPS link.');
+  const linkFailure = screen.getByRole('alert');
+  expect(linkFailure).toHaveClass('alert__root');
+  expect(linkFailure).toHaveTextContent('Enter a valid HTTP or HTTPS link.');
+  expect(input).toHaveAttribute('aria-describedby');
+  expect(document.getElementById(input.getAttribute('aria-describedby')!)).toHaveTextContent('Enter a valid HTTP or HTTPS link.');
   expect(dialog).toBeInTheDocument();
   expect(editor).toHaveTextContent('Link text');
   expect(onChange).not.toHaveBeenCalled();

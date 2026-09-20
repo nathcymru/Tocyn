@@ -1,4 +1,4 @@
-import { ParkButton } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useEffect, useRef, useState } from 'react';
 import { dashboardApi } from '../api/client';
@@ -131,7 +131,10 @@ export function AuthenticatedAttachmentImage({
     <ParkButton type="button" onClick={() => status === 'ready' ? hidePreview() : void preview()} aria-label={status === 'ready' ? `Hide image preview ${label}` : `Preview image ${label}`} aria-busy={status === 'loading'} disabled={status === 'loading'}>
       {status === 'ready' ? 'Hide image preview' : status === 'loading' ? 'Loading image preview…' : 'Preview image'}
     </ParkButton>
-    {status === 'error' && <p role="alert" className={css({ color: 'critical', fontSize: 'sm' })}>Image preview could not be loaded. <ParkButton type="button" variant="plain" onClick={() => void preview()} aria-label={`Retry image preview ${label}`}>Retry preview</ParkButton></p>}
+    {status === 'error' && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Description>Image preview could not be loaded.</ParkAlert.Description>
+      <ParkButton type="button" variant="plain" onClick={() => void preview()} aria-label={`Retry image preview ${label}`}>Retry preview</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
     {previewUrl && <img src={previewUrl} alt={`Preview of ${label}`} onError={previewError} className={css({ display: 'block', maxW: 'full', maxH: '80', objectFit: 'contain', rounded: 'md', borderWidth: '1px', borderColor: 'border.default' })} />}
   </div>;
 }

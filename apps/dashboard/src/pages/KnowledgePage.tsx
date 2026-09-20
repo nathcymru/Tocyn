@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -371,7 +371,9 @@ export const KnowledgePage: React.FC = () => {
           <div>
             <h3 id={deleteTitleId}>Confirm Deletion</h3>
             <p>{deleteConfirm.title}</p>
-            {deleteError && <p role="alert">{deleteError}</p>}
+            {deleteError && <ParkAlert.Root role="alert" status="error" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>}
             <div>
               <ParkButton
                 ref={deleteCancel} disabled={deleting} onClick={closeDelete}

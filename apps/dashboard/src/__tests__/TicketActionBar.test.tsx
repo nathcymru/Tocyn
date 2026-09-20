@@ -55,6 +55,16 @@ it('renders denied server actions disabled with their reason and refuses broaden
   expect(() => parseTicketUtilityActions(unsafe, 'ticket-1')).toThrow('Ticket actions are unavailable.');
 });
 
+it('uses a Park alert for unavailable actions and preserves the explicit retry', async () => {
+  const retry = vi.fn();
+  render(<TicketActionBar reference="#42" actions={[]} loading={false} error retry={retry} />);
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('Ticket actions are unavailable.');
+  await userEvent.click(within(alert).getByRole('button', { name: 'Retry ticket actions' }));
+  expect(retry).toHaveBeenCalledTimes(1);
+});
+
 it('offers a selectable reference fallback when clipboard support is missing', async () => {
   const user = userEvent.setup();
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });

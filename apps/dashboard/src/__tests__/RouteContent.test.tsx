@@ -39,6 +39,10 @@ it('focuses a safe load-error message, offers a real reload and permits another 
     <Route path="/other" element={<RouteContent><h1>Other page loaded</h1></RouteContent>}/>
   </Routes></MemoryRouter>);
   const heading=await screen.findByRole('heading',{name:'This page could not be loaded'});
+  const alert=screen.getByRole('alert');
+  expect(alert).toHaveClass('alert__root', 'alert__root--status_error', 'alert__root--variant_surface');
+  expect(alert.querySelector('.alert__title')).toBe(heading);
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('Your sign-in has not been changed');
   await waitFor(()=>expect(heading).toHaveFocus());
   expect(screen.getByRole('link',{name:'Reload this page'})).toHaveAttribute('href','/inbox/all?sort=updated_desc');
   expect(screen.queryByText(/synthetic private module failure/)).not.toBeInTheDocument();

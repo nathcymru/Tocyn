@@ -41,11 +41,13 @@ it('keeps labels distinct, retains failed input, and requires an explicit safe r
   fireEvent.change(screen.getByLabelText('Internal label'), { target: { value: 'Still waiting' } });
   fireEvent.change(screen.getByLabelText('Customer-visible label'), { target: { value: 'We need an update' } });
   fireEvent.click(screen.getByRole('button', { name: 'Create state' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Duplicate state ID');
+  const saveError = await screen.findByRole('alert');
+  expect(saveError).toHaveClass('alert__root', 'alert__root--status_error');
+  expect(saveError.querySelector('.alert__description')).toHaveTextContent('Duplicate state ID');
   expect(screen.getByLabelText('Internal label')).toHaveValue('Still waiting');
   fireEvent.click(screen.getByRole('button', { name: 'Deactivate Waiting on customer' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remap and deactivate' }));
-  expect(screen.getByRole('alert')).toHaveTextContent('Choose an active replacement');
+  expect(screen.getByRole('alert').querySelector('.alert__description')).toHaveTextContent('Choose an active replacement');
   await userEvent.click(screen.getByRole('combobox', { name: 'Replacement state' }));
   await userEvent.click(await screen.findByRole('option', { name: 'Open (open)' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remap and deactivate' }));

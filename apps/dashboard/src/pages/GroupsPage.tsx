@@ -134,7 +134,7 @@ export const GroupsPage: React.FC = () => {
           </ParkDialog.Header>
           <ParkDialog.Body>
           <form onSubmit={handleCreateGroup} aria-labelledby={createTitle}>
-            {createError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"fg.default"})}>{createError}</p>}
+            {createError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             <fieldset disabled={creating} className={css({"display":"grid","gap":"4"})}>
             <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
               <label htmlFor={`${createTitle}-name`}>Group Name</label>
@@ -183,7 +183,7 @@ export const GroupsPage: React.FC = () => {
           <ParkDialog.Header><ParkDialog.Title id={deleteTitle}>Delete group: {deleteGroup?.name}</ParkDialog.Title></ParkDialog.Header>
           <ParkDialog.Body>
           <p>Delete this group? It must not have any active tickets. This action cannot be undone.</p>
-          {deleteError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"fg.default"})}>{deleteError}</p>}
+          {deleteError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           </ParkDialog.Body>
           <ParkDialog.Footer>
             <ParkButton type="button" variant="outline" ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</ParkButton>
@@ -311,7 +311,7 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
         </ParkDialog.Header>
 
         <ParkDialog.Body className={css({ display: 'grid', gap: '5', minW: '0' })}>
-          {operationError && <p role="alert" className={css({"p":"3","rounded":"md","bg":"bg.subtle","color":"fg.default"})}>{operationError}</p>}
+          {operationError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{operationError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           {status && <p role="status" className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{status}</p>}
           {membersError && <ParkEmptyState role="alert" title="Group members could not be loaded" description="Retry before changing membership." action={<ParkButton type="button" onClick={() => void refetchMembers()}>Retry members</ParkButton>} />}
           {removingId && <div role="group" aria-label="Confirm member removal" className={css({"minW":0})}>

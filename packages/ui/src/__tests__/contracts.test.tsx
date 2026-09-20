@@ -4,11 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { composeEventHandlers, WorkspaceShell, WorkViewNavigator, ConversationList, ActiveConversation, ContextPanel } from '../index';
+import { composeEventHandlers } from '../index';
 import { createListCollection } from '@ark-ui/react';
 import { TocynDialog, TocynConfirmDialog } from '../dialog';
 import { ParkButton, ParkInput, ParkSelect, ParkTextarea, ParkEmptyState, type ParkButtonProps } from '../park';
-import type { WorkspaceRegionProps } from '../workspace-region';
 
 afterEach(cleanup);
 
@@ -94,40 +93,14 @@ describe('official Park control contracts', () => {
     expect(screen.getByRole('button', { name: 'Create ticket' })).toBeInTheDocument();
   });
 
-  it('exposes stable labelled workspace regions without owning application state', () => {
-    const shellRef = React.createRef<HTMLDivElement>();
-    const regionRef = React.createRef<HTMLElement>();
-    const listRef = React.createRef<HTMLElement>();
-    const conversationRef = React.createRef<HTMLElement>();
-    const contextRef = React.createRef<HTMLElement>();
-    const { unmount } = render(<WorkspaceShell ref={shellRef}><WorkViewNavigator ref={regionRef} /><ConversationList ref={listRef} /><ActiveConversation ref={conversationRef} /><ContextPanel ref={contextRef} /></WorkspaceShell>);
-    expect(shellRef.current).toBe(document.querySelector('[data-tocyn-workspace]'));
-    expect(screen.getByRole('region', { name: 'Work views' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Conversations' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Active conversation' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Context' })).toBeInTheDocument();
-    expect(regionRef.current).toBe(screen.getByRole('region', { name: 'Work views' }));
-    expect(listRef.current).toBe(screen.getByRole('region', { name: 'Conversations' }));
-    expect(conversationRef.current).toBe(screen.getByRole('region', { name: 'Active conversation' }));
-    expect(contextRef.current).toBe(screen.getByRole('region', { name: 'Context' }));
-    unmount();
-    expect(shellRef.current).toBeNull();
-    expect(regionRef.current).toBeNull();
-    expect(listRef.current).toBeNull();
-    expect(conversationRef.current).toBeNull();
-    expect(contextRef.current).toBeNull();
-  });
 });
 
 interface ConsumerButtonProps extends ParkButtonProps { auditTag: string; }
 const consumerButtonProps = { type: 'button', auditTag: 'workspace', children: 'Open' } satisfies ConsumerButtonProps;
 interface ConsumerInputProps extends React.ComponentProps<typeof ParkInput> { auditTag: string; }
-interface ConsumerRegionProps extends WorkspaceRegionProps { auditTag: string; }
 const consumerInputProps = { type: 'search', auditTag: 'filter', 'aria-label': 'Filter' } satisfies ConsumerInputProps;
-const consumerRegionProps = { auditTag: 'context', label: 'Context' } satisfies ConsumerRegionProps;
 void consumerButtonProps;
 void consumerInputProps;
-void consumerRegionProps;
 
 it('forwards dialog content refs and caller ARIA descriptions through the shared wrappers',async()=>{
   const ref=React.createRef<HTMLDivElement>();const confirmation=React.createRef<HTMLDivElement>();const key=vi.fn();

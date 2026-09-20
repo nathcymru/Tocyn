@@ -1,5 +1,5 @@
 import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkButton, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useRef, useState } from 'react';
 import { DashboardSelect } from '../components/DashboardSelect';
@@ -80,7 +80,9 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
         <p role="status" aria-label="Ticket creation status" className={css({ m: '0', color: 'fg.muted', fontSize: 'sm' })}>
           {pending ? 'Creating ticket…' : ''}
         </p>
-        {error && <p id="create-ticket-error" role="alert" className={css({ m: '0', color: 'critical', fontSize: 'sm' })}>{error}</p>}
+        {error && <ParkAlert.Root id="create-ticket-error" role="alert" status="error" variant="surface">
+          <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>}
         <div className={css({ display: 'grid', gridTemplateColumns: { base: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: '4' })}>
           <div className={css({ display: 'grid', gap: '1', minW: 0 })}>
             <label htmlFor="create-ticket-subject">Subject</label>
