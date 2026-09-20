@@ -64,6 +64,12 @@ it('names usage credential inputs when the local API reports missing configurati
  expect(title).toHaveClass('card__title');
  expect(title.closest('.card__root')).toBeInTheDocument();
  expect(screen.getByRole('note')).toHaveClass('alert__root');
+ const helpLink = screen.getByRole('link', { name: 'Cloudflare API Tokens' });
+ expect(helpLink).toHaveClass('link', 'link--variant_underline');
+ expect(helpLink).toHaveAttribute('href', 'https://dash.cloudflare.com/profile/api-tokens');
+ expect(helpLink).toHaveAttribute('target', '_blank');
+ expect(helpLink).toHaveAttribute('rel', 'noopener noreferrer');
+ expect(helpLink.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
  expect(await screen.findByRole('textbox',{name:'Cloudflare Account ID'})).toBeInTheDocument();
  expect(screen.getByLabelText('Cloudflare API Token')).toHaveAttribute('type','password');
  expect(api.post).not.toHaveBeenCalled();

@@ -11491,10 +11491,6 @@
     border-radius: var(--radii-l2);
 }
 
-  .td_underline {
-    text-decoration: underline;
-}
-
   .px_0\.25rem {
     padding-inline: 0.25rem;
 }
@@ -11767,12 +11763,8 @@
     border-width: 0;
 }
 
-  .c_blue\.11 {
-    color: var(--colors-blue-11);
-}
-
-  .tu-o_2px {
-    text-underline-offset: 2px;
+  .d_inline {
+    display: inline;
 }
 
   .ff_tabular {
@@ -11797,6 +11789,14 @@
 
   .c_critical {
     color: var(--colors-critical);
+}
+
+  .white-space_normal {
+    white-space: normal;
+}
+
+  .ta_center {
+    text-align: center;
 }
 
   .lh_relaxed {
@@ -12136,6 +12136,10 @@
     display: none;
 }
 
+  .ta_start {
+    text-align: start;
+}
+
   .flex-d_column {
     flex-direction: column;
 }
@@ -12213,8 +12217,8 @@
     user-select: all;
 }
 
-  .c_accent\.primary {
-    color: var(--colors-accent\.primary);
+  .flex-sh_1 {
+    flex-shrink: 1;
 }
 
   .cursor_pointer {
@@ -12231,6 +12235,10 @@
 
   .bx-sh_sm {
     box-shadow: var(--shadows-sm);
+}
+
+  .c_accent\.primary {
+    color: var(--colors-accent\.primary);
 }
 
   .resize_vertical {
@@ -12251,10 +12259,6 @@
 
   .jc_center {
     justify-content: center;
-}
-
-  .ta_center {
-    text-align: center;
 }
 
   .fs_0\.875rem {
@@ -12343,6 +12347,10 @@
 
   .bx-sh_lg {
     box-shadow: var(--shadows-lg);
+}
+
+  .as_flex-start {
+    align-self: flex-start;
 }
 
   .pe_1 {
@@ -12747,10 +12755,6 @@
     min-height: var(--sizes-64);
 }
 
-  .ml_2 {
-    margin-left: var(--spacing-2);
-}
-
   .min-h_9 {
     min-height: var(--sizes-9);
 }
@@ -12773,6 +12777,10 @@
 
   .min-w_9 {
     min-width: var(--sizes-9);
+}
+
+  .ml_2 {
+    margin-left: var(--spacing-2);
 }
 
   .min-w_8 {
@@ -12987,10 +12995,6 @@
     min-height: var(--sizes-24);
 }
 
-  .w_16 {
-    width: var(--sizes-16);
-}
-
   .h_25rem {
     height: 25rem;
 }
@@ -13121,10 +13125,6 @@
 
   .focusVisible\:ring-o_2px:is(:focus-visible, [data-focus-visible]) {
     outline-offset: 2px;
-}
-
-  .focusVisible\:ring-o_-2px:is(:focus-visible, [data-focus-visible]) {
-    outline-offset: -2px;
 }
 
   .hover\:bg_bg\.subtle:not(:disabled):hover {

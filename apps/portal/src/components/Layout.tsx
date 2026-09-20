@@ -1,7 +1,8 @@
 import { p } from '../portalStyles';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { ParkButton } from '@luminatick/ui/park';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Link as ParkLink } from '@luminatick/ui/components';
+import { Outlet, Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { portalApi } from '../api/client';
@@ -41,10 +42,12 @@ export function Layout() {
       <header className={p.header}>
         <div className={p.navInner}>
           <div className={p.navRow}>
-            <Link to="/tickets" className={p.brand} aria-label="Tocyn Portal">
-              <ProductLogo mode={logoMode} className={p.brandLogo} />
-              <span className={p.brandName}>Portal</span>
-            </Link>
+            <ParkLink asChild variant="plain">
+              <RouterLink to="/tickets" className={p.brand} aria-label="Tocyn Portal">
+                <ProductLogo mode={logoMode} className={p.brandLogo} />
+                <span className={p.brandName}>Portal</span>
+              </RouterLink>
+            </ParkLink>
 
             <div className={p.user}>
               <span className={p.userLabel}>

@@ -86,7 +86,7 @@ export const p = {
   ticketError: page,
   ticketListItems: css({ listStyle: 'none', m: '0', p: '0' }),
   ticketListItem: css({ borderBottomWidth: '1px', borderColor: 'border.default', _last: { borderBottomWidth: '0' } }),
-  ticketListLink: css({ display: 'block', p: '4', color: 'text.primary', textDecoration: 'none', _hover: { bg: 'bg.subtle' }, _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '-2px' } }),
+  ticketListLink: css({ display: 'block', p: '4', color: 'text.primary' }),
   ticketListRow: spread,
   ticketRowMain: row,
   ticketReference: css({ fontFamily: 'tabular', fontSize: 'sm', fontWeight: 'bold' }),
@@ -101,7 +101,7 @@ export const p = {
 
   ticketDetail: stack,
   ticketDetailHeader: css({ display: 'flex', alignItems: 'flex-start', gap: '4' }),
-  ticketDetailBack: css({ display: 'inline-grid', placeItems: 'center', minW: '10', minH: '10', rounded: 'md', color: 'text.primary', _hover: { bg: 'bg.subtle' } }),
+  ticketDetailBack: css({ display: 'inline-grid', placeItems: 'center', minW: '10', minH: '10', rounded: 'md', color: 'text.primary' }),
   ticketDetailTitle: css({ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2', fontSize: '2xl', fontWeight: 'bold' }),
   ticketDetailMeta: muted,
   chatBackIcon: icon,
@@ -145,7 +145,6 @@ export const p = {
   emptyState: inset,
   emptyError: inset,
   emptyActions: row,
-  emptyBack: css({ color: 'accent.primary', textDecoration: 'underline' }),
 
   slaCard: css({ p: '4', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'lg' }),
   slaHeading: heading,
@@ -168,6 +167,5 @@ export const p = {
   localCaptureMessage: css({ p: '4', bg: 'bg.surface', borderWidth: '1px', borderColor: 'border.default', rounded: 'md' }),
   localCaptureMessageTitle: heading,
   localCaptureMessageMeta: tiny,
-  localCaptureLink: css({ color: 'accent.primary', textDecoration: 'underline' }),
   localCapturePayload: css({ mt: '2', p: '3', overflowX: 'auto', bg: 'bg.subtle', fontSize: 'xs' }),
 } as const;

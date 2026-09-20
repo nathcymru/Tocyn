@@ -1,5 +1,5 @@
 import { ParkAlert, ParkButton, ParkTicketDetail } from '@luminatick/ui/park';
-import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
+import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import type { TicketUtilityAction } from '@luminatick/shared';
 import React from 'react';
@@ -59,7 +59,7 @@ export function TicketActionBar({ reference, actions, loading, error, retry }: T
     </div>;
     return <div key={current.id} className={detailStyles.actionItem}>
       {disabled ? <ParkButton type="button" disabled aria-describedby={reasonId}>{current.label}</ParkButton>
-        : <a href={current.href} target="_blank" rel="noopener noreferrer" className={detailStyles.actionLink}>{current.label}</a>}
+        : <ParkLink href={current.href} target="_blank" rel="noopener noreferrer" variant="plain" className={`${detailStyles.actionLink} ${css({ minW: 0, maxW: 'full', whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: 'center' })}`}>{current.label}</ParkLink>}
       {description}
     </div>;
   };

@@ -24,12 +24,7 @@ export const w = {
   formControl: css({ w: 'full' }),
   textarea: css({ minH: '24' }),
   submit: css({ w: 'full', minH: '11', justifyContent: 'center' }),
-  success: css({ py: '8', textAlign: 'center' }),
-  successIcon: css({ display: 'grid', w: '16', h: '16', placeItems: 'center', mx: 'auto', mb: '4', rounded: 'full', bg: 'info.surface', color: 'info.text' }),
-  successMark: css({ w: '10', h: '10' }),
-  successTitle: css({ mb: '2', fontSize: 'lg', fontWeight: 'semibold' }),
-  successCopy: css({ mb: '6', color: 'text.muted', fontSize: 'sm' }),
-  successAction: css({}),
+  successAction: css({ mt: '3', alignSelf: 'flex-start' }),
 
   aiChat: css({ display: 'flex', h: '25rem', flexDirection: 'column' }),
   aiMessages: css({ minH: '0', flex: '1', h: 'auto', mb: '4' }),

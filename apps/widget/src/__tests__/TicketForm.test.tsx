@@ -12,7 +12,13 @@ it('keeps labelled authenticated email read-only and guards duplicate submission
  fireEvent.submit(form);fireEvent.submit(form);expect(request).toHaveBeenCalledTimes(1);expect(screen.getByRole('textbox',{name:'Message'})).toBeDisabled();expect(form).toHaveAttribute('aria-busy','true');expect(screen.getByRole('status')).toHaveTextContent('Submitting');expect(screen.getByRole('progressbar',{name:'Submitting your ticket…'})).toHaveClass('progress__track');
  const [url,options]=request.mock.calls[0] as unknown as [string,RequestInit];expect(url).toBe('/local-widget/tickets');expect(options.credentials).toBe('omit');expect(new Headers(options.headers).get('Authorization')).toBe('Bearer synthetic-customer-token');expect(JSON.parse(options.body as string)).toEqual({name:'Synthetic customer',email:'customer@example.invalid',subject:'Synthetic subject',message:'Synthetic message'});
  await act(async()=>finish(new Response('{}',{status:200})));await waitFor(()=>expect(screen.getByRole('heading',{name:'Ticket Submitted!'})).toHaveFocus());
- fireEvent.click(screen.getByRole('button',{name:'Submit another ticket'}));await waitFor(()=>expect(screen.getByRole('textbox',{name:'Your Name'})).toHaveFocus());expect(screen.getByRole('textbox',{name:'Message'})).toHaveValue('');expect(screen.getByRole('textbox',{name:'Email Address'})).toHaveValue('customer@example.invalid');
+ const success=screen.getByRole('status',{name:'Ticket Submitted!'});expect(success).toHaveClass('alert__root','alert__root--status_success','alert__root--variant_surface');
+ expect(success.querySelector('.alert__content')).toBeInTheDocument();expect(success.querySelector('.alert__title')).toHaveTextContent('Ticket Submitted!');
+ expect(success.querySelector('.alert__description')).toHaveTextContent("We've received your request and will get back to you soon.");
+ const indicator=success.querySelector('.alert__indicator');expect(indicator).toHaveAttribute('aria-hidden','true');
+ expect(indicator?.querySelectorAll('svg')).toHaveLength(1);expect(indicator?.querySelector('svg')).toHaveAttribute('aria-hidden','true');
+ const restart=screen.getByRole('button',{name:'Submit another ticket'});expect(restart).toHaveClass('button--variant_outline');expect(success).toContainElement(restart);
+ fireEvent.click(restart);await waitFor(()=>expect(screen.getByRole('textbox',{name:'Your Name'})).toHaveFocus());expect(screen.getByRole('textbox',{name:'Message'})).toHaveValue('');expect(screen.getByRole('textbox',{name:'Email Address'})).toHaveValue('customer@example.invalid');
 });
 it('preserves failed content, announces the error and supports an explicit retry',async()=>{
  const request=vi.fn().mockResolvedValueOnce(new Response('{}',{status:403})).mockResolvedValueOnce(new Response('{}',{status:200}));vi.stubGlobal('fetch',request);const form=fill();fireEvent.submit(form);

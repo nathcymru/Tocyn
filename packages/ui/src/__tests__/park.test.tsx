@@ -5,7 +5,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createListCollection } from '@ark-ui/react';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCheckbox, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkPinInput, ParkPinInputSlot, ParkScrollArea, ParkSelect, ParkSplitter, ParkSwitch, ParkTabs, ParkTextarea } from '../park';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCheckbox, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkPinInput, ParkPinInputSlot, ParkScrollArea, ParkSelect, ParkSplitter, ParkSwitch, ParkTabs, ParkTextarea } from '../park';
+import { IconCircleCheck } from '../icons';
 
 if (!window.ResizeObserver) {
   window.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
@@ -27,6 +28,20 @@ afterEach(() => {
 const priorities = createListCollection({ items: [{ label: 'Normal', value: 'normal' }, { label: 'High', value: 'high' }] });
 
 describe('installed Park UI components', () => {
+  it('keeps the default Alert indicator while allowing a semantic icon in the same Park slot', () => {
+    render(<>
+      <ParkAlert.Root><ParkAlert.Indicator data-testid="default-indicator" /><ParkAlert.Content><ParkAlert.Description>Information</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>
+      <ParkAlert.Root status="success"><ParkAlert.Indicator data-testid="success-indicator" aria-hidden="true"><IconCircleCheck aria-hidden="true" /></ParkAlert.Indicator><ParkAlert.Content><ParkAlert.Description>Saved</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>
+    </>);
+    const defaultIndicator = screen.getByTestId('default-indicator');
+    const successIndicator = screen.getByTestId('success-indicator');
+    expect(defaultIndicator).toHaveClass('alert__indicator');
+    expect(defaultIndicator.querySelectorAll('svg')).toHaveLength(1);
+    expect(successIndicator).toHaveClass('alert__indicator', 'alert__indicator--status_success');
+    expect(successIndicator.querySelectorAll('svg')).toHaveLength(1);
+    expect(successIndicator.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
   it('uses official button variants and loading behavior', () => {
     render(<><ParkButton variant="solid">Save</ParkButton><ParkButton variant="plain">More</ParkButton><ParkButton variant="solid" colorPalette="red">Delete</ParkButton><ParkButton loading loadingText="Saving">Submit</ParkButton></>);
     expect(screen.getByRole('button', { name: 'Save' })).toHaveClass('button--variant_solid');

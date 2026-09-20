@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalAuthCapturePage } from '../pages/LocalAuthCapturePage';
 
@@ -13,10 +14,34 @@ describe('LocalAuthCapturePage', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<LocalAuthCapturePage />);
     expect(await screen.findByRole('heading', { name: '<unsafe>' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open captured login link' })).toHaveAttribute('href', 'http://localhost:5174/verify?token=synthetic');
+    const link = screen.getByRole('link', { name: 'Open captured login link' });
+    expect(link).toHaveClass('link', 'link--variant_underline');
+    expect(link).toHaveAttribute('href', 'http://localhost:5174/verify?token=synthetic');
+    const activation = vi.fn((event: Event) => event.preventDefault());
+    link.addEventListener('click', activation);
+    link.focus();
+    expect(link).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(activation).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Clear captured messages' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/__local/auth-capture/reset', { method: 'POST', credentials: 'same-origin' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No captured messages.'));
+  });
+
+  it('only makes approved loopback verification URLs actionable', async () => {
+    const message = (id: string, loginLink: string) => ({ id, subject: id, to: 'tocyn-auth-test@example.invalid', from: 'local', text: 'Synthetic', createdAt: 'now', expiresAt: 'later', loginLink });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      message('malformed', 'javascript:alert(1)'),
+      message('external', 'https://example.invalid/verify?token=synthetic'),
+      message('wrong-path', 'http://localhost:5174/login?token=synthetic'),
+      message('credentialed', 'http://name:pass@localhost:5174/verify?token=synthetic'),
+      message('allowed', 'http://127.0.0.1:5174/verify?token=synthetic'),
+    ]), { status: 200 })));
+    render(<LocalAuthCapturePage />);
+    expect(await screen.findByRole('heading', { name: 'allowed' })).toBeInTheDocument();
+    const links = screen.getAllByRole('link', { name: 'Open captured login link' });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', 'http://127.0.0.1:5174/verify?token=synthetic');
   });
 
   it('keeps a failed read distinct from an empty capture and offers a working retry', async () => {

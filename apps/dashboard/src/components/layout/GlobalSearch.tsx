@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { createListCollection } from '@ark-ui/react';
 import { ParkButton, ParkGlobalSearch, ParkInput, ParkSelect, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import { dashboardApi } from '../../api/client';
 import { assignmentIdentity } from '../../hooks/useTicketAssignment';
 import { useAuthStore } from '../../store/authStore';
@@ -124,7 +125,7 @@ function SearchSession({ shortcutsEnabled }: { shortcutsEnabled: boolean }) {
     <ParkVisuallyHidden id="global-ticket-search-scope">{type === 'all' || type === 'tickets' ? 'Searches all tickets you are authorised to access.' : type === 'knowledge' ? 'Searches titles in the complete authorised knowledge list.' : 'Searches customer identities attached to tickets you are authorised to access.'} {shortcutsEnabled ? 'Press Command or Control K to focus this search.' : ''} Filter this view is available in the Inbox.</ParkVisuallyHidden>
     {(type === 'customers' || busy || message || selected) && <div className={styles.popover}>
     {(busy || message) && <p role="status" className={styles.status}>{busy ? 'Searching authorised results…' : message}</p>}
-    {results.length > 0 && <ul aria-label={type === 'all' || type === 'tickets' ? 'Ticket search results' : type === 'knowledge' ? 'Knowledge search results' : 'Customer search results'} className={styles.results}>{results.map(row => <li key={row.id}>{type === 'all' || type === 'tickets' ? <Link to={`/inbox/all/${encodeURIComponent(row.id)}`} className={styles.result}>Open in All tickets: {row.title || 'Untitled ticket'}</Link> : <ParkButton type="button" onClick={event => { previewOpener.current = event.currentTarget; setSelected(row); }} className={styles.result}>{row.title || (type === 'customers' ? 'Unnamed customer' : 'Untitled knowledge')}</ParkButton>}</li>)}</ul>}
+    {results.length > 0 && <ul aria-label={type === 'all' || type === 'tickets' ? 'Ticket search results' : type === 'knowledge' ? 'Knowledge search results' : 'Customer search results'} className={styles.results}>{results.map(row => <li key={row.id}>{type === 'all' || type === 'tickets' ? <ParkLink asChild variant="plain"><Link to={`/inbox/all/${encodeURIComponent(row.id)}`} className={`${styles.result} ${css({ minW: 0, maxW: 'full', whiteSpace: 'normal', overflowWrap: 'anywhere' })}`}>Open in All tickets: {row.title || 'Untitled ticket'}</Link></ParkLink> : <ParkButton type="button" onClick={event => { previewOpener.current = event.currentTarget; setSelected(row); }} className={styles.result}>{row.title || (type === 'customers' ? 'Unnamed customer' : 'Untitled knowledge')}</ParkButton>}</li>)}</ul>}
     {selected && <section aria-label="Knowledge result preview" className={styles.preview}><h2 ref={previewHeading} tabIndex={-1}>{selected.title}</h2><p>Status: {selected.status}</p><p>Category reference: {selected.category_id ?? 'Uncategorised'}</p><ParkButton type="button" onClick={() => { setSelected(null); if (previewOpener.current?.isConnected) previewOpener.current.focus(); }}>Close preview</ParkButton></section>}
     </div>}
   </div>;

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { fileURLToPath } from 'node:url';
+import { parkLinkCompositionFailures } from './park-link-composition.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = path.join(root, 'packages/ui');
@@ -101,6 +102,7 @@ function visit(relative) {
     if (/data-park\s*=/.test(content)) failures.push(`Pseudo-Park marker in active application source: ${relative}`);
     if (/<ParkSelect\s*(?:>|\b(?!\.))/.test(content)) failures.push(`Callable ParkSelect remains in active application source: ${relative}`);
     const jsx = ts.createSourceFile(relative, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    failures.push(...parkLinkCompositionFailures(relative, content));
     const classes = new Set();
     function inspect(node) {
       if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {

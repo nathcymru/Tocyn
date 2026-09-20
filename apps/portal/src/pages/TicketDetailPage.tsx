@@ -1,9 +1,10 @@
 import { p } from '../portalStyles';
 import { ParkAlert, ParkButton, ParkEmptyState, ParkField, ParkFileUpload, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link as RouterLink } from 'react-router-dom';
 import { portalApi } from '../api/client';
 import type { Ticket, Article } from '../types';
 import {
@@ -315,15 +316,17 @@ function TicketDetail({ id }: { id: string | undefined }) {
   }
 
   if (error || !ticket) {
-    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className={p.emptyError} action={<div className={p.emptyActions}><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }}>Retry loading conversation</ParkButton><Link to="/tickets" className={p.emptyBack}>Back to Tickets</Link></div>} />;
+    return <ParkEmptyState role="alert" title="Conversation could not be loaded." description={error || 'Ticket not found'} headingLevel={false} className={p.emptyError} action={<div className={p.emptyActions}><ParkButton type="button" onClick={() => { recovering.current = true; void fetchTicket(); }}>Retry loading conversation</ParkButton><ParkLink asChild><RouterLink to="/tickets">Back to Tickets</RouterLink></ParkLink></div>} />;
   }
 
   return (
     <div className={p.ticketDetail}>
       <div className={p.ticketDetailHeader}>
-        <Link to="/tickets" aria-label="Back to Tickets" className={p.ticketDetailBack}>
-          <IconArrowLeft className={p.chatBackIcon} aria-hidden="true" />
-        </Link>
+        <ParkLink asChild variant="plain">
+          <RouterLink to="/tickets" aria-label="Back to Tickets" className={p.ticketDetailBack}>
+            <IconArrowLeft className={p.chatBackIcon} aria-hidden="true" />
+          </RouterLink>
+        </ParkLink>
         <div>
           <h1 ref={conversationHeading} tabIndex={-1} className={p.ticketDetailTitle}>
             {ticket.subject}

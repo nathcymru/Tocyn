@@ -53,20 +53,20 @@ const TicketForm: React.FC<Props> = ({ userEmail }) => {
 
   if (status === 'success') {
     return (
-      <div className={w.success}>
-        <div className={w.successIcon}>
-          <IconCircleCheck className={w.successMark} aria-hidden="true" />
-        </div>
-        <h3 ref={successHeading} tabIndex={-1} className={w.successTitle}>Ticket Submitted!</h3>
-        <p role="status" className={w.successCopy}>We've received your request and will get back to you soon.</p>
-        <ParkButton
-          onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
-          variant="outline"
-          className={w.successAction}
-        >
-          Submit another ticket
-        </ParkButton>
-      </div>
+      <ParkAlert.Root role="status" aria-live="polite" aria-atomic="true" aria-labelledby="widget-ticket-success-title" status="success" variant="surface">
+        <ParkAlert.Indicator aria-hidden="true"><IconCircleCheck aria-hidden="true" /></ParkAlert.Indicator>
+        <ParkAlert.Content>
+          <ParkAlert.Title id="widget-ticket-success-title" ref={successHeading} tabIndex={-1}>Ticket Submitted!</ParkAlert.Title>
+          <ParkAlert.Description>We've received your request and will get back to you soon.</ParkAlert.Description>
+          <ParkButton
+            onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
+            variant="outline"
+            className={w.successAction}
+          >
+            Submit another ticket
+          </ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>
     );
   }
 

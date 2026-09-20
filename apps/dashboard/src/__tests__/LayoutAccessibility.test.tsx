@@ -119,7 +119,14 @@ it('keeps header controls reachable in the generated 320 CSS px reflow contract'
 it('keeps compact navigation icons inside the focus target', async () => {
   await renderReady();
   const sidebar = document.querySelector('aside.shell__sidebarDesktop');
-  expect(within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' }).querySelector('svg')).toHaveClass('shell__navigationIcon');
+  const home = within(sidebar as HTMLElement).getByRole('link', { name: 'Dashboard home' });
+  expect(home).toHaveClass('link', 'link--variant_plain', 'shell__logoLink');
+  home.focus();expect(home).toHaveFocus();
+  const inbox = within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' });
+  expect(inbox).toHaveClass('link', 'link--variant_plain', 'shell__navigationLink', 'shell__navigationLinkIcon');
+  expect(inbox).toHaveAttribute('aria-current', 'page');
+  expect(inbox.querySelector('svg')).toHaveClass('shell__navigationIcon');
+  inbox.focus();expect(inbox).toHaveFocus();
   // 4rem sidebar minus its 1rem total padding leaves a 3rem link. Its
   // 0.5rem padding on either side leaves 2rem for the icon.
   expect(4 * 16 - 2 * 0.5 * 16 - 2 * 0.5 * 16).toBeGreaterThanOrEqual(1.5 * 16);
@@ -415,7 +422,10 @@ it('renders labelled navigation and disables only the app search accelerator', a
     : previous(path));
   await renderReady();
   const navigation = screen.getByRole('navigation', { name: 'Workspace navigation' });
-  await waitFor(() => expect(within(navigation).getByRole('link', { name: 'Inbox' })).toHaveTextContent('Inbox'));
+  const inbox = within(navigation).getByRole('link', { name: 'Inbox' });
+  await waitFor(() => expect(inbox).toHaveTextContent('Inbox'));
+  expect(inbox).toHaveClass('link', 'link--variant_plain', 'shell__navigationLinkLabelled');
+  expect(inbox).toHaveAttribute('aria-current', 'page');
   const search = screen.getByRole('textbox', { name: 'Search all tickets (global shell)' });
   const account = screen.getByRole('button', { name: 'Account options' });
   account.focus();

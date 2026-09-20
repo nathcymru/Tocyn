@@ -189,8 +189,14 @@ it('distinguishes a recoverable detail failure from not found and recovers throu
   let failed=true;transport(()=>failed?json({error:'Temporarily unavailable'},503):json(ticket));
   showDetail();expect(await screen.findByRole('alert')).toHaveTextContent('Could not load ticket');
   expect(screen.queryByText('Ticket not found.')).not.toBeInTheDocument();
+  const unavailableBack=screen.getByRole('link',{name:'Back to Inbox'});
+  expect(unavailableBack).toHaveClass('link');expect(unavailableBack).toHaveAttribute('href','/inbox/all');
+  unavailableBack.focus();expect(unavailableBack).toHaveFocus();
   failed=false;fireEvent.click(screen.getByRole('button',{name:'Retry loading ticket'}));
   await screen.findByRole('heading',{name:ticket.subject});
+  const toolbarBack=screen.getByRole('link',{name:'Back to Inbox'});
+  expect(toolbarBack).toHaveClass('link','link--variant_plain');expect(toolbarBack).toHaveAttribute('href','/inbox/all');
+  toolbarBack.focus();expect(toolbarBack).toHaveFocus();
 });
 
 it('shows a mounted service-level failure and retries its shared detail query without blocking the ticket', async () => {

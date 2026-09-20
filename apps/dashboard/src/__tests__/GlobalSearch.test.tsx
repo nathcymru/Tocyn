@@ -51,6 +51,19 @@ it('ticket query and keyboard clear never visit legacy route or change the curre
   expect(dashboardApi.boundedBlob).toHaveBeenCalledWith('/tickets?search=Synthetic&limit=20&page=1',1048576,['application/json'],expect.anything());
   fireEvent.keyDown(screen.getByRole('textbox',{name:'Search all tickets (global shell)'}),{key:'Escape'});expect(screen.getByRole('textbox')).toHaveValue('');expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
 });
+it('uses the Park link for a wrapping ticket result and opens its authorised route from the keyboard',async()=>{
+ const title=Array(8).fill('A long conversation subject').join(' ');
+ const page={data:[{id:'ticket-1',subject:title,status:'open',customer_email:'someone@example.test'}],meta:{total:1,page:1,limit:20,total_pages:1}};
+ vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response(page));
+ mount();
+ await userEvent.type(screen.getByRole('textbox',{name:'Search all tickets (global shell)'}),'conversation{Enter}');
+ const result=await screen.findByRole('link',{name:`Open in All tickets: ${title}`});
+ expect(result).toHaveClass('link','link--variant_plain','globalSearch__result','ov-wrap_anywhere','white-space_normal');
+ expect(result).toHaveAttribute('href','/inbox/all/ticket-1');
+ result.focus();expect(result).toHaveFocus();
+ await userEvent.keyboard('{Enter}');
+ expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/all/ticket-1');
+});
 for(const [label,meta] of [['wrong count',{total:2,page:1,limit:20,total_pages:1}],['wrong page',{total:1,page:2,limit:20,total_pages:1}]])it(`ticket ${label} fails without partial results`,async()=>{
  vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response({data:[{id:'ticket-1',subject:'Synthetic',status:'open'}],meta}));mount();await userEvent.type(screen.getByRole('textbox'),'Synthetic{Enter}');expect(await screen.findByText(/Ticket search is unavailable/)).toBeVisible();expect(screen.queryByRole('link')).not.toBeInTheDocument();
 });

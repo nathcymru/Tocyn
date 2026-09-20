@@ -82,6 +82,7 @@ it('keeps approved HTTP links readable and isolated from the opener', () => {
   expect(link).toHaveAttribute('href', 'https://example.invalid/help');
   expect(link).toHaveAttribute('target', '_blank');
   expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  expect(link).toHaveClass('link', 'link--variant_underline');
 });
 
 it('uses the Park link dialog and rejects unsafe URLs without changing the draft', async () => {

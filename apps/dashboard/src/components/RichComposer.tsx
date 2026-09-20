@@ -1,6 +1,6 @@
 import type { ArticleBodyFormat } from '@luminatick/shared';
 import { ParkAlert, ParkButton, ParkComposer, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
-import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
+import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -33,7 +33,7 @@ export const TIPTAP_MARKDOWN_CONTRACT = Object.freeze({
   maxImageBytes: COMPOSER_MAX_IMAGE_BYTES,
 });
 const composerStyles = ParkComposer();
-const narrativeLink = css({ color: 'blue.11', textDecoration: 'underline', textUnderlineOffset: '2px', overflowWrap: 'anywhere', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } });
+const narrativeLink = css({ display: 'inline', overflowWrap: 'anywhere' });
 const codeBlock = css({ display: 'block', maxWidth: 'full', overflowX: 'auto', padding: '0.75rem', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' });
 const inlineCode = css({ paddingInline: '0.25rem', fontFamily: 'tabular' });
 const AUTOCOMPLETE_LIMIT = 6;
@@ -82,7 +82,7 @@ function safeLink(url: string) {
 /** Render untrusted Markdown without executing HTML or remote image requests. */
 export function SafeMarkdown({ children, className = '' }: { children: string; className?: string }) {
   return <div className={className}><ReactMarkdown skipHtml rehypePlugins={[rehypeSanitize, [rehypePrism, { ignoreMissing: true }]]} urlTransform={(url, key) => key === 'href' ? safeLink(url) : undefined} components={{
-    a: ({ href, children: linkChildren }) => href ? <a href={href} target="_blank" rel="noreferrer noopener" className={narrativeLink}>{linkChildren}</a> : <span>{linkChildren}</span>,
+    a: ({ href, children: linkChildren }) => href ? <ParkLink href={href} target="_blank" rel="noreferrer noopener" className={narrativeLink}>{linkChildren}</ParkLink> : <span>{linkChildren}</span>,
     img: ({ alt }) => <span role="note" className={css({ fontStyle: 'italic' })}>[Image omitted{alt ? `: ${alt}` : ''}]</span>,
     p: ({ children: paragraphChildren }) => <div className={css({ mb: '3' })}>{paragraphChildren}</div>,
     code: ({ className: codeClassName, children: codeChildren, ...props }) => codeClassName ? <code {...props} className={`${codeClassName} ${codeBlock}`}>{codeChildren}</code> : <code {...props} className={inlineCode}>{codeChildren}</code>,

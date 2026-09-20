@@ -6,7 +6,7 @@ import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
 import { TicketActionBar } from '../components/TicketActionBar';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCheckbox, ParkEmptyState, ParkFileUpload, ParkInput, ParkScrollArea, ParkSkeleton, ParkTabs, ParkTextarea, ParkTicketDetail } from '@luminatick/ui/park';
-import { Collapsible as ParkCollapsible } from '@luminatick/ui/components';
+import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
@@ -805,8 +805,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   if (!ticket) return <ParkEmptyState
     role="alert" className={detailStyles.unavailable} title={error instanceof ApiError && error.status === 404 ? 'Ticket not found.' : error instanceof ApiError && error.status === 403 ? 'You do not have access to this ticket.' : 'Could not load ticket. Please try again.'}
     description="The conversation could not be displayed. Retry loading it or return to the list."
-    action={<div><ParkButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)} className={css({ mt: '2' })}>Retry loading ticket</ParkButton>
-      <Link to={workspaceBackHref??'/inbox/all'} className={css({ ml: '2', color: 'accent.primary', textDecoration: 'underline' })}>{workspaceBackHref?'Back to conversations':'Back to Inbox'}</Link></div>}
+    action={<div className={css({ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2', maxW: 'full' })}>
+      <ParkButton type="button" aria-disabled={updateTicket.isPending || isConfirmingTicketSelect} onClick={(event) => void retryTicketDetail(event.currentTarget)}>Retry loading ticket</ParkButton>
+      <ParkLink asChild><Link to={workspaceBackHref??'/inbox/all'} className={css({ minW: 0, minH: '6', maxW: 'full', overflowWrap: 'anywhere' })}>{workspaceBackHref?'Back to conversations':'Back to Inbox'}</Link></ParkLink>
+    </div>}
   />;
   const reference = ticketReference(ticket, ticketPrefix);
 
@@ -837,10 +839,10 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
           </ParkAlert.Description></ParkAlert.Content>
         </ParkAlert.Root>}
         <div className={detailStyles.toolbar}>
-          <Link to={workspaceBackHref??'/inbox/all'} className={detailStyles.back}>
+          <ParkLink asChild variant="plain"><Link to={workspaceBackHref??'/inbox/all'} className={`${detailStyles.back} ${css({ minW: 0, maxW: 'full', flexShrink: '1', whiteSpace: 'normal', overflowWrap: 'anywhere' })}`}>
             <ArrowLeft className={css({ w: '5', h: '5', flexShrink: 0 })} />
             {workspaceBackHref?'Back to conversations':'Back to Inbox'}
-          </Link>
+          </Link></ParkLink>
           <div className={detailStyles.controls}>
             <ParkButton type="button" ref={contextTriggerRef} aria-expanded={workspace.panel === 'details'} aria-controls="ticket-context-panel"
               onClick={() => {

@@ -1,5 +1,6 @@
 import { css } from '@luminatick/ui/styled-system/css';
 import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkField, ParkInput, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi, ApiError } from '../api/client';
 import {
@@ -152,7 +153,7 @@ export function UsagePage() {
           <h4 className={css({"fontSize":"xl","fontWeight":"medium","lineHeight":"tight","color":"text.primary"})}>1. How to get your API Token:</h4>
           <ol className={css({"minW":0})}>
             <li>
-              Go to your <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className={css({"minW":0})}>Cloudflare API Tokens <IconArrowUpRightFromSquare className={css({"w":"4","h":"4","flexShrink":0})} /></a> dashboard.
+              Go to your <ParkLink href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className={css({"minW":0})}>Cloudflare API Tokens <IconArrowUpRightFromSquare aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} /></ParkLink> dashboard.
             </li>
             <li>Click <strong>Create Token</strong> and choose <strong>Create Custom Token</strong>.</li>
             <li>

@@ -1,7 +1,8 @@
 import { p } from '../portalStyles';
 import { ParkAlert, ParkButton, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { portalApi } from '../api/client';
 import type { Ticket, PaginatedResponse } from '../types';
@@ -214,7 +215,8 @@ export function TicketListPage() {
           <ul className={p.ticketListItems}>
             {tickets.map((ticket) => (
               <li key={ticket.id} className={p.ticketListItem}>
-                <Link to={`/tickets/${ticket.id}`} className={p.ticketListLink}>
+                <ParkLink asChild variant="plain">
+                  <RouterLink to={`/tickets/${ticket.id}`} className={p.ticketListLink}>
                   <div className={p.ticketListRow}>
                     <div className={p.ticketRowMain}>
                       <span className={p.ticketReference}>{ticketReference(ticket, ticketPrefix)}</span>
@@ -229,7 +231,8 @@ export function TicketListPage() {
                     <span>•</span>
                     <span className={p.ticketPriority}>Priority: {ticket.priority}</span>
                   </div>
-                </Link>
+                  </RouterLink>
+                </ParkLink>
               </li>
             ))}
           </ul>

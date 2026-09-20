@@ -2,7 +2,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
-import { IconButton as ParkIconButton } from '@luminatick/ui/components';
+import { IconButton as ParkIconButton, Link as ParkLink } from '@luminatick/ui/components';
 import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
@@ -107,28 +107,31 @@ function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
   const shellStyles = ParkShell();
   return (
         <div className={cn(shellStyles.sidebar, labelled ? shellStyles.sidebarLabelled : shellStyles.sidebarCompact)}>
-          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className={shellStyles.logoLink}>
-            <ProductLogo compact decorative className={shellStyles.logo} />
-          </Link>
+          <ParkLink asChild variant="plain">
+            <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className={shellStyles.logoLink}>
+              <ProductLogo compact decorative className={shellStyles.logo} />
+            </Link>
+          </ParkLink>
 
           <nav aria-label="Workspace navigation" className={shellStyles.navigation}>
             {navigation.map((item) => {
               const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
               return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  title={item.name}
-                  aria-label={item.name}
-                  aria-current={isActive ? "page" : undefined}
-                  onClick={onNavigate}
-                  className={cn(
-                    shellStyles.navigationLink,
-                    labelled ? shellStyles.navigationLinkLabelled : shellStyles.navigationLinkIcon,
-                  )}
-                >
-                  <item.icon aria-hidden="true" className={shellStyles.navigationIcon} />{labelled && <span>{item.name}</span>}
-                </Link>
+                <ParkLink key={item.name} asChild variant="plain">
+                  <Link
+                    to={item.href}
+                    title={item.name}
+                    aria-label={item.name}
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={onNavigate}
+                    className={cn(
+                      shellStyles.navigationLink,
+                      labelled ? shellStyles.navigationLinkLabelled : shellStyles.navigationLinkIcon,
+                    )}
+                  >
+                    <item.icon aria-hidden="true" className={shellStyles.navigationIcon} />{labelled && <span>{item.name}</span>}
+                  </Link>
+                </ParkLink>
               );
             })}
           </nav>

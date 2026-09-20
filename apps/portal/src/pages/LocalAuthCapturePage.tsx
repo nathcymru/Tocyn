@@ -1,5 +1,6 @@
 import { p } from '../portalStyles';
 import { ParkAlert, ParkButton, ParkEmptyState, ParkProgress } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import { useCallback, useEffect, useState } from 'react';
 
 type CaptureMessage = {
@@ -14,6 +15,17 @@ type CaptureMessage = {
 };
 
 const capturePath = '/__local/auth-capture';
+const localPortalOrigins = new Set(['http://localhost:5174', 'http://127.0.0.1:5174']);
+
+function capturedLoginHref(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return localPortalOrigins.has(url.origin) && !url.username && !url.password && url.pathname === '/verify' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 export function LocalAuthCapturePage() {
   const [messages, setMessages] = useState<CaptureMessage[]>([]);
@@ -74,12 +86,14 @@ export function LocalAuthCapturePage() {
     </ParkAlert.Root>}
     <section className={p.localCaptureSection} aria-labelledby="captured-messages">
       <h2 id="captured-messages" className={p.localCaptureHeading}>Captured messages</h2>
-      {!loaded ? <ParkProgress value={null} label="Loading captured messages…" /> : messages.length === 0 ? failure ? null : <ParkEmptyState title="No captured messages." description="Captured local authentication messages will appear here." headingLevel={false} className={p.localCaptureEmpty} /> : messages.map(message => <article key={message.id} className={p.localCaptureMessage}>
+      {!loaded ? <ParkProgress value={null} label="Loading captured messages…" /> : messages.length === 0 ? failure ? null : <ParkEmptyState title="No captured messages." description="Captured local authentication messages will appear here." headingLevel={false} className={p.localCaptureEmpty} /> : messages.map(message => {
+        const href = capturedLoginHref(message.loginLink);
+        return <article key={message.id} className={p.localCaptureMessage}>
         <h3 className={p.localCaptureMessageTitle}>{message.subject}</h3>
         <p className={p.localCaptureMessageMeta}>To: {message.to}</p>
-        {message.loginLink && <a className={p.localCaptureLink} href={message.loginLink}>Open captured login link</a>}
+        {href && <ParkLink href={href}>Open captured login link</ParkLink>}
         <pre className={p.localCapturePayload}>{JSON.stringify(message, null, 2)}</pre>
-      </article>)}
+      </article>})}
     </section>
   </main>;
 }

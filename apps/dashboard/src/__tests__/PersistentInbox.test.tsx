@@ -295,7 +295,10 @@ it('switches to an accessible factual table with row navigation and a mobile lis
   expect(screen.getByRole('table',{name:'Tickets in the current view'})).toBeInTheDocument();
   expect(screen.getByRole('columnheader',{name:'Reference'})).toBeInTheDocument();
   expect(screen.getByRole('columnheader',{name:'Customer'})).toBeInTheDocument();
-  expect(screen.getByRole('link',{name:'Fixture conversation 1'})).toHaveAttribute('href','/inbox/all/ticket-1');
+  const subjectLink=screen.getByRole('link',{name:'Fixture conversation 1'});
+  expect(subjectLink).toHaveAttribute('href','/inbox/all/ticket-1');
+  expect(subjectLink).toHaveClass('link');
+  subjectLink.focus();expect(subjectLink).toHaveFocus();
   expect(screen.getByText('Table view uses the compact conversation list on small screens.')).toBeInTheDocument();
   expect(screen.queryByRole('button',{name:/Actions for/})).not.toBeInTheDocument();
 });

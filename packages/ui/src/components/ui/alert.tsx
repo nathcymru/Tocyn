@@ -17,10 +17,10 @@ type IndicatorProps = ComponentProps<typeof StyledIndicator>
 const StyledIndicator = withContext(ark.span, 'indicator')
 
 export const Indicator = forwardRef<HTMLSpanElement, IndicatorProps>(
-  function Indicator(props, ref) {
+  function Indicator({ children, ...props }, ref) {
     return (
       <StyledIndicator ref={ref} {...props}>
-        <InfoIcon />
+        {children ?? <InfoIcon />}
       </StyledIndicator>
     )
   },

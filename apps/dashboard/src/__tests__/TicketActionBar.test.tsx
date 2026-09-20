@@ -40,7 +40,10 @@ it('keeps the command and More actions keyboard-accessible, with dialog focus re
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(opener).toHaveFocus());
   const link = screen.getByRole('link', { name: 'Open action safety guidance' });
+  expect(link).toHaveClass('link', 'link--variant_plain');
+  expect(link).toHaveAttribute('target', '_blank');
   expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  link.focus();expect(link).toHaveFocus();
 });
 
 it('renders denied server actions disabled with their reason and refuses broadened links', () => {

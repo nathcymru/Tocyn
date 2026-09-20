@@ -71,6 +71,32 @@ describe('portal conversation accessibility and recovery', () => {
     expect(await screen.findByText(new RegExp(`Ticket ${reference} • Created`))).toBeTruthy();
   });
 
+  it('renders ticket rows as Park Links and keeps client-side detail navigation', async () => {
+    setupReads();
+    render(<MemoryRouter initialEntries={['/tickets']}><Routes>
+      <Route path="/tickets" element={<TicketListPage />} />
+      <Route path="/tickets/:id" element={<h1>Conversation destination</h1>} />
+    </Routes></MemoryRouter>);
+    const link = await screen.findByRole('link', { name: /Accepted conversation/ });
+    expect(link).toHaveClass('link', 'link--variant_plain');
+    expect(link).toHaveAttribute('href', '/tickets/ticket');
+    await userEvent.click(link);
+    expect(screen.getByRole('heading', { name: 'Conversation destination' })).toBeInTheDocument();
+  });
+
+  it('renders the conversation back control as a labeled Park Link and navigates', async () => {
+    setupReads();
+    render(<MemoryRouter initialEntries={['/tickets/ticket']}><Routes>
+      <Route path="/tickets/:id" element={<TicketDetailPage />} />
+      <Route path="/tickets" element={<h1>Ticket list destination</h1>} />
+    </Routes></MemoryRouter>);
+    const back = await screen.findByRole('link', { name: 'Back to Tickets' });
+    expect(back).toHaveClass('link', 'link--variant_plain');
+    expect(back).toHaveAttribute('href', '/tickets');
+    await userEvent.click(back);
+    expect(screen.getByRole('heading', { name: 'Ticket list destination' })).toBeInTheDocument();
+  });
+
   it('uses Park Dialog and Field anatomy, focuses its first field and returns focus after Escape', async () => {
     setupReads(); mountList();
     const opener = await screen.findByRole('button', { name: 'New Ticket' });
@@ -148,6 +174,7 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.get).mockRejectedValueOnce(new Error('Conversation unavailable'));
     mountDetail();
     expect((await screen.findByRole('alert')).textContent).toContain('Conversation unavailable');
+    expect(screen.getByRole('link', { name: 'Back to Tickets' })).toHaveClass('link', 'link--variant_underline');
     fireEvent.click(screen.getByRole('button', { name: 'Retry loading conversation' }));
     const heading = await screen.findByRole('heading', { name: /Accepted conversation/ });
     await waitFor(() => expect(document.activeElement).toBe(heading));

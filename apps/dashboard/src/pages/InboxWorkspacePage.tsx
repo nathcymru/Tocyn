@@ -1,6 +1,7 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ChevronDown,ChevronLeft,ChevronRight,Filter,IconChartBar,Plus } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
@@ -392,7 +393,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
             {emptyPage&&<ParkTable.Row><ParkTable.Cell colSpan={4}><ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></ParkTable.Cell></ParkTable.Row>}
             {!emptyPage&&!query.isLoading&&tickets.map(ticket=><ParkTable.Row key={ticket.id} data-selected={ticket.id===selectedTicketId?'true':undefined} className={pageStyles.inboxTableRow}>
               <ParkTable.Cell>{ticketReference(ticket,prefix)}</ParkTable.Cell>
-              <ParkTable.Cell><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}}>{ticket.subject}</Link></ParkTable.Cell>
+              <ParkTable.Cell><ParkLink asChild><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className={css({ minW: 0, minH: '6', maxW: 'full', overflowWrap: 'anywhere', whiteSpace: 'normal', textAlign: 'start' })}>{ticket.subject}</Link></ParkLink></ParkTable.Cell>
               <ParkTable.Cell>{ticket.customer_email}</ParkTable.Cell>
               <ParkTable.Cell>{ticket.status}</ParkTable.Cell>
             </ParkTable.Row>)}
