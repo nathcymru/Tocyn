@@ -272,7 +272,7 @@ export const KnowledgePage: React.FC = () => {
         {/* Sidebar */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeSidebar}>
           <ParkCard.Header>
-            <h2>Categories</h2>
+            <ParkCard.Title asChild><h2>Categories</h2></ParkCard.Title>
             <ParkButton
               onClick={() => setIsAddingCategory({ parentId: null })}
               variant="plain"

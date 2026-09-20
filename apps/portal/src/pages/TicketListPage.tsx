@@ -1,6 +1,6 @@
 import { p } from '../portalStyles';
 import { ParkAlert, ParkButton, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
-import { Link as ParkLink } from '@luminatick/ui/components';
+import { Badge as ParkBadge, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useState, useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -226,9 +226,9 @@ export function TicketListPage() {
                       <span className={p.ticketReference}>{ticketReference(ticket, ticketPrefix)}</span>
                       <h3 className={[p.ticketSubject, ticketSubjectWrap].join(' ')}>{ticket.subject}</h3>
                     </div>
-                    <span className={[p.ticketStatus, statusColors[ticket.status]].join(' ')}>
-                      {ticket.status}
-                    </span>
+                    <ParkBadge asChild variant="subtle" className={[p.ticketStatus, statusColors[ticket.status]].join(' ')}>
+                      <span>{ticket.status}</span>
+                    </ParkBadge>
                   </div>
                   <div className={p.ticketListMeta}>
                     <span>Created {formatDistanceToNow(utcTimestamp(ticket.created_at), { addSuffix: true })}</span>

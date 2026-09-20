@@ -130,58 +130,58 @@ export const GroupsPage: React.FC = () => {
         <ParkDialog.Backdrop />
         <ParkDialog.Positioner>
           <ParkDialog.Content aria-labelledby={createTitle}>
-          <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
-            <ParkDialog.Title id={createTitle}>New Support Group</ParkDialog.Title>
-            <ParkButton type="button" variant="plain" aria-label="Close group editor" disabled={creating} onClick={closeCreate}>
-              <IconXmark aria-hidden="true" size={20} />
-            </ParkButton>
-          </ParkDialog.Header>
-          <ParkDialog.Body>
-          <form onSubmit={handleCreateGroup} aria-labelledby={createTitle}>
-            {createError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
-            <fieldset disabled={creating} className={css({"display":"grid","gap":"4"})}>
-            <ParkField.Root required className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
-              <ParkField.Label htmlFor={`${createTitle}-name`}>Group Name</ParkField.Label>
-              <ParkInput
-                type="text"
-                required
-                className={css({ w: 'full' })}
-                placeholder="e.g., Technical Support"
-                id={`${createTitle}-name`} ref={groupNameInput} value={newGroupName}
-                onChange={e => setNewGroupName(e.target.value)}
-              />
-              <ParkField.HelperText>Use a short, clear team name.</ParkField.HelperText>
-            </ParkField.Root>
-            <ParkField.Root className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
-              <ParkField.Label htmlFor={`${createTitle}-description`}>Description (Optional)</ParkField.Label>
-              <ParkTextarea
-                className={css({ w: 'full' })}
-                placeholder="Briefly describe what this group handles..."
-                rows={2}
-                id={`${createTitle}-description`} value={newGroupDescription}
-                onChange={e => setNewGroupDescription(e.target.value)}
-              />
-              <ParkField.HelperText>Summarise the tickets this team handles.</ParkField.HelperText>
-            </ParkField.Root>
-            <ParkDialog.Footer>
-              <ParkButton
-                type="button" variant="outline"
-                onClick={closeCreate}
-                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
-              >
-                Cancel
+            <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+              <ParkDialog.Title id={createTitle}>New Support Group</ParkDialog.Title>
+              <ParkButton type="button" variant="plain" aria-label="Close group editor" disabled={creating} onClick={closeCreate}>
+                <IconXmark aria-hidden="true" size={20} />
               </ParkButton>
-              <ParkButton
-                type="submit"
-                loading={creating} loadingText="Creating group…"
-                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
-              >
-                Create Group
-              </ParkButton>
-            </ParkDialog.Footer>
-            </fieldset>
-          </form>
-          </ParkDialog.Body>
+            </ParkDialog.Header>
+            <form onSubmit={handleCreateGroup} aria-labelledby={createTitle} className={css({ display: 'flex', flexDirection: 'column', gap: '4', w: 'full' })}>
+              <ParkDialog.Body>
+                {createError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+                <fieldset disabled={creating} className={css({ display: 'grid', gap: '4', w: 'full' })}>
+                  <ParkField.Root required className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
+                    <ParkField.Label htmlFor={`${createTitle}-name`}>Group Name</ParkField.Label>
+                    <ParkInput
+                      type="text"
+                      required
+                      className={css({ w: 'full' })}
+                      placeholder="e.g., Technical Support"
+                      id={`${createTitle}-name`} ref={groupNameInput} value={newGroupName}
+                      onChange={e => setNewGroupName(e.target.value)}
+                    />
+                    <ParkField.HelperText>Use a short, clear team name.</ParkField.HelperText>
+                  </ParkField.Root>
+                  <ParkField.Root className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
+                    <ParkField.Label htmlFor={`${createTitle}-description`}>Description (Optional)</ParkField.Label>
+                    <ParkTextarea
+                      className={css({ w: 'full' })}
+                      placeholder="Briefly describe what this group handles..."
+                      rows={2}
+                      id={`${createTitle}-description`} value={newGroupDescription}
+                      onChange={e => setNewGroupDescription(e.target.value)}
+                    />
+                    <ParkField.HelperText>Summarise the tickets this team handles.</ParkField.HelperText>
+                  </ParkField.Root>
+                </fieldset>
+              </ParkDialog.Body>
+              <ParkDialog.Footer>
+                <ParkButton
+                  type="button" variant="outline" disabled={creating}
+                  onClick={closeCreate}
+                  className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}
+                >
+                  Cancel
+                </ParkButton>
+                <ParkButton
+                  type="submit"
+                  loading={creating} loadingText="Creating group…"
+                  className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}
+                >
+                  Create Group
+                </ParkButton>
+              </ParkDialog.Footer>
+            </form>
           </ParkDialog.Content>
         </ParkDialog.Positioner>
       </ParkDialog.Root>
