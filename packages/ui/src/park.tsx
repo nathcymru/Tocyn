@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { visuallyHidden } from './styles/generated/patterns';
-import { emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, settingsLayout as settingsLayoutRecipe, knowledgeEditor as knowledgeEditorRecipe, composer as composerRecipe, ticketFields as ticketFieldsRecipe, shell as shellRecipe, page as pageRecipe, ticketDetail as ticketDetailRecipe } from './styles/generated/recipes';
+import { emptyState as emptyStateRecipe, globalSearch as globalSearchRecipe, knowledgeEditor as knowledgeEditorRecipe, composer as composerRecipe, ticketFields as ticketFieldsRecipe, shell as shellRecipe, page as pageRecipe, ticketDetail as ticketDetailRecipe } from './styles/generated/recipes';
 import { Button as OfficialButton, type ButtonProps as OfficialButtonProps } from './components/ui/button';
 import { Input as OfficialInput } from './components/ui/input';
 import { Textarea as OfficialTextarea } from './components/ui/textarea';
@@ -124,7 +124,6 @@ export function ParkEmptyState({ title, description, action, headingLevel = 2, h
 // Static calls keep app-only Panda recipes in the shared stylesheet.
 export const ParkShell = (props?: Parameters<typeof shellRecipe>[0]) => shellRecipe(props);
 export const ParkGlobalSearch = () => globalSearchRecipe();
-export const ParkSettingsLayout = () => settingsLayoutRecipe();
 export const ParkKnowledgeEditor = () => knowledgeEditorRecipe();
 export const ParkComposer = () => composerRecipe();
 export const ParkTicketFields = () => ticketFieldsRecipe();
