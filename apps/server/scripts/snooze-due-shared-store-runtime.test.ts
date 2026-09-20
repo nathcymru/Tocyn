@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
@@ -24,11 +25,24 @@ test('the private due timer shares the review app store, wakes unattended and su
     build({ entryPoints: [join(root, 'scripts/snooze-due-local-entry.ts')], bundle: true, format: 'esm', platform: 'neutral',
       external: ['cloudflare:workers', 'node:crypto'], write: false }),
   ]);
+  const probe = createServer();
+  const port = await new Promise<number>((resolvePort, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      if (!address || typeof address === 'string') reject(new Error('Expected local TCP port'));
+      else resolvePort(address.port);
+    });
+  });
+  await new Promise<void>(resolveClose => probe.close(() => resolveClose()));
   const common = { modules: true as const, compatibilityDate: '2024-04-03', compatibilityFlags: ['nodejs_compat'],
     d1Databases: { DB: 'review-shared-d1' } };
-  const options = convertV4MiniflareOptions({ workers: [
+  const directory = await mkdtemp(join(tmpdir(), 'due-shared-'));
+  const options = convertV4MiniflareOptions({ host: '127.0.0.1', port,
+    resourcePersistencePath: join(directory, 'state'), workers: [
     { ...common, name: 'review-app', script: app.outputFiles[0].text,
-      bindings: { ENVIRONMENT: 'local', LOCAL_BETA_ENABLED: 'false', BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1' },
+      bindings: { ENVIRONMENT: 'local', LOCAL_BETA_ENABLED: 'false', BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1',
+        LOCAL_RUNTIME_ORIGIN: `http://127.0.0.1:${port}` },
       durableObjects: { BUDGET_COORDINATOR_DO: 'BudgetCoordinatorDO', BUDGET_GRANT_HOLDER_DO: 'BudgetGrantHolderDO',
         NOTIFICATION_DO: 'NotificationDO' } },
     { ...common, name: 'due-private', script: due.outputFiles[0].text,
@@ -39,8 +53,7 @@ test('the private due timer shares the review app store, wakes unattended and su
         BUDGET_GRANT_HOLDER_DO: { className: 'BudgetGrantHolderDO', scriptName: 'review-app' },
       } },
   ] });
-  const mf = new Miniflare(options);
-  const directory = await mkdtemp(join(tmpdir(), 'due-shared-'));
+  let mf = new Miniflare(options);
   const markerPath = join(directory, 'marker.json');
   let controller: Awaited<ReturnType<typeof createLocalSnoozeController>> | undefined;
   let rpc: DueRpc | undefined;
@@ -76,9 +89,17 @@ test('the private due timer shares the review app store, wakes unattended and su
       await db.prepare('UPDATE ticket_support_state SET snoozed_until=? WHERE tenant_id=?')
         .bind(futureDeadline, tenant).run();
     }
-    const health = await mf.dispatchFetch('http://localhost:8787/health');
+    const health = await mf.dispatchFetch(`http://127.0.0.1:${port}/health`);
     assert.equal(health.status, 200, `the review app worker must be live in the shared runtime: ${await health.text()}`);
-    assert.equal((await mf.dispatchFetch('http://localhost:8787/no-private-due-route')).status, 404);
+    const publicUrl = await mf.ready;
+    assert.equal(publicUrl.hostname, '127.0.0.1', 'the hosted review app must be loopback-only');
+    const hostedHealth = await fetch(new URL('/health', publicUrl));
+    assert.equal(hostedHealth.status, 200, 'the hosted app and private due worker must share this one Miniflare runtime');
+    await hostedHealth.body?.cancel();
+    const privateHttp = await fetch(new URL('/runDue', publicUrl));
+    assert.equal(privateHttp.status, 404, 'the private due RPC must not be exposed by the hosted app');
+    await privateHttp.body?.cancel();
+    assert.equal((await mf.dispatchFetch(`http://127.0.0.1:${port}/no-private-due-route`)).status, 404);
     rpc = await mf.getWorker('due-private') as unknown as DueRpc;
     await assert.rejects(async () => rpc!.runDue('outside-catalogue', 'new-work'));
     const scheduler = { set(callback: () => void, requestedMs: number) {
@@ -126,7 +147,8 @@ test('the private due timer shares the review app store, wakes unattended and su
     await controller.dispose();
     controller = undefined;
     rpc[Symbol.dispose]?.();
-    await mf.setOptions(options);
+    await mf.dispose();
+    mf = new Miniflare(options);
     db = await mf.getD1Database('DB', 'review-app');
     rpc = await mf.getWorker('due-private') as unknown as DueRpc;
     controller = await createLocalSnoozeController({ tenantIds: ['due-a', 'due-b'], markerPath, mode: 'restart',
