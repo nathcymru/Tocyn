@@ -9,7 +9,9 @@ import {
   effectiveUrgencyWindowHours,
   PRIORITY_CATEGORY_BASE,
   PRIORITY_SCOPE_MULTIPLIER,
+  priorityTimeRemainingFromPauses,
   timeRemainingHours,
+  urgencyModifierTotal,
   type PrioritySortTicket,
   type PriorityView,
 } from '../../../../../packages/shared/priority-matrix';
@@ -19,10 +21,17 @@ test('category and scope tables cover the approved values', () => {
   assert.deepEqual(PRIORITY_SCOPE_MULTIPLIER, { systemic: 3, localised: 2, isolated: 1 });
 });
 
-test('score adds the supplied modifier total without assigning urgency conditions', () => {
+test('each explicit urgency condition contributes five points and concurrent crises stack', () => {
+  const none = { regulatoryOfficerOnSite: false, vipBlocked: false, hardDeadline: false };
+  assert.equal(urgencyModifierTotal(none), 0);
+  assert.equal(urgencyModifierTotal({ ...none, vipBlocked: true }), 5);
+  assert.equal(urgencyModifierTotal({ ...none, regulatoryOfficerOnSite: true, vipBlocked: true }), 10);
+  assert.equal(urgencyModifierTotal({ regulatoryOfficerOnSite: true, vipBlocked: true, hardDeadline: true }), 15);
+  assert.throws(() => urgencyModifierTotal({ ...none, hardDeadline: 1 } as never), RangeError);
   assert.equal(calculatePriorityScore('technical-problems', 'localised', 0), 14);
-  assert.equal(calculatePriorityScore('technical-problems', 'localised', 5), 19);
-  for (const invalid of [-5, 2.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+  assert.equal(calculatePriorityScore('technical-problems', 'localised', 10), 24);
+  assert.equal(calculatePriorityScore('incidents-interruptions', 'systemic', 15), 45);
+  for (const invalid of [-5, 2.5, 20, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.throws(() => calculatePriorityScore('technical-problems', 'localised', invalid), RangeError);
   }
 });
@@ -51,6 +60,32 @@ test('invalid tier values fail before any window or remaining-time calculation',
   assert.throws(() => timeRemainingHours('alpha', 2.5 as never, 50), RangeError);
 });
 
+test('fixed-hour clock pauses for waiting and resolution, then resumes with the original time debt', () => {
+  const hour = 3_600_000;
+  // A 48-hour D1 ticket works 20h, waits 10h, works 4h, then is resolved.
+  const waiting = { startsAtMs: 20 * hour, endsAtMs: 30 * hour };
+  const resolved = { startsAtMs: 34 * hour, endsAtMs: null };
+  assert.equal(priorityTimeRemainingFromPauses('delta', 1, 0, 40 * hour, [waiting, resolved]), 24);
+  // Reopening at 40h closes the pause; the ticket still owes its first 24h.
+  assert.equal(priorityTimeRemainingFromPauses('delta', 1, 0, 44 * hour,
+    [waiting, { startsAtMs: 34 * hour, endsAtMs: 40 * hour }]), 20);
+  assert.equal(priorityTimeRemainingFromPauses('delta', 1, 0, 65 * hour,
+    [waiting, { startsAtMs: 34 * hour, endsAtMs: 40 * hour }]), -1);
+});
+
+test('fixed-hour clock rejects malformed, overlapping and unbounded pause history', () => {
+  const hour = 3_600_000;
+  const remaining = (pauses: Parameters<typeof priorityTimeRemainingFromPauses>[4]) =>
+    priorityTimeRemainingFromPauses('delta', 1, 0, 10 * hour, pauses);
+  assert.throws(() => remaining([{ startsAtMs: hour, endsAtMs: 3 * hour },
+    { startsAtMs: 2 * hour, endsAtMs: 4 * hour }]), RangeError);
+  assert.throws(() => remaining([{ startsAtMs: hour, endsAtMs: null },
+    { startsAtMs: 5 * hour, endsAtMs: null }]), RangeError);
+  assert.throws(() => remaining([{ startsAtMs: 11 * hour, endsAtMs: null }]), RangeError);
+  assert.throws(() => remaining(Array.from({ length: 4_097 }, (_, index) =>
+    ({ startsAtMs: index * 100, endsAtMs: index * 100 + 50 }))), RangeError);
+});
+
 test('urgency drift includes the 24h and 4h equality examples without mutating contract tiers', () => {
   assert.equal(effectiveUrgencyWindowHours(48, 25), 48);
   assert.equal(effectiveUrgencyWindowHours(48, 24), 24);
@@ -66,38 +101,40 @@ test('urgency drift includes the 24h and 4h equality examples without mutating c
 
 const snapshot = (
   ticketId: string, contractTier: PrioritySortTicket['contractTier'],
-  criticalityTier: PrioritySortTicket['criticalityTier'], remaining: number,
-): PrioritySortTicket => ({ ticketId, contractTier, criticalityTier, timeRemainingHours: remaining });
+  criticalityTier: PrioritySortTicket['criticalityTier'], remaining: number, priorityScore = 10,
+): PrioritySortTicket => ({ ticketId, contractTier, criticalityTier, timeRemainingHours: remaining, priorityScore });
 
 function sortedIds(view: PriorityView, tickets: PrioritySortTicket[]): string[] {
   return [...tickets].sort((a, b) => comparePriorityTickets(view, a, b)).map(ticket => ticket.ticketId);
 }
 
-test('Default Focus orders time, then criticality, contract, and ID', () => {
+test('Default Focus orders time, then stacked score, criticality, contract, and ID', () => {
   const tickets = [
     snapshot('z', 'delta', 4, 2), snapshot('a', 'delta', 4, 2),
-    snapshot('bravo', 'bravo', 4, 2), snapshot('lower', 'alpha', 3, 2),
+    snapshot('bravo', 'bravo', 4, 2), snapshot('lower', 'alpha', 3, 2, 25),
     snapshot('overdue', 'delta', 1, -1), snapshot('later', 'alpha', 4, 3),
   ];
-  assert.deepEqual(sortedIds('default-focus', tickets), ['overdue', 'bravo', 'a', 'z', 'lower', 'later']);
+  assert.deepEqual(sortedIds('default-focus', tickets), ['overdue', 'lower', 'bravo', 'a', 'z', 'later']);
 });
 
-test('Criticality Matrix orders criticality, then time, then ID', () => {
+test('Criticality Matrix promotes drift into effective tier, then orders time within it', () => {
   const tickets = [
-    snapshot('low', 'alpha', 1, -10), snapshot('z', 'delta', 4, 2),
-    snapshot('a', 'alpha', 4, 2), snapshot('soon', 'bravo', 4, -1),
-    snapshot('middle', 'alpha', 3, -2),
+    snapshot('not-yet', 'delta', 1, 25), snapshot('at-24', 'delta', 1, 24),
+    snapshot('bravo', 'bravo', 3, 3), snapshot('fresh-l4', 'delta', 4, 0.75),
+    snapshot('drifted-l1', 'delta', 1, 0.5),
   ];
-  assert.deepEqual(sortedIds('criticality-matrix', tickets), ['soon', 'a', 'z', 'middle', 'low']);
+  assert.deepEqual(sortedIds('criticality-matrix', tickets),
+    ['drifted-l1', 'fresh-l4', 'bravo', 'at-24', 'not-yet']);
 });
 
-test('SLA Commitment orders contract, criticality, time, and ID', () => {
+test('SLA Commitment promotes effective contract tier, then raw criticality and time', () => {
   const tickets = [
-    snapshot('delta', 'delta', 4, -4), snapshot('a', 'alpha', 4, 2),
-    snapshot('z', 'alpha', 4, 2), snapshot('sooner', 'alpha', 4, 1),
-    snapshot('lower', 'alpha', 3, -2), snapshot('bravo', 'bravo', 4, 0),
+    snapshot('delta-25', 'delta', 1, 25), snapshot('delta-24', 'delta', 1, 24),
+    snapshot('bravo', 'bravo', 3, 3), snapshot('delta-4', 'delta', 1, 4),
+    snapshot('alpha', 'alpha', 4, 0.5), snapshot('delta-1', 'delta', 1, 0.25),
   ];
-  assert.deepEqual(sortedIds('sla-commitment', tickets), ['sooner', 'a', 'z', 'lower', 'bravo', 'delta']);
+  assert.deepEqual(sortedIds('sla-commitment', tickets),
+    ['alpha', 'delta-1', 'bravo', 'delta-4', 'delta-24', 'delta-25']);
   assert.throws(() => comparePriorityTickets('sla-commitment', snapshot('a', 'alpha', 4, Number.NaN), snapshot('b', 'alpha', 4, 1)), RangeError);
 });
 
@@ -108,4 +145,5 @@ test('invalid view and every malformed sort snapshot fail even when an earlier k
   assert.throws(() => comparePriorityTickets('sla-commitment', snapshot('bad', 'unknown' as never, 1, 1), valid), RangeError);
   assert.throws(() => comparePriorityTickets('default-focus', snapshot('bad', 'alpha', 5 as never, 1), valid), RangeError);
   assert.throws(() => comparePriorityTickets('default-focus', snapshot('', 'alpha', 4, 1), valid), RangeError);
+  assert.throws(() => comparePriorityTickets('default-focus', snapshot('bad', 'alpha', 4, 1, 46), valid), RangeError);
 });

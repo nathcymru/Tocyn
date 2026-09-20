@@ -23,6 +23,25 @@ export const PRIORITY_SCOPE_MULTIPLIER = {
 
 export type PriorityScope = keyof typeof PRIORITY_SCOPE_MULTIPLIER;
 
+export interface UrgencyConditions {
+  regulatoryOfficerOnSite: boolean;
+  vipBlocked: boolean;
+  hardDeadline: boolean;
+}
+
+/** Each independently verified condition adds five points; concurrent crises stack. */
+export function urgencyModifierTotal(conditions: UrgencyConditions): number {
+  if (!conditions || typeof conditions !== 'object'
+    || typeof conditions.regulatoryOfficerOnSite !== 'boolean'
+    || typeof conditions.vipBlocked !== 'boolean'
+    || typeof conditions.hardDeadline !== 'boolean') {
+    throw new RangeError('Urgency conditions must be three explicit booleans');
+  }
+  return 5 * Number(conditions.regulatoryOfficerOnSite)
+    + 5 * Number(conditions.vipBlocked)
+    + 5 * Number(conditions.hardDeadline);
+}
+
 function assertCategory(value: PriorityCategory): void {
   if (!Object.prototype.hasOwnProperty.call(PRIORITY_CATEGORY_BASE, value)) {
     throw new RangeError('Unsupported priority category');
@@ -42,8 +61,9 @@ export function calculatePriorityScore(
 ): number {
   assertCategory(category);
   assertScope(scope);
-  if (!Number.isSafeInteger(urgencyModifierTotal) || urgencyModifierTotal < 0) {
-    throw new RangeError('Urgency modifier total must be a non-negative integer');
+  if (!Number.isSafeInteger(urgencyModifierTotal) || urgencyModifierTotal < 0
+    || urgencyModifierTotal > 15 || urgencyModifierTotal % 5 !== 0) {
+    throw new RangeError('Urgency modifier total must be 0, 5, 10, or 15');
   }
   return PRIORITY_CATEGORY_BASE[category] * PRIORITY_SCOPE_MULTIPLIER[scope] + urgencyModifierTotal;
 }
@@ -96,6 +116,47 @@ export function timeRemainingHours(
   return window - window * (elapsedPercentage / 100);
 }
 
+export interface PriorityPauseInterval {
+  startsAtMs: number;
+  /** Omitted only for the current waiting or resolved period. */
+  endsAtMs: number | null;
+}
+
+/**
+ * Fixed-hour triage clock, independent of the calendar-aware contractual SLA.
+ * The caller supplies authoritative waiting and resolved intervals from the
+ * ticket lifecycle. An open interval freezes elapsed time until resumption.
+ */
+export function priorityTimeRemainingFromPauses(
+  contractTier: ContractTier,
+  criticalityTier: CriticalityTier,
+  startedAtMs: number,
+  evaluatedAtMs: number,
+  pauses: readonly PriorityPauseInterval[],
+): number {
+  const window = absoluteWindowHours(contractTier, criticalityTier);
+  if (!Number.isSafeInteger(startedAtMs) || !Number.isSafeInteger(evaluatedAtMs)
+    || evaluatedAtMs < startedAtMs || !Array.isArray(pauses) || pauses.length > 4_096) {
+    throw new RangeError('Invalid priority clock bounds');
+  }
+  let previousEnd = startedAtMs;
+  let pausedMs = 0;
+  for (let index = 0; index < pauses.length; index += 1) {
+    const pause = pauses[index];
+    const end = pause?.endsAtMs ?? evaluatedAtMs;
+    if (!pause || !Number.isSafeInteger(pause.startsAtMs)
+      || (pause.endsAtMs !== null && !Number.isSafeInteger(pause.endsAtMs)) || !Number.isSafeInteger(end)
+      || pause.startsAtMs < previousEnd || pause.startsAtMs > evaluatedAtMs
+      || end < pause.startsAtMs || end > evaluatedAtMs
+      || (pause.endsAtMs === null && index !== pauses.length - 1)) {
+      throw new RangeError('Invalid priority pause history');
+    }
+    pausedMs += end - pause.startsAtMs;
+    previousEnd = end;
+  }
+  return window - (evaluatedAtMs - startedAtMs - pausedMs) / 3_600_000;
+}
+
 export type TimeTierWindowHours = 1 | 4 | 24 | 48;
 
 /**
@@ -124,6 +185,7 @@ export interface PrioritySortTicket {
   contractTier: ContractTier;
   criticalityTier: CriticalityTier;
   timeRemainingHours: number;
+  priorityScore: number;
 }
 
 const CONTRACT_TIER_ORDER: Readonly<Record<ContractTier, number>> = {
@@ -139,6 +201,21 @@ function compareTicketId(a: string, b: string): number {
 
 function compareRemaining(a: PrioritySortTicket, b: PrioritySortTicket): number {
   return a.timeRemainingHours - b.timeRemainingHours;
+}
+
+function compareScore(a: PrioritySortTicket, b: PrioritySortTicket): number {
+  return b.priorityScore - a.priorityScore;
+}
+
+function effectiveWindow(ticket: PrioritySortTicket): TimeTierWindowHours {
+  return effectiveUrgencyWindowHours(
+    absoluteWindowHours(ticket.contractTier, ticket.criticalityTier) as TimeTierWindowHours,
+    ticket.timeRemainingHours,
+  );
+}
+
+function compareEffectiveTier(a: PrioritySortTicket, b: PrioritySortTicket): number {
+  return effectiveWindow(a) - effectiveWindow(b);
 }
 
 function compareCriticality(a: PrioritySortTicket, b: PrioritySortTicket): number {
@@ -158,9 +235,12 @@ function assertSortTicket(ticket: PrioritySortTicket): void {
   if (!Number.isFinite(ticket.timeRemainingHours)) {
     throw new RangeError('Time remaining must be finite');
   }
+  if (!Number.isSafeInteger(ticket.priorityScore) || ticket.priorityScore < 1 || ticket.priorityScore > 45) {
+    throw new RangeError('Priority score must be an integer from 1 through 45');
+  }
 }
 
-/** Sorts snapshots by the requested raw-tier key chain, then by stable ticket ID. */
+/** Sorts a single whole-queue snapshot; drift never writes the stored tiers. */
 export function comparePriorityTickets(view: PriorityView, a: PrioritySortTicket, b: PrioritySortTicket): number {
   if (view !== 'default-focus' && view !== 'criticality-matrix' && view !== 'sla-commitment') {
     throw new RangeError('Unsupported priority view');
@@ -168,10 +248,10 @@ export function comparePriorityTickets(view: PriorityView, a: PrioritySortTicket
   assertSortTicket(a);
   assertSortTicket(b);
   const keys = view === 'default-focus'
-    ? [compareRemaining, compareCriticality, compareContract]
+    ? [compareRemaining, compareScore, compareCriticality, compareContract]
     : view === 'criticality-matrix'
-      ? [compareCriticality, compareRemaining]
-      : [compareContract, compareCriticality, compareRemaining];
+      ? [compareEffectiveTier, compareRemaining, compareCriticality, compareContract, compareScore]
+      : [compareEffectiveTier, compareCriticality, compareRemaining, compareContract, compareScore];
   for (const compare of keys) {
     const result = compare(a, b);
     if (result !== 0) return result;
