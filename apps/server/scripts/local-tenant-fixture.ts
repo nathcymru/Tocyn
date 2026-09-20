@@ -6,7 +6,7 @@ import * as OTPAuth from 'otpauth';
 import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
-import { RESOURCE_DIMENSIONS, STOCK_DIMENSIONS } from '@luminatick/shared';
+import { initializeSyntheticLocalBudgetAuthority } from './local-budget-d1-bootstrap';
 import { createLocalRuntime } from '../src/local-app';
 import type { Env } from '../src/bindings';
 import { createSystemTenantScope } from '../src/auth/scope';
@@ -196,8 +196,7 @@ function localEnv(db: D1Database, bucket: R2Bucket): Env {
 }
 
 /** A complete, high-capacity synthetic owner authority for two local fixture tenants.
- * It is intentionally created only by enableCombinedTicketAdmission, after the
- * fixture's local-beta policy and invitations have been installed. */
+ * It is created only after the fixture's local-beta policy and invitations exist. */
 async function enableTicketAdmission(env: Env, db: D1Database, policy: 'api-ticket-mutations-v1' | 'ticket-mutations-v1'): Promise<void> {
   assert.equal(env.LOCAL_BETA_ENABLED, 'true', 'Combined admission evidence requires the guarded local-beta fixture');
   if (env.BUDGET_ADMISSION_POLICY === 'api-ticket-mutations-v1') {
@@ -206,50 +205,11 @@ async function enableTicketAdmission(env: Env, db: D1Database, policy: 'api-tick
     return;
   }
   assert.equal(env.BUDGET_ADMISSION_POLICY, 'off', 'Admission authority may be seeded once per disposable fixture');
-  const deploymentId = 'fixture-combined-beta-deployment';
-  const policyId = 'fixture-combined-beta-policy';
-  const authorityRevision = 1;
-  const policyRevision = 1;
-  // Keep the disposable authority complete. New admitted paths must not be
-  // rejected merely because this local fixture omitted a catalogue dimension.
-  // Individual negative tests install their own deliberately constrained policy.
-  const dimensions = RESOURCE_DIMENSIONS;
-  const limitFor = (dimension: typeof dimensions[number]) => dimension === 'logEvents' ? 200_000_000 : 10_000_000;
-  const ownerPolicy = {
-    schemaVersion: 1,
-    policyId,
-    revision: policyRevision,
-    deploymentId,
-    mode: 'conservative',
-    catalogueVersion: 'fixture-combined-beta-catalogue',
-    maxGrantLifetimeMs: 60_000,
-    budgets: dimensions.map(dimension => ({
-      dimension,
-      allocationId: `fixture-combined-${dimension}`,
-      window: STOCK_DIMENSIONS.includes(dimension)
-        ? { kind: 'stock', id: `fixture-combined-${dimension}-stock` }
-        : { kind: 'interval', id: 'fixture-combined-window', startsAt: Date.now() - 1_000, endsAt: Date.now() + 60_000 },
-      limit: limitFor(dimension),
-      recoveryPercent: 20,
-      provenance: 'owner-allocation',
-    })),
-  };
-  const restrictions = (tenantId: Tenant) => JSON.stringify({
-    schemaVersion: 1, tenantId, ownerPolicyId: policyId, ownerPolicyRevision: policyRevision,
-    revision: 1, mode: 'conservative', limits: Object.fromEntries(dimensions.map(dimension => [dimension, limitFor(dimension)])), disabledFeatures: [],
+  const run = await db.prepare('SELECT run_id FROM local_beta_policy WHERE singleton=1').first<{ run_id: string }>();
+  assert.ok(run, 'Guarded local-beta policy must exist before synthetic budget authority');
+  await initializeSyntheticLocalBudgetAuthority(db, {
+    runId: run.run_id, tenantIds: ['fixture-tenant-a', 'fixture-tenant-b'], now: Date.now(), intervalWindowMs: 60_000,
   });
-  await db.batch([
-    db.prepare(`INSERT INTO budget_deployment_authority (deployment_id,authority_revision,state,updated_at)
-      VALUES (?,?,'active',?)`).bind(deploymentId, authorityRevision, Date.now()),
-    db.prepare(`INSERT INTO budget_owner_policies
-      (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
-      VALUES (?,?,?,?,?,?,?,?)`).bind(deploymentId, policyId, policyRevision, authorityRevision,
-      'fixture-combined-beta-coordinator', 64, 60_000, JSON.stringify(ownerPolicy)),
-    ...(['fixture-tenant-a', 'fixture-tenant-b'] as const).map((tenantId, index) => db.prepare(`INSERT INTO budget_tenant_allocations
-      (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
-      VALUES (?,?,?,?,?,?,?,'active')`).bind(deploymentId, tenantId, policyId, policyRevision, authorityRevision,
-      `fixture-combined-namespace-${index}`, restrictions(tenantId))),
-  ]);
   env.BUDGET_ADMISSION_POLICY = policy;
 }
 

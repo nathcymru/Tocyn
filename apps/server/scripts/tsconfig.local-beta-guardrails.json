@@ -7,6 +7,8 @@
     "local-tenant-fixture.ts",
     "local-beta-d1-bootstrap.ts",
     "local-beta-d1-bootstrap.test.ts",
+    "local-budget-d1-bootstrap.ts",
+    "local-budget-d1-bootstrap.test.ts",
     "local-beta-fixture.ts",
     "local-beta-guardrails.test.ts",
     "local-beta-operator.ts",
