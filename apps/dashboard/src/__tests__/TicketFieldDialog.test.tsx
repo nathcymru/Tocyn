@@ -81,3 +81,16 @@ it('keeps a retry action when the field list fails to load',()=>{
  fireEvent.click(screen.getByRole('button',{name:'Retry ticket fields'}));
  expect(refetch).toHaveBeenCalledOnce();
 });
+
+it('retains confirmed field rows and an inline retry after a refresh failure', () => {
+ const refetch=vi.fn();
+ fieldQuery.mockReturnValue({data:[{id:'field-1',label:'Device model',name:'device_model',field_type:'text',options:null,is_active:true}],isLoading:false,isError:true,refetch});
+ render(<QueryClientProvider client={client}><TicketFieldsPage/></QueryClientProvider>);
+ const warning=screen.getByRole('alert');
+ expect(warning).toHaveClass('alert__root');
+ expect(warning).toHaveTextContent('The last confirmed field definitions remain visible');
+ expect(screen.getByRole('table')).toHaveTextContent('Device model');
+ expect(screen.queryByText('Ticket fields could not be loaded')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Retry ticket fields'}));
+ expect(refetch).toHaveBeenCalledOnce();
+});

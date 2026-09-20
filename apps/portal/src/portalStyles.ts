@@ -70,7 +70,6 @@ export const p = {
   ticketListTitle: title,
   ticketListCreate: row,
   ticketListIcon: icon,
-  ticketListStatus: muted,
   ticketDialog: css({ maxW: 'lg', w: 'full' }),
   ticketDialogTitle: heading,
   ticketDialogStatus: muted,

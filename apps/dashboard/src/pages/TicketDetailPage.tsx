@@ -895,8 +895,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             {supportState.data.snoozed_until && <p role="status" className={css({ color: 'text.muted', fontSize: 'sm' })}>Snoozed until {new Date(supportState.data.snoozed_until).toLocaleString()}.</p>}
           </div>
           {selectedSupportStateNeedsDetails && <p role="status" className={css({ color: 'text.muted', fontSize: 'sm' })}>Load the current support-state definition before saving.</p>}
-          <div className={detailStyles.supportStateActions}><ParkButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className={detailStyles.modeButton}>Save support state</ParkButton><ParkButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Refresh current state</ParkButton>{supportStateDraftDirty.current && <ParkButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Discard local changes</ParkButton>}</div>
-          {hasMoreSupportStates && <ParkButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</ParkButton>}
+          <div className={detailStyles.supportStateActions}><ParkButton type="submit" disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} aria-disabled={isSupportStateSubmitting || assignmentBlocked || !selectedSupportStateDefinition} className={detailStyles.modeButton}>Save support state</ParkButton><ParkButton type="button" disabled={isSupportStateSubmitting} onClick={() => void refreshSupportState()} variant="plain">Refresh current state</ParkButton>{supportStateDraftDirty.current && <ParkButton type="button" disabled={isSupportStateSubmitting} onClick={discardSupportStateDraft} variant="plain">Discard local changes</ParkButton>}</div>
+          {hasMoreSupportStates && <ParkButton type="button" aria-disabled={isLoadingMoreSupportStates} onClick={() => void loadMoreSupportStates()} variant="plain">{isLoadingMoreSupportStates ? 'Loading more support states…' : 'Load more support states'}</ParkButton>}
           {isLoadMoreSupportStatesError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>Could not load more support states. Try again.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             </form>}
           </ParkCollapsible.Content>
@@ -1085,9 +1085,9 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 {staleReplyReview === 'refreshing'
                   ? <span role="status">Refreshing the latest conversation…</span>
                   : typeof staleReplyReview !== 'number'
-                    ? <ParkButton type="button" onClick={() => void refreshConversationForStaleReply()} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Refresh and review conversation</ParkButton>
-                    : <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Rebase saved draft</ParkButton>}
-              </> : <ParkButton type="button" onClick={() => void refetch()} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Refresh conversation</ParkButton>}
+                    ? <ParkButton type="button" onClick={() => void refreshConversationForStaleReply()} variant="plain">Refresh and review conversation</ParkButton>
+                    : <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void rebaseReviewedStaleDraft()} variant="plain">Rebase saved draft</ParkButton>}
+              </> : <ParkButton type="button" onClick={() => void refetch()} variant="plain">Refresh conversation</ParkButton>}
             </ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             {(draft.status !== 'idle' && draft.status !== 'discarded') && <ParkAlert.Root role={draft.status === 'error' || draft.status === 'conflict' ? 'alert' : 'status'} status={draft.status === 'error' ? 'error' : draft.status === 'conflict' ? 'warning' : draft.status === 'saved' ? 'success' : 'info'}>
               <ParkAlert.Content><ParkAlert.Description>
@@ -1099,8 +1099,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 {draft.status === 'conflict' && (draft.error ?? 'Draft changed in another session. Review before discarding it.')}
               </ParkAlert.Description>
               <span className={detailStyles.draftActions}>
-                {draft.status === 'error' && <ParkButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Retry draft</ParkButton>}
-                {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Discard draft</ParkButton>}
+                {draft.status === 'error' && <ParkButton type="button" onClick={() => { draft.retryRestore(); draft.retrySave(); }} variant="plain">Retry draft</ParkButton>}
+                {(draft.status === 'saved' || draft.status === 'unsaved' || draft.status === 'error' || draft.status === 'conflict') && <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => void discardDraft()} variant="plain">Discard draft</ParkButton>}
               </span>
               </ParkAlert.Content>
             </ParkAlert.Root>}
@@ -1174,7 +1174,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                 {replyCapabilities.isLoading ? <><span className={css({ srOnly: true })}>Loading reply options…</span><ParkSkeleton aria-hidden="true" height="4" width="70%" /></> : 'Reply options are unavailable.'}
                 {replyCapabilities.isError && <ParkButton
                   type="button"
-                  className={css({ minH: '8', px: '1', ml: '2', color: 'accent.primary' })}
+                  variant="plain"
+                  className={css({ ml: '2' })}
                   onClick={() => void replyCapabilities.refetch()}
                 >
                   Retry reply options
@@ -1248,7 +1249,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                       <Paperclip className={css({ w: '4', h: '4', flexShrink: 0 })} />
                       <span className={css({ minW: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{attachment.file.name}</span>
                       <span role={attachment.status === 'error' ? 'alert' : 'status'} className={css({ color: 'text.muted', fontSize: 'xs' })}>{attachment.status === 'uploading' ? 'Uploading…' : 'Upload failed.'}</span>
-                      {attachment.status === 'error' && <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} className={css({ minH: '8', px: '1', color: 'accent.primary' })}>Retry upload</ParkButton>}
+                      {attachment.status === 'error' && <ParkButton type="button" aria-disabled={isSubmitting} onClick={() => retryAttachment(attachment)} variant="plain">Retry upload</ParkButton>}
                       <ParkButton
                         type="button"
                         aria-disabled={isSubmitting} aria-label={`Remove ${attachment.file.name}`}

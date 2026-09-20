@@ -3,7 +3,7 @@ import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPa
 import { useAuthStore } from '../store/authStore';
 import { TocynDialog } from '@luminatick/ui/dialog';
 import { Badge } from '@luminatick/ui/components';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
@@ -45,9 +45,14 @@ export const UsersPage: React.FC = () => {
         </div>
       </div>
 
-      {error && (
-        <ParkEmptyState role="alert" title="Team members are unavailable" description={error.message}
-          action={<ParkButton type="button" loading={isFetching} loadingText="Retrying team members…" onClick={() => void refetch()}>Retry team members</ParkButton>} />
+      {error && (users.length === 0
+        ? <ParkEmptyState role="alert" title="Team members are unavailable" description={error.message}
+            action={<ParkButton type="button" loading={isFetching} loadingText="Retrying team members…" onClick={() => void refetch()}>Retry team members</ParkButton>} />
+        : <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+            <ParkAlert.Title>Team members could not be refreshed</ParkAlert.Title>
+            <ParkAlert.Description>Showing the last loaded team members. {error.message}</ParkAlert.Description>
+            <ParkButton type="button" variant="outline" loading={isFetching} loadingText="Retrying team members…" onClick={() => void refetch()}>Retry team members</ParkButton>
+          </ParkAlert.Content></ParkAlert.Root>
       )}
 
       <div className={css({"display":"grid","gap":"4","gridTemplateColumns":{"base":"1fr","md":"repeat(2,minmax(0,1fr))","xl":"repeat(3,minmax(0,1fr))"}})}>

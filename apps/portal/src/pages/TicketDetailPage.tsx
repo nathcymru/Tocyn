@@ -26,6 +26,7 @@ type DetailPage = { ticket: Ticket; articles: Article[]; pagination?: { next_cur
 const messageArea = css({ h: 'clamp(12rem, 40dvh, 24rem)', minW: '0' });
 const messageViewport = css({ h: 'full', minH: '0' });
 const messageContent = css({ display: 'flex', minW: '0', flexDirection: 'column', gap: '4', p: '4' });
+const replyRefreshWarning = 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.';
 
 export function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -279,7 +280,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
       setAttachments([]);
       completedUploads.current.clear();
       const refreshed = await fetchTicket('interactive');
-      setReplyStatus(refreshed !== 'failed' ? 'Reply sent.' : 'Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
+      setReplyStatus(refreshed !== 'failed' ? 'Reply sent.' : replyRefreshWarning);
     } catch (err: unknown) {
       setReplyStatus('');
       setReplyError(err instanceof Error ? err.message : 'Failed to send reply');
@@ -412,7 +413,11 @@ function TicketDetail({ id }: { id: string | undefined }) {
                 {replyError && <ParkAlert.Root id="reply-error" role="alert" status="error" variant="surface">
                   <ParkAlert.Content><ParkAlert.Description>{replyError}</ParkAlert.Description></ParkAlert.Content>
                 </ParkAlert.Root>}
-                <p role="status" aria-label="Reply status" className={p.chatReplyStatus}>{replyStatus}</p>
+                {replyStatus === replyRefreshWarning
+                  ? <ParkAlert.Root role="status" aria-label="Reply status" status="warning" variant="surface">
+                    <ParkAlert.Content><ParkAlert.Description>{replyStatus}</ParkAlert.Description></ParkAlert.Content>
+                  </ParkAlert.Root>
+                  : <p role="status" aria-label="Reply status" className={p.chatReplyStatus}>{replyStatus}</p>}
                 <p id="reply-requirement" className={p.chatReplyRequirement}>Reply text is required, including when attaching files.</p>
                 <ParkTextarea
                   readOnly={sending}

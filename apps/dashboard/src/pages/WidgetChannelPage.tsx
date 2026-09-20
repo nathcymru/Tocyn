@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export function WidgetChannelPage() {
   const queryClient = useQueryClient();
 
-  const { data: config, isLoading, isError, refetch } = useQuery({
+  const { data: config, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['settings'],
     queryFn: () => dashboardApi.get<Record<string, string>>('/settings'),
   });
@@ -79,9 +79,15 @@ export function WidgetChannelPage() {
 
           {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           {saveStatus && <p role="status" className={css({ color: 'fg.default', textStyle: 'sm' })}>{saveStatus}</p>}
-          {isLoading ? (
+          {isError && config && <ParkAlert.Root role="alert" status="warning" variant="surface">
+            <ParkAlert.Content>
+              <ParkAlert.Description>Widget settings could not be refreshed. Your choices are kept; refresh before saving.</ParkAlert.Description>
+              <ParkButton type="button" disabled={isFetching} onClick={() => void refetch()}>Retry widget settings</ParkButton>
+            </ParkAlert.Content>
+          </ParkAlert.Root>}
+          {isLoading && !config ? (
             <div role="status" aria-label="Loading widget settings" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading widget settings…</span><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /></div>
-          ) : isError ? (
+          ) : isError && !config ? (
             <ParkEmptyState role="alert" title="Widget settings could not be loaded" description="Retry loading the settings before saving." action={<ParkButton type="button" onClick={() => void refetch()}>Retry widget settings</ParkButton>} />
           ) : (
             <div className={css({"display":"grid","gap":"4"})}>

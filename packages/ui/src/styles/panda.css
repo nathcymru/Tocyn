@@ -12743,10 +12743,6 @@
     min-height: var(--sizes-9);
 }
 
-  .min-h_8 {
-    min-height: var(--sizes-8);
-}
-
   .min-h_42rem {
     min-height: 42rem;
 }
@@ -12769,6 +12765,10 @@
 
   .min-w_8 {
     min-width: var(--sizes-8);
+}
+
+  .min-h_8 {
+    min-height: var(--sizes-8);
 }
 
   .pt_2 {

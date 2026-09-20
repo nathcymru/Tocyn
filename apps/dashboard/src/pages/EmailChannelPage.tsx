@@ -67,10 +67,12 @@ export function EmailChannelPage() {
   const [savingResend, setSavingResend] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
 
-  const { data: settings, isLoading: settingsLoading, isError: settingsFailed, refetch: reloadSettings } = useQuery({
+  const { data: settings, isLoading: settingsLoading, isError: settingsFailed, isFetching: settingsFetching, refetch: reloadSettings } = useQuery({
     queryKey: ['settings'],
     queryFn: () => dashboardApi.get<Record<string, string>>('/settings'),
   });
+
+  const settingsUnavailable = settingsFailed && settings === undefined;
 
   React.useEffect(() => {
     if (settings && !providerDirty.current) {
@@ -104,10 +106,11 @@ export function EmailChannelPage() {
     }
   };
 
-  const { data: emails, isLoading, isError: emailsFailed, refetch: reloadEmails } = useQuery({
+  const { data: emails, isLoading, isError: emailsFailed, isFetching: emailsFetching, refetch: reloadEmails } = useQuery({
     queryKey: ['support_emails'],
     queryFn: () => dashboardApi.get<SupportEmail[]>('/channels/emails'),
   });
+  const emailsUnavailable = emailsFailed && emails === undefined;
 
   const createEmail = useMutation({
     mutationFn: (data: typeof formData) =>
@@ -178,7 +181,8 @@ export function EmailChannelPage() {
         <ParkCard.Body><form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className={css({ display: 'grid', gap: '4' })}>
 
         {settingsLoading && <div role="status" aria-label="Loading email configuration" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading configuration…</span><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /></div>}
-        {settingsFailed && <ParkEmptyState role="alert" headingLevel={false} title="Configuration could not be loaded." action={<ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton>} className={css({"minW":0})} />}
+        {settingsUnavailable && <ParkEmptyState role="alert" headingLevel={false} title="Configuration could not be loaded." action={<ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton>} className={css({"minW":0})} />}
+        {settingsFailed && settings !== undefined && <ParkAlert.Root role="alert" status="warning" variant="surface"><ParkAlert.Content><ParkAlert.Title>Configuration refresh failed</ParkAlert.Title><ParkAlert.Description>Last loaded settings and your edits remain available.</ParkAlert.Description><ParkButton type="button" variant="outline" disabled={settingsFetching} onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton></ParkAlert.Content></ParkAlert.Root>}
         {providerError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{providerError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
         <div className={css({"display":"grid","gap":"4"})}>
           <div className={css({"w":"full","display":"grid","gap":"1","fontSize":"sm"})}>
@@ -186,7 +190,7 @@ export function EmailChannelPage() {
               Resend API Key
             </label>
             <ParkInput
-              id="resend-api-key" type="password" autoComplete="off" disabled={savingResend || settingsLoading || settingsFailed}
+              id="resend-api-key" type="password" autoComplete="off" disabled={savingResend || settingsLoading || settingsUnavailable}
               placeholder="re_xxxxxxxxxxxxxxxxx"
               value={resendApiKey}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendApiKey(e.target.value); }}
@@ -199,7 +203,7 @@ export function EmailChannelPage() {
               Default From Email
             </label>
             <ParkInput
-              id="resend-from-email" type="email" required disabled={savingResend || settingsLoading || settingsFailed}
+              id="resend-from-email" type="email" required disabled={savingResend || settingsLoading || settingsUnavailable}
               placeholder="support@yourdomain.com"
               value={resendFromEmail}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendFromEmail(e.target.value); }}
@@ -302,9 +306,10 @@ export function EmailChannelPage() {
       )}
 
       <ParkCard.Root variant="outline"><ParkCard.Body>
+        {emailsFailed && emails !== undefined && <ParkAlert.Root role="alert" status="warning" variant="surface"><ParkAlert.Content><ParkAlert.Title>Channel refresh failed</ParkAlert.Title><ParkAlert.Description>Last loaded email channels remain visible.</ParkAlert.Description><ParkButton type="button" variant="outline" disabled={emailsFetching} onClick={() => { void reloadEmails(); }}>Retry channels</ParkButton></ParkAlert.Content></ParkAlert.Root>}
         {isLoading ? (
           <div role="status" aria-label="Loading email channels" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading emails...</span><ParkSkeleton aria-hidden="true" className={css({ h: '16', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '16', w: 'full' })} /></div>
-        ) : emailsFailed ? (
+        ) : emailsUnavailable ? (
           <ParkEmptyState role="alert" title="Email channels could not be loaded." description="Retry to check the configured support addresses again." action={<ParkButton onClick={() => { void reloadEmails(); }}>Retry channels</ParkButton>} className={css({"minW":0})} />
         ) : emails?.length === 0 ? (
           <ParkEmptyState title="No email channels" description="No addresses are configured here. Receiving email also requires the separately configured inbound provider." className={css({"minW":0})} />

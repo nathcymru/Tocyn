@@ -77,3 +77,64 @@ it('renders loaded email addresses with Park card and badge anatomy',async()=>{
  expect(screen.getByText('Default').closest('[class*="badge"]')).toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Remove team@example.invalid'})).toBeInTheDocument();
 });
+it('keeps cached provider settings and unsaved edits available after a failed background refresh',async()=>{
+ let settingsRequests=0;
+ api.get.mockImplementation(async(path:string)=>{
+  if(path!=='/settings')return[];
+  settingsRequests++;
+  if(settingsRequests===2)throw new Error('synthetic refresh failure');
+  return{RESEND_API_KEY:'••••••••',RESEND_FROM_EMAIL:'support@example.invalid'};
+ });
+ api.put.mockResolvedValue({});
+ open();
+ const from=await screen.findByLabelText('Default From Email');
+ await waitFor(()=>expect(from).toHaveValue('support@example.invalid'));
+ fireEvent.change(from,{target:{value:'edited@example.invalid'}});
+ await act(async()=>{await client.invalidateQueries({queryKey:['settings']});});
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveTextContent('Configuration refresh failed');
+ expect(alert.className).toContain('alert__root');
+ expect(from).toHaveValue('edited@example.invalid');
+ expect(from).toBeEnabled();
+ expect(screen.getByRole('button',{name:'Save Configuration'})).toBeDisabled();
+ fireEvent.submit(screen.getByRole('form',{name:'Outbound email configuration'}));
+ expect(api.put).not.toHaveBeenCalled();
+ expect(screen.queryByText('Configuration could not be loaded.')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Retry configuration'}));
+ await waitFor(()=>expect(screen.queryByText('Configuration refresh failed')).not.toBeInTheDocument());
+ expect(from).toHaveValue('edited@example.invalid');
+ expect(screen.getByRole('button',{name:'Save Configuration'})).toBeEnabled();
+ fireEvent.submit(screen.getByRole('form',{name:'Outbound email configuration'}));
+ await waitFor(()=>expect(api.put).toHaveBeenCalledWith('/settings',{RESEND_FROM_EMAIL:'edited@example.invalid'}));
+});
+it('retains cached channels and their actions after a failed background refresh',async()=>{
+ let channelRequests=0;
+ api.get.mockImplementation(async(path:string)=>{
+  if(path==='/settings')return{RESEND_API_KEY:'••••••••',RESEND_FROM_EMAIL:'support@example.invalid'};
+  channelRequests++;
+  if(channelRequests===2)throw new Error('synthetic refresh failure');
+  return[{id:'email-a',email_address:'team@example.invalid',name:'Team',group_id:'group-a',is_default:true}];
+ });
+ open();
+ await screen.findByText('team@example.invalid');
+ await act(async()=>{await client.invalidateQueries({queryKey:['support_emails']});});
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveTextContent('Channel refresh failed');
+ expect(alert.className).toContain('alert__root');
+ expect(screen.getByText('team@example.invalid')).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Remove team@example.invalid'})).toBeEnabled();
+ expect(screen.queryByText('Email channels could not be loaded.')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Retry channels'}));
+ await waitFor(()=>expect(screen.queryByText('Channel refresh failed')).not.toBeInTheDocument());
+ expect(screen.getByText('team@example.invalid')).toBeInTheDocument();
+});
+it('keeps the initial email-channel failure in a retryable empty state',async()=>{
+ api.get.mockImplementation(async(path:string)=>{
+  if(path==='/settings')return{RESEND_API_KEY:'••••••••',RESEND_FROM_EMAIL:'support@example.invalid'};
+  throw new Error('synthetic initial failure');
+ });
+ open();
+ expect(await screen.findByRole('alert')).toHaveTextContent('Email channels could not be loaded.');
+ expect(screen.getByRole('button',{name:'Retry channels'})).toBeEnabled();
+ expect(screen.queryByText('Channel refresh failed')).not.toBeInTheDocument();
+});

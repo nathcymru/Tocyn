@@ -350,6 +350,7 @@ it('transitions a custom waiting state with its required private facts and retai
   expect(await screen.findByRole('alert')).toHaveTextContent('changed elsewhere');
   expect(screen.getByLabelText('Waiting reason')).toHaveValue('Waiting for their account number');
   expect(screen.getByLabelText('Next action')).toHaveValue('Follow up tomorrow');
+  expect(screen.getByRole('button', { name: 'Refresh current state' })).toHaveClass('button--variant_plain');
   refreshed = true;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh current support state' }));
   await screen.findByText('Current support state refreshed. Your local input is retained; review it before saving.');
@@ -810,7 +811,9 @@ it('retains a failed dropped image and retries it without changing the draft att
   showDetail(); await screen.findByText('Customer question');
   fireEvent.drop(screen.getByLabelText('Rich message composer'), { dataTransfer: { files: [new File(['png'], 'retry.png', { type: 'image/png' })] } });
   expect(await screen.findByText('Upload failed.')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Retry upload' }));
+  const retryUpload = screen.getByRole('button', { name: 'Retry upload' });
+  expect(retryUpload).toHaveClass('button--variant_plain');
+  fireEvent.click(retryUpload);
   await waitFor(() => expect(attempts).toBe(2));
   expect(screen.getByRole('button', { name: 'Remove retry.png' })).toBeInTheDocument();
 });
@@ -996,6 +999,7 @@ it('retains the draft and prevents send until reply-capability failure is recove
     ? Promise.resolve(json({ error: 'Unavailable' }, 503)) : original(input, options));
   showDetail(); await screen.findByText('Customer question');
   const retry = await screen.findByRole('button', { name: 'Retry reply options' });
+  expect(retry).toHaveClass('button--variant_plain');
   fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Retained while options unavailable' } });
   const send = screen.getByRole('button', { name: 'Send Reply' });
   expect(send).toHaveAttribute('aria-disabled','true'); fireEvent.click(send);

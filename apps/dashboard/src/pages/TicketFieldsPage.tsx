@@ -48,10 +48,17 @@ export function TicketFieldsPage() {
         </ParkButton>
       </div>
 
+      {isError && fields !== undefined && <ParkAlert.Root role="alert" status="warning" variant="surface">
+        <ParkAlert.Content>
+          <ParkAlert.Title>Ticket fields could not be refreshed</ParkAlert.Title>
+          <ParkAlert.Description>The last confirmed field definitions remain visible. Retry before relying on changes.</ParkAlert.Description>
+          <ParkButton type="button" onClick={() => void refetch()}>Retry ticket fields</ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>}
       <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
         {isLoading ? (
           <section role="status" aria-label="Loading ticket fields" aria-busy="true" className={css({ display: 'grid', gap: '3' })}><span className={css({ srOnly: true })}>Loading fields...</span><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /></section>
-        ) : isError ? (
+        ) : isError && fields === undefined ? (
           <ParkEmptyState role="alert" title="Ticket fields could not be loaded" description="Retry before managing field definitions." action={<ParkButton type="button" onClick={() => void refetch()}>Retry ticket fields</ParkButton>} />
         ) : fields?.length === 0 ? (
           <ParkEmptyState

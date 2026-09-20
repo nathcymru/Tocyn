@@ -137,7 +137,9 @@ export function TicketListPage() {
         </ParkButton>
       </div>
 
-      <p role="status" aria-live="polite" className={p.ticketListStatus}>{createStatus}</p>
+      {createStatus && <ParkAlert.Root role="status" aria-live="polite" status="success" variant="surface">
+        <ParkAlert.Content><ParkAlert.Description>{createStatus}</ParkAlert.Description></ParkAlert.Content>
+      </ParkAlert.Root>}
       <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!creatingTicket) setIsCreating(open); }}
         initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
         closeOnEscape={!creatingTicket} closeOnInteractOutside={false} lazyMount unmountOnExit>

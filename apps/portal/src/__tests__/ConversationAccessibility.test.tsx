@@ -126,7 +126,9 @@ describe('portal conversation accessibility and recovery', () => {
     await screen.findByRole('link', { name: /Draft subject/ });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(opener));
-    expect(screen.getByRole('status').textContent).toContain('Ticket created');
+    const success = screen.getByRole('status');
+    expect(success).toHaveClass('alert__root');
+    expect(success.querySelector('.alert__description')).toHaveTextContent('Ticket created. It is now in your ticket list.');
     expect(portalApi.post).toHaveBeenCalledTimes(2);
   });
 
@@ -227,7 +229,9 @@ describe('portal conversation accessibility and recovery', () => {
     const refreshAlert = await screen.findByRole('alert');
     expect(refreshAlert).toHaveClass('alert__root');
     expect(refreshAlert.querySelector('.alert__description')).toHaveTextContent('Refresh unavailable');
-    expect(screen.getByText(/Reply sent. Refresh messages/)).toBeTruthy();
+    const replyNotice = screen.getByRole('status', { name: 'Reply status' });
+    expect(replyNotice).toHaveClass('alert__root', 'alert__root--status_warning');
+    expect(replyNotice.querySelector('.alert__description')).toHaveTextContent('Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
     expect(screen.getByText('Accepted message')).toBeTruthy();
     expect(message.value).toBe(''); expect(document.activeElement).toBe(submit);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh messages' }));
