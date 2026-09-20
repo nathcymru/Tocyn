@@ -49,6 +49,7 @@ it('guards creation and retains the name after an uncertain result before an exp
  render(<ApiKeyPage/>);fireEvent.click(screen.getByRole('button',{name:'Create New Key'}));const dialog=await screen.findByRole('dialog',{name:'Create New API Key'});
  expect(dialog).toHaveClass('dialog__content');const name=within(dialog).getByRole('textbox',{name:'Key Name'});expect(name.closest('.field__root')).toBeInTheDocument();await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'Draft'}});const form=within(dialog).getByRole('form');
  fireEvent.submit(form);fireEvent.submit(form);expect(api.post).toHaveBeenCalledTimes(1);expect(name).toBeDisabled();expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();
+ expect(within(dialog).getByRole('button',{name:'Generating key…'})).toHaveAttribute('data-loading');
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
  await act(async()=>reject(new Error('synthetic uncertain response')));const failure=await screen.findByRole('alert');expect(failure).toHaveClass('alert__root');expect(failure).toHaveTextContent('could not be confirmed');expect(name).toHaveValue('Draft');
  expect(api.get).toHaveBeenCalledTimes(2);fireEvent.submit(form);await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

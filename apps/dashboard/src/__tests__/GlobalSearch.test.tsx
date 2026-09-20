@@ -40,6 +40,17 @@ it('searches authorised customers from ticket identities and clear/type switchin
  await userEvent.keyboard('{Escape}'); expect(screen.getByRole('textbox')).toHaveFocus(); expect(screen.getByRole('textbox')).toHaveValue('');
  expect(screen.getByLabelText('Current route')).toHaveTextContent('/inbox/mine?priority=urgent');
 });
+it('keeps the customer scope free of an empty popover and removes results after clearing',async()=>{
+ vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response({data:[{id:'ticket-1',subject:'Synthetic',status:'open',customer_email:'someone@example.test'}],meta:{total:1,page:1,limit:20,total_pages:1}}));
+ mount(); await selectScope('customers');
+ expect(document.querySelector('.globalSearch__popover')).not.toBeInTheDocument();
+ await userEvent.type(screen.getByRole('textbox'),'someone{Enter}');
+ expect(await screen.findByRole('list',{name:'Customer search results'})).toBeVisible();
+ expect(document.querySelector('.globalSearch__popover')).toBeInTheDocument();
+ await userEvent.click(screen.getByRole('button',{name:'Clear global ticket search'}));
+ expect(screen.getByRole('textbox')).toHaveValue('');
+ expect(document.querySelector('.globalSearch__popover')).not.toBeInTheDocument();
+});
 it('ticket query and keyboard clear never visit legacy route or change the current filter',async()=>{
  const page={data:[{id:'ticket-1',subject:'Synthetic result',status:'open',customer_email:'someone@example.test'}],meta:{total:1,page:1,limit:20,total_pages:1}};
  vi.mocked(dashboardApi.boundedBlob).mockResolvedValue(response(page));

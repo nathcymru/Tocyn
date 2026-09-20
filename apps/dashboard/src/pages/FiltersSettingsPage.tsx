@@ -300,9 +300,11 @@ export function FiltersSettingsPage() {
                   ))}
 
                   {formData.conditions.length === 0 && (
-                    <p className={css({"minW":0})}>
-                      No conditions. This filter will match all tickets.
-                    </p>
+                    <ParkEmptyState
+                      headingLevel={false}
+                      title="No conditions added"
+                      description="This filter will match all tickets. Use Add Condition above to narrow it."
+                    />
                   )}
                 </div>
               </div>

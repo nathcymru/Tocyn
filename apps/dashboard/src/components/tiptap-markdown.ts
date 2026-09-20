@@ -15,6 +15,13 @@ function isHttpUrl(value: unknown): value is string {
   }
 }
 
+function isSafeClipboardImageSource(value: unknown): value is string {
+  if (typeof value !== 'string' || !value || value.trim() !== value || /[\u0000-\u001f\u007f]/.test(value)) return false;
+  if (value.startsWith('//') || value.startsWith('\\')) return false;
+  if (/^[a-z][a-z\d+.-]*:/i.test(value)) return isHttpUrl(value);
+  return true;
+}
+
 /** Preserve legacy Markdown text, but only explicit web URLs become clickable. */
 const SafeHttpLink = Link.extend({
   renderHTML({ HTMLAttributes }) {
@@ -32,10 +39,23 @@ const SafeHttpLink = Link.extend({
 /** Keep Markdown image references round-trippable without creating a fetching img element. */
 const SafeInlineImage = Image.extend({
   parseHTML() {
-    return [];
+    return [{
+      tag: 'span[data-tocyn-image="placeholder"][data-tocyn-image-src]',
+      getAttrs: element => {
+        const src = element.getAttribute('data-tocyn-image-src');
+        const alt = element.getAttribute('data-tocyn-image-alt') ?? '';
+        if (!isSafeClipboardImageSource(src) || element.getAttribute('role') !== 'note'
+          || element.textContent !== `[Image omitted${alt ? `: ${alt}` : ''}]`) return false;
+        return { src, alt, title: element.getAttribute('data-tocyn-image-title') };
+      },
+    }];
   },
   renderHTML({ node }) {
-    return ['span', { 'data-tocyn-image': '', role: 'note' }, `[Image omitted${node.attrs.alt ? `: ${node.attrs.alt}` : ''}]`];
+    const alt = typeof node.attrs.alt === 'string' ? node.attrs.alt : '';
+    const attrs: Record<string, string> = { 'data-tocyn-image': 'placeholder', 'data-tocyn-image-alt': alt, role: 'note' };
+    if (isSafeClipboardImageSource(node.attrs.src)) attrs['data-tocyn-image-src'] = node.attrs.src;
+    if (typeof node.attrs.title === 'string') attrs['data-tocyn-image-title'] = node.attrs.title;
+    return ['span', attrs, `[Image omitted${alt ? `: ${alt}` : ''}]`];
   },
 }).configure({ inline: true, allowBase64: false });
 

@@ -16,7 +16,11 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();vi.resetAllM
 it('associates automation labels, exposes status state, and swaps conditional action controls',async()=>{
  api.get.mockResolvedValue([]);render(<AutomationPage/>);fireEvent.click(await screen.findByRole('button',{name:'Create Rule'}));
  expect(screen.getByRole('button',{name:'Close automation editor'})).toBeInTheDocument();
+ const empty=screen.getByRole('region',{name:'No conditions added'});
+ expect(empty).toHaveClass('emptyState__root');
+ expect(empty).toHaveTextContent('This rule will always run for the selected event.');
  fireEvent.click(screen.getByRole('button',{name:'Add Condition'}));
+ expect(screen.queryByRole('region',{name:'No conditions added'})).not.toBeInTheDocument();
  expect(screen.getByRole('combobox',{name:'Condition 1 field'})).toBeInTheDocument();
  expect(screen.getByRole('combobox',{name:'Condition 1 operator'})).toBeInTheDocument();
  expect(screen.getByRole('textbox',{name:'Condition 1 value'})).toBeInTheDocument();
@@ -25,6 +29,7 @@ it('associates automation labels, exposes status state, and swaps conditional ac
  expect(screen.getByRole('textbox',{name:'Condition 1 value'}).closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Remove condition 1'}));
  expect(screen.queryByRole('textbox',{name:'Condition 1 value'})).not.toBeInTheDocument();
+ expect(screen.getByRole('region',{name:'No conditions added'})).toBeInTheDocument();
  expect(screen.getByRole('textbox',{name:'Rule Name'}).closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();
  expect(screen.getByRole('combobox',{name:'Trigger Event'}).closest('[data-scope="select"][data-part="root"]')).toHaveTextContent('Trigger Event');
  const action=screen.getByRole('combobox',{name:'Action Type'});expect(action).toBeInTheDocument();
@@ -145,7 +150,8 @@ it('keeps credential save and usage reload behavior inside the Park card', async
 it('shows Park skeletons during restore and a retryable empty state after a failed load', async () => {
  api.get.mockRejectedValueOnce(new Error('Synthetic usage outage')).mockResolvedValueOnce(usageStats);
  render(<UsagePage/>);
- expect(screen.getByLabelText('Loading usage data')).toHaveAttribute('aria-busy', 'true');
+ expect(screen.getByRole('status',{name:'Loading usage data'})).toHaveAttribute('aria-busy', 'true');
+ expect(screen.getByRole('status',{name:'Loading usage data'})).toHaveTextContent('Loading usage data…');
  expect(document.querySelector('.skeleton')).toBeInTheDocument();
  expect(await screen.findByText('Error loading usage data')).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));

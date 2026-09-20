@@ -215,7 +215,8 @@ export function UsagePage() {
   );
 
   if (loading) {
-    return <div aria-label="Loading usage data" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })}>
+    return <div role="status" aria-label="Loading usage data" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })}>
+      <span className={css({ srOnly: true })}>Loading usage data…</span>
       <ParkSkeleton aria-hidden="true" className={css({ w: '48', h: '8' })} />
       <div className={css({ display: 'grid', gap: '4', gridTemplateColumns: { base: '1fr', md: 'repeat(2,minmax(0,1fr))', xl: 'repeat(3,minmax(0,1fr))' } })}>
         {Array.from({ length: 6 }, (_, index) => <ParkSkeleton key={index} aria-hidden="true" className={css({ h: '32', w: 'full' })} />)}

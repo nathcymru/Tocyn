@@ -193,8 +193,9 @@ export function ApiKeyPage() {
               <ParkButton
                 type="submit" ref={retryCreateButton}
                 variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
+                loading={creating} loadingText="Generating key…"
               >
-                {creating ? 'Generating...' : createUnresolved ? 'Retry creation' : 'Generate Key'}
+                {createUnresolved ? 'Retry creation' : 'Generate Key'}
               </ParkButton>
               <ParkButton
                 type="button"

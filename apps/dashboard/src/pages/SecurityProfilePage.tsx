@@ -1,4 +1,4 @@
-import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkField, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkPinInput, ParkPinInputSlot } from '@luminatick/ui/park';
 import { Badge } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect, useRef } from 'react';
@@ -30,8 +30,8 @@ const securityStyles = {
   qr: css({ justifySelf: 'start', maxWidth: '100%', padding: '0.75rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.subtle', '& svg': { maxWidth: '100%', height: 'auto' } }),
   secret: css({ display: 'inline-block', marginTop: '0.5rem', padding: '0.375rem 0.625rem', borderRadius: 'l1', background: 'bg.subtle', color: 'fg.default', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', userSelect: 'all' }),
   verifyForm: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '0.75rem' }),
-  codeField: css({ display: 'grid', gap: '0.375rem', minWidth: '12rem', flex: '1' }),
-  codeInput: css({ maxWidth: '14rem', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' }),
+  codeField: css({ display: 'grid', gap: '0.375rem', minWidth: '0', maxWidth: '100%', flex: '1 1 100%' }),
+  codeCell: css({ fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' }),
 };
 
 export function SecurityProfilePage() {
@@ -44,7 +44,7 @@ export function SecurityProfilePage() {
 
   const pending = useRef(false);
   const setupButton = useRef<HTMLButtonElement>(null);
-  const codeInput = useRef<HTMLInputElement>(null);
+  const codeInput = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const disableButton = useRef<HTMLButtonElement>(null);
   const disableCancel = useRef<HTMLButtonElement>(null);
@@ -57,7 +57,9 @@ export function SecurityProfilePage() {
     setSuccessMessage(sessionAnnouncement.message);
     clearSessionAnnouncement(sessionGeneration);
   }, [clearSessionAnnouncement, sessionAnnouncement, sessionGeneration]);
-  useEffect(() => { if (setupData) codeInput.current?.focus(); }, [setupData]);
+  useEffect(() => {
+    if (setupData) codeInput.current?.querySelector<HTMLInputElement>('[data-scope="pin-input"][data-part="input"]')?.focus();
+  }, [setupData]);
   useEffect(() => {
     if (!successMessage) return;
     // AuthQueryBoundary remounts the workspace after a replacement session; run after its
@@ -236,18 +238,38 @@ export function SecurityProfilePage() {
                     <div className={securityStyles.step}>
                       <h4 className={securityStyles.stepTitle}>Step 2: Verify Code</h4>
                       <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className={securityStyles.verifyForm}>
-                        <ParkField label={<span id="security-code-label">Authentication Code</span>} className={securityStyles.codeField}>
-                          <ParkInput
-                            type="text"
-                            id="code" aria-labelledby="security-code-label" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
-                            value={code}
-                            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className={securityStyles.codeInput}
-                            placeholder="000000"
-                            maxLength={6}
-                            required
-                          />
-                        </ParkField>
+                        <div className={securityStyles.codeField}>
+                          <ParkPinInput
+                            id="code"
+                            ref={codeInput}
+                            count={6}
+                            size="xs"
+                            label="Authentication Code"
+                            name="code"
+                            otp
+                            value={Array.from({ length: 6 }, (_, index) => code[index] ?? '')}
+                            onValueChange={({ value }) => {
+                              if (!isLoading) {
+                                setCode(value.join('').replace(/\D/g, '').slice(0, 6));
+                                setError(null);
+                              }
+                            }}
+                            sanitizeValue={value => value.replace(/\D/g, '').slice(0, 6)}
+                            disabled={isLoading}
+                            readOnly={isLoading}
+                            invalid={Boolean(error)}
+                            placeholder="0"
+                          >
+                            {Array.from({ length: 6 }, (_, index) => (
+                              <ParkPinInputSlot
+                                key={index}
+                                index={index}
+                                aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
+                                className={securityStyles.codeCell}
+                              />
+                            ))}
+                          </ParkPinInput>
+                        </div>
                         <ParkButton
                           type="submit"
                           disabled={isLoading || code.length !== 6}

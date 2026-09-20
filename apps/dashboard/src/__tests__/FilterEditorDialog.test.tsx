@@ -25,7 +25,11 @@ it('bounds duplicate submissions and preserves the dialog through pending Escape
 it('retains a failed draft and sends its labelled conditions on retry',async()=>{
  mutations.create.mockRejectedValueOnce(new Error('synthetic failure')).mockResolvedValueOnce({});
  const {dialog,name}=await openEditor();fireEvent.change(name,{target:{value:'Keep my draft'}});
+ const empty=within(dialog).getByRole('region',{name:'No conditions added'});
+ expect(empty).toHaveClass('emptyState__root');
+ expect(empty).toHaveTextContent('This filter will match all tickets.');
  fireEvent.click(within(dialog).getByRole('button',{name:'Add Condition'}));
+ expect(within(dialog).queryByRole('region',{name:'No conditions added'})).not.toBeInTheDocument();
  expect(within(dialog).getByRole('combobox',{name:'Condition 1 field'})).toBeInTheDocument();
  expect(within(dialog).getByRole('combobox',{name:'Condition 1 operator'})).toBeInTheDocument();
  expect(name.closest('[data-scope="field"][data-part="root"]')).toBeInTheDocument();

@@ -301,9 +301,11 @@ export const AutomationPage: React.FC = () => {
                   </div>
                 ))}
                 {JSON.parse(editForm.conditions || '[]').length === 0 && (
-                  <p className={css({"py":"6"})}>
-                    No conditions. This rule will always run for the selected event.
-                  </p>
+                  <ParkEmptyState
+                    headingLevel={false}
+                    title="No conditions added"
+                    description="This rule will always run for the selected event. Use Add Condition above to narrow it."
+                  />
                 )}
               </div>
             </div>

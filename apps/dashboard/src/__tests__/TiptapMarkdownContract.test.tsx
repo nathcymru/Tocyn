@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MarkdownManager } from '@tiptap/markdown';
 import { Editor } from '@tiptap/core';
+import { DOMParser as ProseMirrorDOMParser, DOMSerializer } from '@tiptap/pm/model';
 import { expect, it, vi } from 'vitest';
 import { RichComposer, TIPTAP_MARKDOWN_CONTRACT } from '../components/RichComposer';
 import { tocynMarkdownExtensions } from '../components/tiptap-markdown';
@@ -27,6 +28,40 @@ it('round-trips a local accepted inline-image reference without fetching it', ()
   const result = roundTrip(`Before ![Synthetic diagram](${reference}) after`);
   expect(result.document.content?.[0]?.content?.[1]?.type).toBe('image');
   expect(result.markdown).toContain(`![Synthetic diagram](${reference})`);
+});
+
+it('retains an inline-image reference and alt text through the editor HTML clipboard path', () => {
+  const source = 'Before ![Diagram & plan](/api/attachments/plan.png "Review & approve") after';
+  const editor = new Editor({ extensions: tocynMarkdownExtensions, content: source, contentType: 'markdown' });
+  try {
+    const clipboard = document.createElement('div');
+    clipboard.appendChild(DOMSerializer.fromSchema(editor.schema).serializeFragment(editor.state.doc.content));
+    expect(clipboard.querySelector('img')).toBeNull();
+    expect(clipboard.innerHTML).toContain('data-tocyn-image-src="/api/attachments/plan.png"');
+    expect(clipboard.innerHTML).toContain('Diagram &amp; plan');
+    const pasted = ProseMirrorDOMParser.fromSchema(editor.schema).parse(clipboard);
+    expect(new MarkdownManager({ extensions: tocynMarkdownExtensions }).serialize(pasted.toJSON())).toBe(source);
+  } finally {
+    editor.destroy();
+  }
+});
+
+it('rejects forged unsafe image sources and arbitrary img elements on HTML paste', () => {
+  const editor = new Editor({ extensions: tocynMarkdownExtensions, content: '', contentType: 'markdown' });
+  try {
+    const clipboard = document.createElement('div');
+    clipboard.innerHTML = '<p><span data-tocyn-image="placeholder" data-tocyn-image-src="javascript:alert(1)" data-tocyn-image-alt="Unsafe" role="note">[Image omitted: Unsafe]</span><img src="https://example.invalid/pixel.png" alt="remote"></p>';
+    const pasted = ProseMirrorDOMParser.fromSchema(editor.schema).parse(clipboard);
+    let hasImage = false;
+    pasted.descendants(node => { if (node.type.name === 'image') hasImage = true; });
+    expect(hasImage).toBe(false);
+    expect(pasted.textContent).toContain('[Image omitted: Unsafe]');
+    const rendered = document.createElement('div');
+    rendered.appendChild(DOMSerializer.fromSchema(editor.schema).serializeFragment(pasted.content));
+    expect(rendered.querySelector('img, [data-tocyn-image-src]')).toBeNull();
+  } finally {
+    editor.destroy();
+  }
 });
 
 it('retains text from unsupported GFM tables rather than silently discarding it', () => {

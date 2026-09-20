@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SecurityProfilePage } from '../pages/SecurityProfilePage';
 import { useAuthStore } from '../store/authStore';
@@ -18,10 +19,14 @@ it('guards setup and confirmation, focuses code and adopts the replacement serve
   render(<SecurityProfilePage/>);const start=screen.getByRole('button',{name:'Set up 2FA'});fireEvent.click(start);fireEvent.click(start);
   expect(dashboardApi.post).toHaveBeenCalledTimes(1);await act(async()=>finish(setup));
   const code=await screen.findByRole('textbox',{name:'Authentication Code'});await waitFor(()=>expect(code).toHaveFocus());
-  fireEvent.change(code,{target:{value:'123456'}});
+  const cells=screen.getAllByRole('textbox',{name:/Authentication Code/});expect(cells).toHaveLength(6);
+  expect(code).toHaveClass('pin-input__input--size_xs');
+  expect(code).toHaveAttribute('autocomplete','one-time-code');
+  await userEvent.type(code,'123456');
   vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
   const form=screen.getByRole('form',{name:'Verify two-factor setup'});fireEvent.submit(form);fireEvent.submit(form);
-  expect(dashboardApi.post).toHaveBeenCalledTimes(2);expect(code).toBeDisabled();
+  expect(dashboardApi.post).toHaveBeenCalledTimes(2);expect(cells.every(cell=>(cell as HTMLInputElement).disabled)).toBe(true);
+  expect(cells.map(cell=>(cell as HTMLInputElement).value).join('')).toBe('123456');
   await act(async()=>finish({token:'synthetic-replacement-session',user:{...user,mfa_enabled:true}}));
   expect(useAuthStore.getState().token).toBe('synthetic-replacement-session');expect(useAuthStore.getState().user?.mfa_enabled).toBe(true);
   expect(screen.getByRole('status')).toHaveTextContent('successfully enabled');expect(screen.queryByText('SYNTHETIC_ONLY')).not.toBeInTheDocument();
@@ -31,7 +36,7 @@ it('keeps the replacement-session confirmation announcement through the authenti
   vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup).mockResolvedValueOnce({token:'synthetic-replacement-session',user:{...user,mfa_enabled:true}});
   render(<AuthQueryBoundary><SecurityProfilePage/></AuthQueryBoundary>);
   fireEvent.click(screen.getByRole('button',{name:'Set up 2FA'}));
-  fireEvent.change(await screen.findByRole('textbox',{name:'Authentication Code'}),{target:{value:'123456'}});
+  await userEvent.type(await screen.findByRole('textbox',{name:'Authentication Code'}),'123456');
   fireEvent.submit(screen.getByRole('form',{name:'Verify two-factor setup'}));
   expect(await screen.findByRole('status')).toHaveTextContent('successfully enabled');
   await waitFor(()=>expect(screen.getByRole('heading',{name:'Security Profile'})).toHaveFocus());
@@ -41,12 +46,28 @@ it('keeps the replacement-session confirmation announcement through the authenti
 it('retains failed confirmation for retry and clears local setup material on cancellation',async()=>{
   vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup).mockRejectedValueOnce(new Error('private server detail'));
   render(<SecurityProfilePage/>);fireEvent.click(screen.getByRole('button',{name:'Set up 2FA'}));
-  const code=await screen.findByRole('textbox',{name:'Authentication Code'});fireEvent.change(code,{target:{value:'123456'}});
+  const code=await screen.findByRole('textbox',{name:'Authentication Code'});await userEvent.type(code,'123456');
   fireEvent.submit(screen.getByRole('form',{name:'Verify two-factor setup'}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');expect(code).toHaveValue('123456');
+  expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');
+  expect(screen.getAllByRole('textbox',{name:/Authentication Code/}).map(cell=>(cell as HTMLInputElement).value).join('')).toBe('123456');
+  expect(code).toHaveAttribute('aria-invalid','true');
   expect(useAuthStore.getState().token).toBe('synthetic-old-session');expect(useAuthStore.getState().user?.mfa_enabled).toBe(false);
   fireEvent.click(screen.getByRole('button',{name:'Cancel'}));expect(screen.queryByText('SYNTHETIC_ONLY')).not.toBeInTheDocument();
   await waitFor(()=>expect(screen.getByRole('button',{name:'Set up 2FA'})).toHaveFocus());
+});
+it('accepts pasted codes with separators and keeps six labelled Park cells',async()=>{
+  vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup);
+  render(<SecurityProfilePage/>);fireEvent.click(screen.getByRole('button',{name:'Set up 2FA'}));
+  const cells=await screen.findAllByRole('textbox',{name:/Authentication Code/});
+  expect(cells).toHaveLength(6);
+  fireEvent.submit(screen.getByRole('form',{name:'Verify two-factor setup'}));
+  expect(screen.getByRole('alert')).toHaveTextContent('Please enter a valid 6-digit code');
+  expect(dashboardApi.post).toHaveBeenCalledTimes(1);
+  fireEvent.paste(cells[0],{clipboardData:{getData:()=> '12-34 56'}});
+  await waitFor(()=>expect(cells.map(cell=>(cell as HTMLInputElement).value).join('')).toBe('123456'));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(cells.every(cell=>cell.getAttribute('aria-invalid') !== 'true')).toBe(true);
+  expect(screen.getByRole('button',{name:'Verify & Enable'})).toBeEnabled();
 });
 it('ignores setup response after the authenticated session changes',async()=>{
   let finish!:(value:unknown)=>void;vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
@@ -101,7 +122,7 @@ it('does not adopt a completed confirmation from an obsolete session',async()=>{
   let finish!:(value:unknown)=>void;
   vi.mocked(dashboardApi.post).mockResolvedValueOnce(setup).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
   render(<SecurityProfilePage/>);fireEvent.click(screen.getByRole('button',{name:'Set up 2FA'}));
-  fireEvent.change(await screen.findByRole('textbox',{name:'Authentication Code'}),{target:{value:'123456'}});
+  await userEvent.type(await screen.findByRole('textbox',{name:'Authentication Code'}),'123456');
   fireEvent.submit(screen.getByRole('form',{name:'Verify two-factor setup'}));
   act(()=>useAuthStore.getState().setAuth('new-session',{...user,id:'new-user'}));
   await act(async()=>finish({token:'obsolete-confirmation-token',user:{...user,mfa_enabled:true}}));
