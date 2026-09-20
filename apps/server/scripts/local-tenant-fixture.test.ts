@@ -58,6 +58,13 @@ test('real local-beta bootstrap includes the classified review matrix', async ()
   assert.match(bootstrap.sql, /WHERE tenant_id='fixture-tenant-a' AND id='beta2-breach-billing'/);
   assert.match(bootstrap.sql, /WHERE tenant_id='fixture-tenant-b' AND id='beta2-b-email'/);
   assert.match(bootstrap.sql, /'fixture-tenant-a','fixture-operator',1,'all','priority_focus'/);
+  assert.match(bootstrap.sql, /beta2-customer-elena','elena\.ward@synthetic\.example\.test'/,
+    'The real review launcher must seed named customers with consistent ownership');
+  assert.equal([...bootstrap.sql.matchAll(/INSERT INTO users \(tenant_id,id,email,full_name,role,mfa_enabled\)/g)].length, 5);
+  assert.match(bootstrap.sql, /beta2-article-email','beta2-email','beta2-customer-elena'/,
+    'The real review email article must identify its owning customer');
+  assert.doesNotMatch(bootstrap.sql, /2099-01-01|2026-09-10T09:20:00/,
+    'The real review launcher must use plausible relative snooze and attachment dates');
 });
 
 test('general Miniflare helper retains the eight-ticket base matrix without review-only SLA facts', async () => {
@@ -125,15 +132,17 @@ test('general Miniflare helper retains the eight-ticket base matrix without revi
 
     const snooze = await fixture.db.prepare(`SELECT snoozed_until, resurface_reason FROM ticket_support_state
       WHERE tenant_id = 'fixture-tenant-a' AND ticket_id = 'beta2-snoozed-assigned'`).first<{ snoozed_until: string; resurface_reason: string }>();
-    assert.deepEqual(snooze, { snoozed_until: '2099-01-01T12:00:00.000Z', resurface_reason: 'manual' });
+    assert.equal(snooze?.resurface_reason, 'manual');
+    assert.ok(snooze && Date.parse(snooze.snoozed_until) - Date.now() > 23 * 60 * 60_000);
+    assert.ok(snooze && Date.parse(snooze.snoozed_until) - Date.now() < 25 * 60 * 60_000);
   });
 });
 
 test('opt-in local beta review has 20 tenant-A conversations, real SLA variety and tenant isolation', async () => {
   await withTwoTenantFixture(async fixture => {
-    const reviewTickets = await fixture.db.prepare(`SELECT tenant_id,id,ticket_no,priority,status,assigned_to,source,customer_email
+    const reviewTickets = await fixture.db.prepare(`SELECT tenant_id,id,ticket_no,priority,status,assigned_to,source,customer_id,customer_email
       FROM tickets WHERE id LIKE 'beta2-%' ORDER BY tenant_id,id`).all<{
-      tenant_id: string; id: string; ticket_no: number; priority: string; status: string; assigned_to: string | null; source: string; customer_email: string;
+      tenant_id: string; id: string; ticket_no: number; priority: string; status: string; assigned_to: string | null; source: string; customer_id: string | null; customer_email: string;
     }>();
     assert.equal(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').length, 20);
     assert.equal(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-b').length, 2);
@@ -141,6 +150,39 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.priority))].sort(), ['high', 'low', 'normal', 'urgent']);
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.status))].sort(), ['closed', 'open', 'pending', 'resolved']);
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.source))].sort(), ['api', 'email', 'portal', 'web', 'widget']);
+    const namedBaseTickets = ['beta2-open-assigned', 'beta2-snoozed-assigned', 'beta2-resolved', 'beta2-email', 'beta2-internal-attachment'];
+    for (const ticketId of namedBaseTickets) {
+      const ticket = reviewTickets.results.find(candidate => candidate.tenant_id === 'fixture-tenant-a' && candidate.id === ticketId);
+      assert.ok(ticket, `${ticketId} exists in the review matrix`);
+      assert.ok(ticket.customer_id?.startsWith('beta2-customer-'), `${ticketId} has a named synthetic owner`);
+      const owner = await fixture.db.prepare('SELECT email,full_name FROM users WHERE tenant_id=? AND id=?')
+        .bind('fixture-tenant-a', ticket.customer_id).first<{ email: string; full_name: string }>();
+      assert.equal(owner?.email, ticket.customer_email, `${ticketId} owner and display email agree`);
+      assert.ok(owner?.full_name.includes(' '), `${ticketId} owner has a reviewable name`);
+    }
+    assert.equal(reviewTickets.results.find(ticket => ticket.id === 'beta2-pending-unassigned')?.customer_id,
+      fixture.principals.customerA.localId, 'The portal example remains owned by its login principal');
+    const ownedCustomerArticles = await fixture.db.prepare(`SELECT a.ticket_id,a.sender_id,t.customer_id
+      FROM articles a JOIN tickets t ON t.tenant_id=a.tenant_id AND t.id=a.ticket_id
+      WHERE a.tenant_id='fixture-tenant-a' AND a.ticket_id IN ('beta2-open-assigned','beta2-email') AND a.sender_type='customer'`)
+      .all<{ ticket_id: string; sender_id: string; customer_id: string }>();
+    assert.equal(ownedCustomerArticles.results.length, 2);
+    assert.ok(ownedCustomerArticles.results.every(row => row.sender_id === row.customer_id));
+    const datedAttachments = await fixture.db.prepare(`SELECT a.id,a.created_at,ar.created_at AS article_created_at
+      FROM attachments a JOIN articles ar ON ar.tenant_id=a.tenant_id AND ar.id=a.article_id
+      WHERE a.id LIKE 'beta2-%'`).all<{ id: string; created_at: string; article_created_at: string }>();
+    assert.equal(datedAttachments.results.length, 2);
+    assert.ok(datedAttachments.results.every(row => row.created_at === row.article_created_at),
+      'Review attachments use their article timestamps rather than a stale fixed date');
+    const urgencyNarratives = await fixture.db.prepare(`SELECT t.id,t.subject,a.body
+      FROM tickets t JOIN articles a ON a.tenant_id=t.tenant_id AND a.ticket_id=t.id AND a.sender_type='customer'
+      WHERE t.tenant_id='fixture-tenant-a' AND t.id IN ('beta2-breach-billing','beta2-billing-urgent','beta2-account-access','beta2-security-question')`)
+      .all<{ id: string; subject: string; body: string }>();
+    const narrative = new Map(urgencyNarratives.results.map(row => [row.id, `${row.subject} ${row.body}`]));
+    assert.match(narrative.get('beta2-breach-billing') ?? '', /regulatory officer.*filing/is);
+    assert.match(narrative.get('beta2-billing-urgent') ?? '', /VIP.*board/is);
+    assert.match(narrative.get('beta2-account-access') ?? '', /Every operator.*VIP/is);
+    assert.match(narrative.get('beta2-security-question') ?? '', /Every account.*regulatory officer/is);
     const classified = await fixture.db.prepare(`SELECT tenant_id,id,created_at,priority_category,priority_scope,
       priority_regulatory_officer_on_site,priority_vip_blocked,priority_hard_deadline,priority_score,contract_sla_tier,criticality_tier
       FROM tickets WHERE id LIKE 'beta2-%' ORDER BY tenant_id,id`).all<{
