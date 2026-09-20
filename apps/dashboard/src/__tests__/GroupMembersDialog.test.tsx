@@ -168,6 +168,19 @@ it('preserves the existing cancelled group draft without submitting',async()=>{
  fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));await waitFor(()=>expect(opener).toHaveFocus());
  fireEvent.click(opener);expect(await screen.findByRole('textbox',{name:'Group Name'})).toHaveValue('Later');expect(fixture.create).not.toHaveBeenCalled();
 });
+it('stops offering group creation when the local beta permanently rejects it',async()=>{
+ fixture.create.mockRejectedValueOnce(Object.assign(new Error('disabled'),{code:'feature_disabled'}));
+ render(<GroupsPage/>);
+ fireEvent.click(screen.getByRole('button',{name:'Create Group'}));
+ const dialog=await screen.findByRole('dialog',{name:'New Support Group'});
+ fireEvent.change(within(dialog).getByRole('textbox',{name:'Group Name'}),{target:{value:'Review team'}});
+ fireEvent.submit(within(dialog).getByRole('form'));
+ await waitFor(()=>expect(screen.queryByRole('dialog',{name:'New Support Group'})).not.toBeInTheDocument());
+ expect(screen.getByRole('status')).toHaveTextContent('Group creation is unavailable in this local review');
+ expect(screen.queryByRole('button',{name:'Create Group'})).not.toBeInTheDocument();
+ expect(screen.getByRole('table')).toBeInTheDocument();
+ expect(fixture.create).toHaveBeenCalledTimes(1);
+});
 it('cancels group deletion safely and locks failed/retried deletion until completion',async()=>{
  let reject!:(error:Error)=>void;fixture.delete.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
  render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Delete Support'});opener.focus();fireEvent.click(opener);

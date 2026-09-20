@@ -51,6 +51,7 @@ export const GroupsPage: React.FC = () => {
   const [returnFocusToHeading, setReturnFocusToHeading] = useState(false);
   const [deleteGroup, setDeleteGroup] = useState<Group | null>(null);
   const [createError, setCreateError] = useState('');
+  const [createDisabled, setCreateDisabled] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [groupStatus, setGroupStatus] = useState('');
   const closeCreate = () => { if (!createGuard.current) setIsCreating(false); };
@@ -80,8 +81,15 @@ export const GroupsPage: React.FC = () => {
       setNewGroupDescription('');
       setIsCreating(false);
       setGroupStatus('Group created.');
-    } catch {
-      setCreateError('Group could not be created. Your draft has been kept; try again.');
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+      if (code === 'feature_disabled') {
+        setCreateDisabled(true);
+        setIsCreating(false);
+        setCreateError('');
+      } else {
+        setCreateError('Group could not be created. Your draft has been kept; try again.');
+      }
     } finally { createGuard.current = false; setCreating(false); }
   };
 
@@ -111,7 +119,7 @@ export const GroupsPage: React.FC = () => {
           <h1 ref={pageHeading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Group Management</h1>
           <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Organize agents into teams to handle specific ticket categories.</p>
         </div>
-        {isAdmin && (
+        {isAdmin && !createDisabled && (
           <ParkButton
             ref={createOpener} onClick={() => { setCreateError(''); setIsCreating(true); }}
             className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
@@ -123,9 +131,13 @@ export const GroupsPage: React.FC = () => {
       </div>
 
       {groupStatus && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{groupStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      {createDisabled && <ParkAlert.Root role="status" status="warning" variant="surface"><ParkAlert.Content>
+        <ParkAlert.Title>Group creation is unavailable in this local review</ParkAlert.Title>
+        <ParkAlert.Description>You can review existing groups, but this local beta does not allow new groups.</ParkAlert.Description>
+      </ParkAlert.Content></ParkAlert.Root>}
       {groupsError && Boolean(groups?.length) && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>The group list could not be refreshed.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton></ParkAlert.Content></ParkAlert.Root>}
       <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!open && !creating) closeCreate(); }}
-        initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current}
+        initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current ?? pageHeading.current}
         closeOnEscape={!creating} closeOnInteractOutside={false} lazyMount unmountOnExit>
         <ParkDialog.Backdrop />
         <ParkDialog.Positioner>
@@ -205,7 +217,7 @@ export const GroupsPage: React.FC = () => {
       </ParkDialog.Root>
 
       {groupsError && !groups?.length ? <ParkEmptyState role="alert" title="Groups could not be loaded" description="Retry to load groups before managing members." action={<ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton>} /> : <ParkCard.Root variant="outline"><ParkCard.Body className={groups?.length ? css({ minW: '0', overflowX: 'auto' }) : css({ minW: '0' })}>
-        {!groups?.length ? <ParkEmptyState title="No groups found." description={isAdmin ? 'Create a group to organize your team.' : 'No groups are available in this workspace.'} className={css({ minW: '0', w: 'full', overflowWrap: 'anywhere' })} /> : <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
+        {!groups?.length ? <ParkEmptyState title="No groups found." description={isAdmin && createDisabled ? 'Group creation is disabled in this local review.' : isAdmin ? 'Create a group to organize your team.' : 'No groups are available in this workspace.'} className={css({ minW: '0', w: 'full', overflowWrap: 'anywhere' })} /> : <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
           <ParkTable.Head>
             <ParkTable.Row>
               <ParkTable.Header>Group Name</ParkTable.Header>
