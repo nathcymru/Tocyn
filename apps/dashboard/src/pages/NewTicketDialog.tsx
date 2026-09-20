@@ -1,26 +1,78 @@
 import { Field } from '@luminatick/ui/components';
-import { ParkAlert, ParkButton, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCheckbox, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useRef, useState } from 'react';
+import type { ContractTier, CriticalityTier, PriorityCategory, PriorityScope } from '@luminatick/shared';
 import { DashboardSelect } from '../components/DashboardSelect';
 import { X } from '../components/icons';
 import { useAgents, useGroups } from '../hooks/useGroups';
 import { useCreateTicket } from '../hooks/useTickets';
 
+type ClassificationDraft = {
+  category: PriorityCategory | '';
+  scope: PriorityScope | '';
+  regulatoryOfficerOnSite: boolean;
+  vipBlocked: boolean;
+  hardDeadline: boolean;
+  contractTier: ContractTier | '';
+  criticalityTier: CriticalityTier | null;
+};
+
+type ClassificationOption<Value extends string> = { value: Value | ''; label: string };
+
+const categoryOptions: ClassificationOption<PriorityCategory>[] = [
+  { value: '', label: 'Choose category' },
+  { value: 'incidents-interruptions', label: 'Incidents and interruptions' },
+  { value: 'security-privacy', label: 'Security and privacy' },
+  { value: 'access-authentication', label: 'Access and authentication' },
+  { value: 'technical-problems', label: 'Technical problems' },
+  { value: 'service-requests', label: 'Service requests' },
+  { value: 'transactions-billing', label: 'Transactions and billing' },
+  { value: 'status-follow-up', label: 'Status and follow-up' },
+  { value: 'information-requests', label: 'Information requests' },
+  { value: 'how-to-assistance', label: 'How-to assistance' },
+  { value: 'feedback', label: 'Feedback' },
+  { value: 'other', label: 'Other' },
+];
+const scopeOptions: ClassificationOption<PriorityScope>[] = [
+  { value: '', label: 'Choose scope' },
+  { value: 'systemic', label: 'Systemic' },
+  { value: 'localised', label: 'Localised' },
+  { value: 'isolated', label: 'Isolated' },
+];
+const contractOptions: ClassificationOption<ContractTier>[] = [
+  { value: '', label: 'Choose contract tier' },
+  { value: 'alpha', label: 'Alpha' },
+  { value: 'bravo', label: 'Bravo' },
+  { value: 'charlie', label: 'Charlie' },
+  { value: 'delta', label: 'Delta' },
+];
+const criticalityOptions: ClassificationOption<`${CriticalityTier}`>[] = [
+  { value: '', label: 'Choose criticality level' },
+  { value: '1', label: 'Level 1' },
+  { value: '2', label: 'Level 2' },
+  { value: '3', label: 'Level 3' },
+  { value: '4', label: 'Level 4' },
+];
+
 type NewTicketDraft = {
   subject: string;
   customer_email: string;
   body: string;
-  priority: string;
   status: string;
   group_id: string;
   assigned_to: string;
   custom_fields: Record<string, unknown>;
+  classification: ClassificationDraft;
 };
 
 const emptyDraft = (): NewTicketDraft => ({
-  subject: '', customer_email: '', body: '', priority: 'normal', status: 'open',
+  subject: '', customer_email: '', body: '', status: 'open',
   group_id: '', assigned_to: '', custom_fields: {},
+  classification: {
+    category: '', scope: '', regulatoryOfficerOnSite: false, vipBlocked: false,
+    hardDeadline: false, contractTier: '', criticalityTier: null,
+  },
 });
 
 /** The active inbox owns the trigger; this dialog keeps a failed draft in place for retry. */
@@ -33,8 +85,13 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
   const titleId = React.useId();
   const subject = useRef<HTMLInputElement>(null);
   const submit = useRef<HTMLButtonElement>(null);
+  const category = useRef<HTMLButtonElement>(null);
+  const scope = useRef<HTMLButtonElement>(null);
+  const contractTier = useRef<HTMLButtonElement>(null);
+  const criticalityTier = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState<NewTicketDraft>(emptyDraft);
   const [error, setError] = useState<string | null>(null);
+  const [classificationError, setClassificationError] = useState(false);
   const createTicket = useCreateTicket();
   const { data: groups } = useGroups();
   const { data: agents } = useAgents();
@@ -42,19 +99,46 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
   const update = <K extends keyof NewTicketDraft>(key: K, value: NewTicketDraft[K]) => {
     if (!pending) setDraft(current => ({ ...current, [key]: value }));
   };
+  const updateClassification = <K extends keyof ClassificationDraft>(key: K, value: ClassificationDraft[K]) => {
+    if (pending) return;
+    const classification = { ...draft.classification, [key]: value };
+    setDraft(current => ({ ...current, classification: { ...current.classification, [key]: value } }));
+    if (classification.category && classification.scope && classification.contractTier && classification.criticalityTier !== null) {
+      setClassificationError(false);
+    }
+  };
   const close = () => { if (!pending) onOpenChange(false); };
   const submitDraft = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
     setError(null);
+    const classification = draft.classification;
+    if (!classification.category || !classification.scope || !classification.contractTier || classification.criticalityTier === null) {
+      setClassificationError(true);
+      const firstMissing = !classification.category ? category : !classification.scope ? scope
+        : !classification.contractTier ? contractTier : criticalityTier;
+      requestAnimationFrame(() => firstMissing.current?.focus());
+      return;
+    }
+    setClassificationError(false);
     try {
       await createTicket.mutateAsync({
         ...draft,
+        classification: {
+          category: classification.category,
+          scope: classification.scope,
+          regulatoryOfficerOnSite: classification.regulatoryOfficerOnSite,
+          vipBlocked: classification.vipBlocked,
+          hardDeadline: classification.hardDeadline,
+          contractTier: classification.contractTier,
+          criticalityTier: classification.criticalityTier,
+        },
         group_id: draft.group_id || undefined,
         assigned_to: draft.assigned_to || undefined,
         custom_fields: Object.keys(draft.custom_fields).length ? draft.custom_fields : undefined,
       });
       setDraft(emptyDraft());
+      setClassificationError(false);
       onOpenChange(false);
       onCreated();
     } catch (cause) {
@@ -101,11 +185,6 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
               onChange={event => update('customer_email', event.target.value)} />
             <Field.HelperText id="create-ticket-customer-help">The customer who will receive replies.</Field.HelperText>
           </Field.Root>
-          <DashboardSelect id="create-ticket-priority" label="Priority" disabled={pending} value={draft.priority}
-            onValueChange={value => update('priority', value)} options={[
-              { value: 'low', label: 'Low' }, { value: 'normal', label: 'Normal' },
-              { value: 'high', label: 'High' }, { value: 'urgent', label: 'Urgent' },
-            ]} />
           <DashboardSelect id="create-ticket-group_id" label="Group" disabled={pending} value={draft.group_id}
             onValueChange={value => update('group_id', value)} options={[
               { value: '', label: 'No Group' }, ...(Array.isArray(groups) ? groups.map(group => ({ value: group.id, label: group.name })) : []),
@@ -122,6 +201,48 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
             onChange={event => update('body', event.target.value)} />
           <Field.HelperText id="create-ticket-body-help">The first message in the conversation.</Field.HelperText>
         </Field.Root>
+        <section aria-labelledby="create-ticket-classification-heading" className={css({ display: 'grid', gap: '4' })}>
+          <div>
+            <h3 id="create-ticket-classification-heading" className={css({ m: '0', fontSize: 'md', fontWeight: 'semibold' })}>Ticket classification</h3>
+            <p className={css({ m: '0', color: 'fg.muted', fontSize: 'sm' })}>Choose a category, scope, contract tier, and criticality level. The score is calculated when the ticket is created.</p>
+          </div>
+          {classificationError && <ParkAlert.Root id="create-ticket-classification-error" role="alert" status="error" variant="surface">
+            <ParkAlert.Content><ParkAlert.Description>Choose a category, scope, contract tier, and criticality level before creating a ticket.</ParkAlert.Description></ParkAlert.Content>
+          </ParkAlert.Root>}
+          <div className={css({ display: 'grid', gridTemplateColumns: { base: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: '4' })}>
+            <DashboardSelect id="create-ticket-category" label="Category (required)" disabled={pending} value={draft.classification.category}
+              triggerRef={category} aria-describedby={classificationError ? 'create-ticket-classification-error' : undefined}
+              onValueChange={value => updateClassification('category', value as ClassificationDraft['category'])} options={categoryOptions} />
+            <DashboardSelect id="create-ticket-scope" label="Scope (required)" disabled={pending} value={draft.classification.scope}
+              triggerRef={scope} aria-describedby={classificationError ? 'create-ticket-classification-error' : undefined}
+              onValueChange={value => updateClassification('scope', value as ClassificationDraft['scope'])} options={scopeOptions} />
+            <DashboardSelect id="create-ticket-contract-tier" label="Contract tier (required)" disabled={pending} value={draft.classification.contractTier}
+              triggerRef={contractTier} aria-describedby={classificationError ? 'create-ticket-classification-error' : undefined}
+              onValueChange={value => updateClassification('contractTier', value as ClassificationDraft['contractTier'])} options={contractOptions} />
+            <DashboardSelect id="create-ticket-criticality-tier" label="Criticality level (required)" disabled={pending}
+              value={draft.classification.criticalityTier?.toString() ?? ''} triggerRef={criticalityTier}
+              aria-describedby={classificationError ? 'create-ticket-classification-error' : undefined}
+              onValueChange={value => updateClassification('criticalityTier', value ? Number(value) as CriticalityTier : null)} options={criticalityOptions} />
+          </div>
+          <div className={css({ display: 'grid', gap: '2' })}>
+            <p className={css({ m: '0', color: 'fg.muted', fontSize: 'sm' })}>Urgency conditions: each checked condition adds 5 points. Check all that apply.</p>
+            <ParkCheckbox.Root checked={draft.classification.regulatoryOfficerOnSite} disabled={pending}
+              onCheckedChange={({ checked }) => updateClassification('regulatoryOfficerOnSite', checked === true)}>
+              <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+              <ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Regulatory officer on site</ParkCheckbox.Label>
+            </ParkCheckbox.Root>
+            <ParkCheckbox.Root checked={draft.classification.vipBlocked} disabled={pending}
+              onCheckedChange={({ checked }) => updateClassification('vipBlocked', checked === true)}>
+              <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+              <ParkCheckbox.HiddenInput /><ParkCheckbox.Label>VIP blocked</ParkCheckbox.Label>
+            </ParkCheckbox.Root>
+            <ParkCheckbox.Root checked={draft.classification.hardDeadline} disabled={pending}
+              onCheckedChange={({ checked }) => updateClassification('hardDeadline', checked === true)}>
+              <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+              <ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Hard deadline</ParkCheckbox.Label>
+            </ParkCheckbox.Root>
+          </div>
+        </section>
       </form>
     </ParkDialog.Body>
     <ParkDialog.Footer>

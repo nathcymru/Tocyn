@@ -2,7 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { assignmentIdentity } from './useTicketAssignment';
-import { Ticket, TicketWithDetails } from '@luminatick/shared';
+import { Ticket, TicketWithDetails, type ContractTier, type CriticalityTier, type PriorityCategory, type PriorityScope } from '@luminatick/shared';
 import { isPriorityMatrixSort, usePriorityMatrixTickets } from './usePriorityMatrixTickets';
 import { useSlaPriorityTickets, type TicketQueryPage } from './useSlaPriorityTickets';
 
@@ -87,6 +87,16 @@ export function useAssignResponsibleOwner() {
   });
 }
 
+export type TicketClassification = {
+  category: PriorityCategory;
+  scope: PriorityScope;
+  regulatoryOfficerOnSite: boolean;
+  vipBlocked: boolean;
+  hardDeadline: boolean;
+  contractTier: ContractTier;
+  criticalityTier: CriticalityTier;
+};
+
 export function useCreateTicket() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -99,6 +109,7 @@ export function useCreateTicket() {
       group_id?: string;
       assigned_to?: string;
       custom_fields?: Record<string, any>;
+      classification: TicketClassification;
     }) => dashboardApi.post<Ticket>('/tickets', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });

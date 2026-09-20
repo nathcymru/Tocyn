@@ -117,6 +117,9 @@ it('replaces a pending stale inbox read after ticket.created and displays only t
 
   renderInbox();
   await screen.findByRole('heading', { name: 'No conversations in this view' });
+  await waitFor(() => expect(client.getQueryCache().getAll().some(query =>
+    query.queryKey[0] === 'tickets' && query.queryKey.length === 3 && query.state.data !== undefined,
+  )).toBe(true));
   const readsBeforePending = reads();
   holdOldRead = true;
   let pending!: Promise<void>;
@@ -133,6 +136,32 @@ it('replaces a pending stale inbox read after ticket.created and displays only t
   await waitFor(() => expect(reads()).toBeGreaterThan(readsBeforeEvent));
 
   await act(async () => { releaseOldRead(json(empty)); await pending; });
+  expect(within(list).getByRole('option', { name: /Authoritative post-event arrival/ })).toBeInTheDocument();
+  expect(screen.queryByText('Untrusted event display hint')).not.toBeInTheDocument();
+});
+
+it('replaces a pending initial inbox read when a ticket is created', async () => {
+  let releaseOldRead!: (response: Response) => void;
+  const oldRead = new Promise<Response>(resolve => { releaseOldRead = resolve; });
+  let holdOldRead = true;
+  let arrived = false;
+  const reads = stubInboxApi(() => arrived, () => {
+    if (!holdOldRead) return null;
+    holdOldRead = false;
+    return oldRead;
+  });
+
+  renderInbox();
+  await waitFor(() => expect(reads()).toBe(1));
+  arrived = true;
+  act(() => Socket.latest.emit({ type: 'ticket.created', payload: {
+    id: ticket.id, subject: 'Untrusted event display hint',
+  } }));
+
+  const list = screen.getByRole('listbox', { name: 'Conversation list' });
+  await within(list).findByRole('option', { name: /Authoritative post-event arrival/ });
+  await waitFor(() => expect(reads()).toBeGreaterThan(1));
+  await act(async () => { releaseOldRead(json(empty)); });
   expect(within(list).getByRole('option', { name: /Authoritative post-event arrival/ })).toBeInTheDocument();
   expect(screen.queryByText('Untrusted event display hint')).not.toBeInTheDocument();
 });

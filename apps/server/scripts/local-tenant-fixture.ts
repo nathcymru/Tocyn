@@ -372,7 +372,7 @@ function appendBeta2ReviewFixtureSql(rows: string[], now: number): void {
   }
   rows.push(`INSERT INTO support_state_definitions (tenant_id,id,legacy_status,internal_label,public_label,waiting_reason_required,next_action_required,is_compatibility_default)
     VALUES ('fixture-tenant-a','beta2-awaiting-customer','pending','Waiting on customer','We need your reply',1,1,0);`);
-  rows.push(`UPDATE ticket_support_state SET definition_id='beta2-awaiting-customer',waiting_reason='Waiting for a packaging photo',next_action='Review the photo when the customer replies',changed_at=${literal(beta2MinutesAgo(now, 70))}
+  rows.push(`UPDATE ticket_support_state SET definition_id='beta2-awaiting-customer',waiting_reason='Waiting for a packaging photo',next_action='Review the photo when the customer replies',revision=revision+1,changed_at=${literal(beta2MinutesAgo(now, 70))}
     WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-waiting-customer';`);
 }
 

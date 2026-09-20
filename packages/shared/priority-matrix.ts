@@ -207,15 +207,20 @@ function compareScore(a: PrioritySortTicket, b: PrioritySortTicket): number {
   return b.priorityScore - a.priorityScore;
 }
 
-function effectiveWindow(ticket: PrioritySortTicket): TimeTierWindowHours {
-  return effectiveUrgencyWindowHours(
-    absoluteWindowHours(ticket.contractTier, ticket.criticalityTier) as TimeTierWindowHours,
-    ticket.timeRemainingHours,
-  );
+function driftedWindow(ticket: PrioritySortTicket): TimeTierWindowHours | null {
+  const absoluteWindow = absoluteWindowHours(ticket.contractTier, ticket.criticalityTier) as TimeTierWindowHours;
+  const effectiveWindow = effectiveUrgencyWindowHours(absoluteWindow, ticket.timeRemainingHours);
+  return effectiveWindow < absoluteWindow ? effectiveWindow : null;
 }
 
-function compareEffectiveTier(a: PrioritySortTicket, b: PrioritySortTicket): number {
-  return effectiveWindow(a) - effectiveWindow(b);
+function compareEffectiveCriticality(a: PrioritySortTicket, b: PrioritySortTicket): number {
+  return (driftedWindow(a) ?? CRITICALITY_TIER_WINDOW_HOURS[a.criticalityTier])
+    - (driftedWindow(b) ?? CRITICALITY_TIER_WINDOW_HOURS[b.criticalityTier]);
+}
+
+function compareEffectiveContract(a: PrioritySortTicket, b: PrioritySortTicket): number {
+  return (driftedWindow(a) ?? CONTRACT_TIER_WINDOW_HOURS[a.contractTier])
+    - (driftedWindow(b) ?? CONTRACT_TIER_WINDOW_HOURS[b.contractTier]);
 }
 
 function compareCriticality(a: PrioritySortTicket, b: PrioritySortTicket): number {
@@ -250,8 +255,8 @@ export function comparePriorityTickets(view: PriorityView, a: PrioritySortTicket
   const keys = view === 'default-focus'
     ? [compareRemaining, compareScore, compareCriticality, compareContract]
     : view === 'criticality-matrix'
-      ? [compareEffectiveTier, compareRemaining, compareCriticality, compareContract, compareScore]
-      : [compareEffectiveTier, compareCriticality, compareRemaining, compareContract, compareScore];
+      ? [compareEffectiveCriticality, compareRemaining, compareCriticality, compareContract, compareScore]
+      : [compareEffectiveContract, compareCriticality, compareRemaining, compareContract, compareScore];
   for (const compare of keys) {
     const result = compare(a, b);
     if (result !== 0) return result;

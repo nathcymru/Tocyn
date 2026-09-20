@@ -11541,10 +11541,6 @@
     padding: var(--spacing-4);
 }
 
-  .m_4 {
-    margin: var(--spacing-4);
-}
-
   .p_2 {
     padding: var(--spacing-2);
 }
@@ -11769,6 +11765,10 @@
     padding-block: var(--spacing-2);
 }
 
+  .px_2 {
+    padding-inline: var(--spacing-2);
+}
+
   .ov_auto {
     overflow: auto;
 }
@@ -11847,10 +11847,6 @@
 
   .py_8 {
     padding-block: var(--spacing-8);
-}
-
-  .px_2 {
-    padding-inline: var(--spacing-2);
 }
 
   .py_0\.5 {
@@ -12449,6 +12445,10 @@
     justify-self: end;
 }
 
+  .fs_md {
+    font-size: var(--font-sizes-md);
+}
+
   .justify-items_start {
     justify-items: start;
 }
@@ -12540,10 +12540,6 @@
 
   .z_50 {
     z-index: 50;
-}
-
-  .fs_md {
-    font-size: var(--font-sizes-md);
 }
 
   .c_info\.text {
@@ -12930,6 +12926,10 @@
     padding-bottom: var(--spacing-2);
 }
 
+  .min-h_8 {
+    min-height: var(--sizes-8);
+}
+
   .min-h_0 {
     min-height: var(--sizes-0);
 }
@@ -13036,10 +13036,6 @@
 
   .min-w_8 {
     min-width: var(--sizes-8);
-}
-
-  .min-h_8 {
-    min-height: var(--sizes-8);
 }
 
   .pt_4 {

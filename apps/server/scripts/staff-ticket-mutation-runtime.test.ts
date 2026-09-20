@@ -22,6 +22,7 @@ import { LocalBetaAdmissionRepository } from '../src/repositories/local-beta-adm
 import { SessionBudgetAdmissionService } from '../src/budgets/session-admission.service';
 import { IsolateBudgetAdmissionCache } from '../src/budgets/isolate-admission.service';
 import { StaffTicketMutationService } from '../src/services/staff-ticket-mutation.service';
+import { priorityClassificationColumns } from '../src/domain/priority-classification';
 import { OperatorActivityRepository } from '../src/repositories/operator-activity.repository';
 import { OperatorActivityService } from '../src/services/operator-activity.service';
 import type { TenantRequestDeps } from '../src/middleware/tenant.middleware';
@@ -181,7 +182,9 @@ async function fixture() {
   } catch (error) {await mf.dispose();throw error;}
 }
 const reply = (body='Synthetic reply'):StaffMutationInput => ({operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body}});
-const create = ():StaffMutationInput => ({operation:'dashboard.ticket.create',data:{subject:'Staff intake',customer_email:'CUSTOMER-A@EXAMPLE.TEST',body:'Synthetic intake',group_id:'group'}});
+const completeClassification = {category:'security-privacy',scope:'systemic',regulatoryOfficerOnSite:true,
+  vipBlocked:true,hardDeadline:false,contractTier:'alpha',criticalityTier:4} as const;
+const create = ():StaffMutationInput => ({operation:'dashboard.ticket.create',data:{subject:'Staff intake',customer_email:'CUSTOMER-A@EXAMPLE.TEST',body:'Synthetic intake',group_id:'group',classification:completeClassification}});
 const update = (data: AuditedTicketUpdate = { status:'pending' }): StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data });
 const responsibleOwner = (ownerId:string|null,expectedOwnerId:string|null):StaffMutationInput => ({ operation:'dashboard.ticket.update',ticketId:'ticket',data:{
   assigned_to:ownerId,responsibleOwnerAssignment:true,expectedAssignedTo:expectedOwnerId,
@@ -190,6 +193,28 @@ async function accept(service:StaffTicketMutationService,input:StaffMutationInpu
   const prepared = await service.prepareStaffMutation(input,key);assert.equal(prepared.replay,null);
   assert.equal((await service.admit(prepared)).status,'spent');return {prepared,outcome:await service.commit(prepared)};
 }
+
+test('staff create requires complete classification before admission and computes its own score',async()=>{
+  const f=await fixture();try{
+    const service=f.service();
+    const base=create();
+    if(base.operation!=='dashboard.ticket.create')throw new Error('Expected staff create input');
+    const before={calls:{...f.calls},counts:await f.counts(),attempts:f.canonicalAttempts()};
+    for(const classification of [undefined,{...completeClassification,hardDeadline:undefined},{...completeClassification,priority_score:99}]){
+      const input={...base,data:{...base.data,classification}} as StaffMutationInput;
+      await assert.rejects(service.prepareStaffMutation(input,crypto.randomUUID()),(error:any)=>error.status===400&&error.code==='invalid_mutation');
+    }
+    assert.deepEqual(f.calls,before.calls,'invalid classification does not reserve session capacity');
+    assert.equal(f.canonicalAttempts(),before.attempts,'invalid classification does not reach the canonical batch');
+    assert.deepEqual(await f.counts(),before.counts,'invalid classification creates no ticket or receipt');
+    const {outcome}=await accept(service,base,'classified-create');
+    const row=await f.db.prepare('SELECT priority_category,priority_scope,priority_score,contract_sla_tier,criticality_tier FROM tickets WHERE tenant_id=? AND id=?')
+      .bind('a',outcome.ticket.id).first();
+    const expected=priorityClassificationColumns(completeClassification);
+    assert.deepEqual(row,{priority_category:expected.priority_category,priority_scope:expected.priority_scope,
+      priority_score:expected.priority_score,contract_sla_tier:expected.contract_sla_tier,criticality_tier:expected.criticality_tier});
+  }finally{await f.mf.dispose();}
+});
 
 test('generic existing-ticket assignment is rejected before admission without partial updates', async () => {
   const f = await fixture(); try {
@@ -500,7 +525,7 @@ test('attachment intent, immutable preparation, deletion redaction and snapshot 
 
 test('two tenants persist shared article formats, reject unknown formats, and replay the canonical format without a second batch',async()=>{
   const f=await fixture();try{
-    const markdownCreate:StaffMutationInput={operation:'dashboard.ticket.create',data:{subject:'Markdown intake',customer_email:'customer-a@example.test',body:'# Markdown intake',bodyFormat:'markdown-v1',group_id:'group'}};
+    const markdownCreate:StaffMutationInput={operation:'dashboard.ticket.create',data:{subject:'Markdown intake',customer_email:'customer-a@example.test',body:'# Markdown intake',bodyFormat:'markdown-v1',group_id:'group',classification:completeClassification}};
     const created=await accept(f.service('a'),markdownCreate,'format-create');assert.equal(created.outcome.article.body_format,'markdown-v1');
     const createdStored=await f.db.prepare("SELECT body_format FROM articles WHERE tenant_id='a' AND id=?").bind(created.outcome.article.id).first();
     assert.deepEqual(createdStored,{body_format:'markdown-v1'});
@@ -524,13 +549,13 @@ test('staff bodies use the current 16000-character and byte format boundary befo
   const f=await fixture();try{
     const s=f.service();
     const unicode='é'.repeat(8_000);
-    const accepted=await accept(s,{operation:'dashboard.ticket.create',data:{subject:'Unicode boundary',customer_email:'customer-a@example.test',body:unicode,bodyFormat:'markdown-v1',group_id:'group'}},'unicode-boundary');
+    const accepted=await accept(s,{operation:'dashboard.ticket.create',data:{subject:'Unicode boundary',customer_email:'customer-a@example.test',body:unicode,bodyFormat:'markdown-v1',group_id:'group',classification:completeClassification}},'unicode-boundary');
     assert.equal(accepted.outcome.article.body,unicode);assert.equal(accepted.outcome.article.body_format,'markdown-v1');
     const before={calls:{...f.calls},counts:await f.counts(),attempts:f.canonicalAttempts()};
     const invalidBodies:StaffMutationInput[]=[
       {operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'a'.repeat(16_001),bodyFormat:'markdown-v1'}},
       {operation:'dashboard.ticket.reply',ticketId:'ticket',data:{body:'é'.repeat(8_001),bodyFormat:'markdown-v1'}},
-      {operation:'dashboard.ticket.create',data:{subject:'Too long',customer_email:'customer-a@example.test',body:'a'.repeat(16_001),bodyFormat:'markdown-v1',group_id:'group'}},
+      {operation:'dashboard.ticket.create',data:{subject:'Too long',customer_email:'customer-a@example.test',body:'a'.repeat(16_001),bodyFormat:'markdown-v1',group_id:'group',classification:completeClassification}},
     ];
     for (const input of invalidBodies) await assert.rejects(s.prepareStaffMutation(input,crypto.randomUUID()),(error:any)=>error.code==='invalid_mutation');
     assert.deepEqual(f.calls,before.calls,'oversize bodies do not reserve session budget capacity');

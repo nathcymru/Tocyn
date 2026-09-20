@@ -271,7 +271,13 @@ function LayoutContent() {
     if (!lastMessage) return;
 
     if (['ticket.created', 'ticket.updated', 'article.created'].includes(lastMessage.type)) {
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      // A live event can arrive before the first list read has returned. Query
+      // invalidation reuses a pending fetch with no cached data, so cancel it
+      // first and read the authoritative post-event list.
+      void queryClient.cancelQueries({ queryKey: ['tickets'], predicate: query =>
+        query.queryKey.length === 3 && typeof query.queryKey[1] === 'object' && query.state.data === undefined,
+      }).then(() =>
+        queryClient.invalidateQueries({ queryKey: ['tickets'] }));
       void queryClient.invalidateQueries({ queryKey: ['stats'] });
       const ticketId = lastMessage.type === 'article.created'
         ? lastMessage.payload?.ticket_id ?? lastMessage.payload?.ticketId : lastMessage.payload?.id;

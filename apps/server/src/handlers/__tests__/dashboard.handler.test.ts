@@ -1,6 +1,8 @@
 import { StaffTicketMutationService } from '../../services/staff-ticket-mutation.service';
 import { BroadcastService } from '../../services/broadcast.service';
 import { TicketEmailDeliveryAdmissionService } from '../../services/email/ticket-email-admission.service';
+import { TenantTicketService } from '../../services/tenant-ticket.service';
+import { EmailService } from '../../services/email/outbound.service';
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import dashboard from "../dashboard.handler";
 import { authService } from "../../services/auth/auth.service";
@@ -30,6 +32,8 @@ const mockBucket = {
 
 const JWT_SECRET = "test-secret-key-at-least-32-chars-long-123456";
 let validToken: string;
+const completeClassification = { category:'security-privacy',scope:'systemic',regulatoryOfficerOnSite:true,
+  vipBlocked:true,hardDeadline:false,contractTier:'alpha',criticalityTier:4 } as const;
 
 const request = (path: string, init?: RequestInit, env?: any) => {
   return dashboard.request(path, init, { BUDGET_ADMISSION_POLICY: 'off', DB: mockDB as any, JWT_SECRET, NOTIFICATION_DO: mockNotificationsDO as any, ATTACHMENTS_BUCKET: mockBucket, ...env });
@@ -93,19 +97,18 @@ describe("Dashboard Handler Integration Tests", () => {
       const email=vi.spyOn(TicketEmailDeliveryAdmissionService.prototype,'deliver').mockResolvedValue(true);
       return {finish,broadcast,email};
     }
-    const createRequest=()=>request('/tickets',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},body:JSON.stringify({subject:'Synthetic',customer_email:'fixture@example.test',body:'Synthetic'})},{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+    const createRequest=()=>request('/tickets',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},body:JSON.stringify({subject:'Synthetic',customer_email:'fixture@example.test',body:'Synthetic',classification:completeClassification})},{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
     it('validates complete operator classification before admission and passes it to the canonical mutation',async()=>{
       setup();
-      const classification={category:'security-privacy',scope:'systemic',regulatoryOfficerOnSite:true,
-        vipBlocked:true,hardDeadline:false,contractTier:'alpha',criticalityTier:4};
       const send=(value:unknown)=>request('/tickets',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},
         body:JSON.stringify({subject:'Synthetic',customer_email:'fixture@example.test',body:'Synthetic',classification:value})},
       {BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
-      expect((await send({...classification,hardDeadline:undefined})).status).toBe(400);
+      expect((await send(undefined)).status).toBe(400);
+      expect((await send({...completeClassification,hardDeadline:undefined})).status).toBe(400);
       expect(StaffTicketMutationService.prototype.prepareStaffMutation).not.toHaveBeenCalled();
-      expect((await send(classification)).status).toBe(201);
+      expect((await send(completeClassification)).status).toBe(201);
       expect(StaffTicketMutationService.prototype.prepareStaffMutation).toHaveBeenCalledWith(
-        expect.objectContaining({operation:'dashboard.ticket.create',data:expect.objectContaining({classification})}),undefined);
+        expect.objectContaining({operation:'dashboard.ticket.create',data:expect.objectContaining({classification:completeClassification})}),undefined);
     });
     it('waits for broadcast and email before settling the constructed response',async()=>{
       const {finish,broadcast,email}=setup();
@@ -142,6 +145,31 @@ describe("Dashboard Handler Integration Tests", () => {
       if(kind==='email-false')email.mockResolvedValue(false);
       if(kind==='email-throw')email.mockRejectedValue(new Error('Synthetic delivery uncertainty'));
       const response=await createRequest(); expect(response.status).toBe(201); expect(finish.mock.calls).toEqual([[prepared,'unknown']]);
+    });
+  });
+
+  describe('ordinary staff ticket create classification', () => {
+    afterEach(() => vi.restoreAllMocks());
+    const send = (classification?: unknown) => request('/tickets', {
+      method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},
+      body:JSON.stringify({subject:'Synthetic',customer_email:'fixture@example.test',body:'Synthetic',
+        ...(classification === undefined ? {} : {classification})}),
+    });
+    it('rejects missing and incomplete classification before ticket creation', async () => {
+      const create=vi.spyOn(TenantTicketService.prototype,'createTicketWithArticle');
+      expect((await send()).status).toBe(400);
+      expect((await send({...completeClassification,hardDeadline:undefined})).status).toBe(400);
+      expect(create).not.toHaveBeenCalled();
+    });
+    it('passes a complete classification to the ticket service', async () => {
+      const ticket={id:'created'} as any,article={id:'article'} as any;
+      const create=vi.spyOn(TenantTicketService.prototype,'createTicketWithArticle').mockResolvedValue({ticket,article});
+      vi.spyOn(BroadcastService.prototype,'notifyTicketCreated').mockResolvedValue({status:'accepted',attempts:1});
+      vi.spyOn(EmailService.prototype,'sendTicketReply').mockResolvedValue(undefined as any);
+      const response=await send(completeClassification);
+      expect(response.status).toBe(201);
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({classification:completeClassification}),
+        expect.objectContaining({kind:'staff',source:'dashboard'}));
     });
   });
 

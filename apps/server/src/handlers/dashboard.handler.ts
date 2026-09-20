@@ -88,7 +88,7 @@ const createTicketSchema = z.object({
   group_id: z.string().uuid().optional().nullable(),
   assigned_to: z.string().uuid().optional().nullable(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
-  classification: priorityClassificationSchema.optional(),
+  classification: priorityClassificationSchema,
 });
 
 const staffCreateTicketSchema = createTicketSchema.extend({
@@ -96,7 +96,6 @@ const staffCreateTicketSchema = createTicketSchema.extend({
   body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).byteLength <= 16000),
   customer_email: z.string().email().max(254),
   body_format: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT),
-  classification: priorityClassificationSchema.optional(),
 }).strict();
 const staffReplySchema = z.object({
   body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).byteLength <= 16000),

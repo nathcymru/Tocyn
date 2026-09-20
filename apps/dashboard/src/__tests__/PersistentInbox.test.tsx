@@ -43,6 +43,20 @@ function showInbox(entry='/inbox/all',globalSearch=false){
   const result=render(<InboxGlobalAlertProvider><QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider></InboxGlobalAlertProvider>);
   return {...result,router};
 }
+async function chooseTicketClassification({urgent=false}:{urgent?:boolean}={}){
+  for(const [field,choice] of [
+    ['Category (required)','Security and privacy'],
+    ['Scope (required)','Systemic'],
+    ['Contract tier (required)','Alpha'],
+    ['Criticality level (required)','Level 4'],
+  ]){
+    await userEvent.click(screen.getByRole('combobox',{name:field}));
+    await userEvent.click(await screen.findByRole('option',{name:choice}));
+  }
+  if(urgent)for(const label of ['Regulatory officer on site','VIP blocked','Hard deadline']){
+    await userEvent.click(screen.getByRole('checkbox',{name:label}));
+  }
+}
 async function chooseSort(option:string){
   await openFilters();
   await userEvent.click(screen.getByRole('button',{name:/^Sort:/}));
@@ -967,7 +981,8 @@ it('keeps a failed New Ticket draft and retries the same validated payload in th
       posts++;
       expect(JSON.parse(String(options.body))).toEqual({
         subject:'Operator-created follow-up',customer_email:'customer@example.invalid',body:'Synthetic operator message',
-        priority:'normal',status:'open',
+        status:'open',classification:{category:'security-privacy',scope:'systemic',contractTier:'alpha',criticalityTier:4,
+          regulatoryOfficerOnSite:true,vipBlocked:true,hardDeadline:true},
       });
       return Promise.resolve(posts===1?json({error:'Creation is temporarily unavailable'},503):json(createdTicket,201));
     }
@@ -990,6 +1005,16 @@ it('keeps a failed New Ticket draft and retries the same validated payload in th
   const message=within(dialog).getByRole('textbox',{name:'Initial Message'});
   fireEvent.change(message,{target:{value:'Synthetic operator message'}});
   const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
+  expect(within(dialog).queryByRole('combobox',{name:'Priority'})).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('combobox',{name:'Category (required)'})).toHaveTextContent('Choose category');
+  fireEvent.click(submit);
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Choose a category, scope, contract tier, and criticality level');
+  expect(posts).toBe(0);
+  await chooseTicketClassification({urgent:true});
+  expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('checkbox',{name:'Regulatory officer on site'})).toBeChecked();
+  expect(within(dialog).getByRole('checkbox',{name:'VIP blocked'})).toBeChecked();
+  expect(within(dialog).getByRole('checkbox',{name:'Hard deadline'})).toBeChecked();
   fireEvent.click(submit);
   const alert=await within(dialog).findByRole('alert');
   expect(alert).toHaveAttribute('id','create-ticket-error');
@@ -1025,13 +1050,15 @@ it('holds the New Ticket draft, focus and dialog while creation is pending',asyn
   fireEvent.change(subject,{target:{value:'Submitted subject'}});
   fireEvent.change(within(dialog).getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
   fireEvent.change(within(dialog).getByRole('textbox',{name:'Initial Message'}),{target:{value:'Submitted message'}});
+  await chooseTicketClassification();
   const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
   submit.focus();fireEvent.click(submit);
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Creating…'})).toHaveAttribute('aria-disabled','true'));
   expect(submit).toHaveFocus();
   fireEvent.change(subject,{target:{value:'Changed while pending'}});
   expect(subject).toHaveValue('Submitted subject');
-  expect(within(dialog).getByRole('combobox',{name:'Priority'})).toBeDisabled();
+  expect(within(dialog).getByRole('combobox',{name:'Category (required)'})).toBeDisabled();
+  expect(within(dialog).getByRole('checkbox',{name:'VIP blocked'})).toBeDisabled();
   fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
   fireEvent.keyDown(submit,{key:'Escape'});
   expect(screen.getByRole('dialog',{name:'Create New Ticket'})).toBeInTheDocument();

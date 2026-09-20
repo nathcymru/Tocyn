@@ -107,11 +107,12 @@ export class StaffTicketMutationService {
       if (typeof data.subject !== 'string' || !data.subject.trim() || typeof data.customer_email !== 'string' || !data.customer_email.trim()) throw invalid();
       if (data.status && !['open','pending','resolved','closed'].includes(data.status)) throw invalid();
       if (data.priority && !['low','normal','high','urgent'].includes(data.priority)) throw invalid();
-      if (data.classification !== undefined && !priorityClassificationSchema.safeParse(data.classification).success) throw invalid();
+      const classification = priorityClassificationSchema.safeParse(data.classification);
+      if (!classification.success) throw invalid();
       return { operation: input.operation, data: { subject: data.subject, customer_email: data.customer_email.toLowerCase(), body: data.body,
         bodyFormat, status: data.status ?? 'open', priority: data.priority ?? 'normal', group_id: data.group_id ?? null,
         assigned_to: data.assigned_to ?? null, ...(data.custom_fields == null ? {} : { custom_fields: data.custom_fields }),
-        ...(data.classification === undefined ? {} : { classification: priorityClassificationSchema.parse(data.classification) }) } };
+        classification: classification.data } };
     }
     if (input.operation !== 'dashboard.ticket.reply' || typeof input.ticketId !== 'string' || !input.ticketId) throw invalid();
     const attachments = input.data.attachments ?? [];

@@ -23,8 +23,8 @@ CREATE TRIGGER priority_clock_on_ticket_insert AFTER INSERT ON tickets BEGIN
     (tenant_id,ticket_id,started_at,active_since,stop_reason,last_support_state_revision,updated_at)
   VALUES (
     NEW.tenant_id,NEW.id,COALESCE(NEW.intake_received_at,NEW.created_at),
-    CASE WHEN NEW.status IN ('pending','resolved','closed') THEN NULL ELSE COALESCE(NEW.intake_received_at,NEW.created_at) END,
-    CASE WHEN NEW.status IN ('resolved','closed') THEN 'resolved' WHEN NEW.status='pending' THEN 'waiting' ELSE NULL END,
+    CASE WHEN NEW.status IN ('resolved','closed') THEN NULL ELSE COALESCE(NEW.intake_received_at,NEW.created_at) END,
+    CASE WHEN NEW.status IN ('resolved','closed') THEN 'resolved' ELSE NULL END,
     1,COALESCE(NEW.intake_received_at,NEW.created_at)
   );
 END;
@@ -38,19 +38,21 @@ AFTER UPDATE OF definition_id,waiting_reason ON ticket_support_state
 WHEN NEW.revision > OLD.revision BEGIN
   UPDATE ticket_priority_clocks SET
     accrued_active_ms = accrued_active_ms + CASE WHEN active_since IS NOT NULL AND (
-      SELECT d.legacy_status IN ('pending','resolved','closed')
+      SELECT d.legacy_status IN ('resolved','closed') OR
+        (d.legacy_status='pending' AND NEW.waiting_reason IS NOT NULL)
       FROM support_state_definitions d WHERE d.tenant_id=NEW.tenant_id AND d.id=NEW.definition_id
     ) THEN MAX(0,
       (CAST(strftime('%s',NEW.changed_at) AS INTEGER)*1000 + CAST(substr(strftime('%f',NEW.changed_at),4,3) AS INTEGER)) -
       (CAST(strftime('%s',active_since) AS INTEGER)*1000 + CAST(substr(strftime('%f',active_since),4,3) AS INTEGER))
     ) ELSE 0 END,
     active_since = CASE WHEN (
-      SELECT d.legacy_status IN ('pending','resolved','closed')
+      SELECT d.legacy_status IN ('resolved','closed') OR
+        (d.legacy_status='pending' AND NEW.waiting_reason IS NOT NULL)
       FROM support_state_definitions d WHERE d.tenant_id=NEW.tenant_id AND d.id=NEW.definition_id
     ) THEN NULL ELSE COALESCE(active_since,NEW.changed_at) END,
     stop_reason = (
       SELECT CASE WHEN d.legacy_status IN ('resolved','closed') THEN 'resolved'
-        WHEN d.legacy_status='pending' THEN 'waiting' ELSE NULL END
+        WHEN d.legacy_status='pending' AND NEW.waiting_reason IS NOT NULL THEN 'waiting' ELSE NULL END
       FROM support_state_definitions d WHERE d.tenant_id=NEW.tenant_id AND d.id=NEW.definition_id
     ),
     last_support_state_revision=NEW.revision,

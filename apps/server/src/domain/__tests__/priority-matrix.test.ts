@@ -127,6 +127,25 @@ test('Criticality Matrix promotes drift into effective tier, then orders time wi
     ['drifted-l1', 'fresh-l4', 'bravo', 'at-24', 'not-yet']);
 });
 
+test('the named views keep their own primary tiers when a different axis sets the absolute window', () => {
+  const alphaLevel1 = snapshot('alpha-level-1', 'alpha', 1, 0.25);
+  const deltaLevel4 = snapshot('delta-level-4', 'delta', 4, 0.75);
+  assert.deepEqual(sortedIds('criticality-matrix', [alphaLevel1, deltaLevel4]),
+    ['delta-level-4', 'alpha-level-1']);
+  assert.deepEqual(sortedIds('sla-commitment', [deltaLevel4, alphaLevel1]),
+    ['alpha-level-1', 'delta-level-4']);
+});
+
+test('drift lets a long-window ticket join the stricter primary tier in each named view', () => {
+  const drifted = snapshot('drifted', 'delta', 1, 0.25);
+  const highCriticality = snapshot('high-criticality', 'delta', 4, 0.75);
+  const strictContract = snapshot('strict-contract', 'alpha', 1, 0.75);
+  assert.deepEqual(sortedIds('criticality-matrix', [highCriticality, drifted]),
+    ['drifted', 'high-criticality']);
+  assert.deepEqual(sortedIds('sla-commitment', [strictContract, drifted]),
+    ['drifted', 'strict-contract']);
+});
+
 test('SLA Commitment promotes effective contract tier, then raw criticality and time', () => {
   const tickets = [
     snapshot('delta-25', 'delta', 1, 25), snapshot('delta-24', 'delta', 1, 24),

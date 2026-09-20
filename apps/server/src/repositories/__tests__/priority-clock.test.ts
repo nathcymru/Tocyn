@@ -55,11 +55,36 @@ describe('priority clock database lifecycle', () => {
         active_since:null,accrued_active_ms:0,stop_reason:'resolved',
       });
       expect(clock(db,'tenant-A','already-pending')).toMatchObject({
-        active_since:null,accrued_active_ms:0,stop_reason:'waiting',
+        active_since:'2026-09-20T10:00:00.000Z',accrued_active_ms:0,stop_reason:null,
       });
       expect(projectPriorityClock(clock(db,'tenant-A','already-resolved'),Date.parse('2026-09-21T00:00:00Z'))?.timeRemainingHours).toBe(1);
-      expect(projectPriorityClock(clock(db,'tenant-A','already-pending'),Date.parse('2026-09-21T00:00:00Z'))?.timeRemainingHours).toBe(1);
+      expect(projectPriorityClock(clock(db,'tenant-A','already-pending'),Date.parse('2026-09-21T00:00:00Z'))?.timeRemainingHours).toBe(-13);
       expect(db.pragma('foreign_key_check')).toEqual([]);
+    } finally { db.close(); }
+  });
+
+  it('accrues pending time without a waiting reason and pauses only when the reason is set', () => {
+    const db = dbWithClock();
+    try {
+      ticket(db,'tenant-A','unexplained-pending','pending');
+      state(db,'tenant-A','unexplained-pending','legacy-pending',null,'2026-09-20T10:15:00.000Z');
+      expect(clock(db,'tenant-A','unexplained-pending')).toMatchObject({
+        active_since:'2026-09-20T10:00:00.000Z',accrued_active_ms:0,stop_reason:null,
+      });
+      expect(projectPriorityClock(clock(db,'tenant-A','unexplained-pending'),Date.parse('2026-09-20T10:30:00Z'))).toMatchObject({
+        elapsedActiveMs:1_800_000,timeRemainingHours:0.5,paused:false,
+      });
+      state(db,'tenant-A','unexplained-pending','legacy-pending','awaiting customer','2026-09-20T10:30:00.000Z');
+      expect(clock(db,'tenant-A','unexplained-pending')).toMatchObject({
+        active_since:null,accrued_active_ms:1_800_000,stop_reason:'waiting',
+      });
+      expect(projectPriorityClock(clock(db,'tenant-A','unexplained-pending'),Date.parse('2026-09-20T11:00:00Z'))).toMatchObject({
+        elapsedActiveMs:1_800_000,timeRemainingHours:0.5,paused:true,
+      });
+      state(db,'tenant-A','unexplained-pending','legacy-pending',null,'2026-09-20T11:00:00.000Z');
+      expect(projectPriorityClock(clock(db,'tenant-A','unexplained-pending'),Date.parse('2026-09-20T11:15:00Z'))).toMatchObject({
+        elapsedActiveMs:2_700_000,timeRemainingHours:0.25,paused:false,
+      });
     } finally { db.close(); }
   });
 
@@ -90,7 +115,8 @@ describe('priority clock database lifecycle', () => {
       state(db,'tenant-A','same','legacy-pending','waiting','2026-09-20T10:30:00.000Z');
       expect(clock(db,'tenant-B','same')).toMatchObject({accrued_active_ms:0,stop_reason:null,revision:1});
       state(db,'tenant-B','same','legacy-pending',null,'2026-09-20T10:15:00.000Z');
-      expect(clock(db,'tenant-B','same')).toMatchObject({accrued_active_ms:900_000,stop_reason:'waiting',revision:2});
+      expect(clock(db,'tenant-B','same')).toMatchObject({accrued_active_ms:0,active_since:'2026-09-20T10:00:00.000Z',stop_reason:null,revision:2});
+      expect(projectPriorityClock(clock(db,'tenant-B','same'),Date.parse('2026-09-20T10:15:00Z'))?.elapsedActiveMs).toBe(900_000);
       // A replayed row at the same support-state revision cannot account twice.
       db.prepare(`UPDATE ticket_support_state SET changed_at='2026-09-20T11:00:00.000Z'
         WHERE tenant_id='tenant-A' AND ticket_id='same'`).run();

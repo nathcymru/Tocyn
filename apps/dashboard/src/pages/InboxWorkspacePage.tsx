@@ -421,13 +421,13 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     </header>
     {createMounted&&<NewTicketDialog open={createOpen} onOpenChange={setCreateOpen} trigger={createTrigger} onCreated={()=>setStatus('Ticket created.')} />}
     {slaSort&&<SlaQueueNotice asOf={query.data?.asOf} error={query.error} busy={query.isFetching} restart={restartSla} />}
-    {priorityMatrixSort&&<section aria-label="Priority ordering" className={css({ display: 'grid', gap: '2', m: '4', p: '3', borderWidth: '1px', borderColor: 'border.default', borderRadius: 'l2', bg: 'bg.surface' })}>
-      <p role="status">{query.error instanceof ApiError&&query.error.code==='priority_sort_restart'
+    {priorityMatrixSort&&<section aria-label="Priority ordering" className={css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '2', px: '4', py: '2', borderBottomWidth: '1px', borderColor: 'border.default', bg: 'bg.surface', fontSize: 'xs' })}>
+      <p role="status" className={css({ m: '0', color: 'fg.muted' })}>{query.error instanceof ApiError&&query.error.code==='priority_sort_restart'
         ? 'This priority view changed or expired. Restart ordering to continue.'
         : query.error ? 'Priority ordering is unavailable. No partial order is shown.'
-          : query.data?.asOf ? <>Priority order calculated at <time dateTime={query.data.asOf}>{new Date(query.data.asOf).toLocaleTimeString()}</time>. Refresh to update the queue.</>
+          : query.data?.asOf ? <>Priority order set <time dateTime={query.data.asOf}>{new Date(query.data.asOf).toLocaleTimeString()}</time>.</>
             : 'Calculating priority order for the whole view…'}</p>
-      <ParkButton type="button" variant="outline" disabled={query.isFetching} onClick={restartPriority} className={css({ justifySelf: 'start' })}>
+      <ParkButton type="button" variant="plain" disabled={query.isFetching} onClick={restartPriority} className={css({ minH: '8', px: '2' })}>
         {query.error instanceof ApiError&&query.error.code==='priority_sort_restart'?'Restart priority ordering':'Refresh priority ordering'}
       </ParkButton>
     </section>}

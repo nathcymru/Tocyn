@@ -164,10 +164,11 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     assert.equal(tenantAClassified.find(ticket => ticket.id === 'beta2-billing-urgent')?.priority_hard_deadline,1);
     const priorityClocks = await fixture.db.prepare(`SELECT c.tenant_id,c.ticket_id,c.started_at,c.active_since,c.accrued_active_ms,
       c.stop_reason,c.last_support_state_revision,c.revision,c.updated_at,
-      t.contract_sla_tier,t.criticality_tier,t.status
+      t.contract_sla_tier,t.criticality_tier,t.status,s.waiting_reason
       FROM ticket_priority_clocks c JOIN tickets t ON t.tenant_id=c.tenant_id AND t.id=c.ticket_id
+      JOIN ticket_support_state s ON s.tenant_id=c.tenant_id AND s.ticket_id=c.ticket_id
       WHERE c.ticket_id LIKE 'beta2-%' ORDER BY c.tenant_id,c.ticket_id`)
-      .all<PriorityClockRow & { tenant_id:string;status:string }>();
+      .all<PriorityClockRow & { tenant_id:string;status:string;waiting_reason:string|null }>();
     const tenantAClocks = priorityClocks.results.filter(clock => clock.tenant_id === 'fixture-tenant-a');
     const tenantBClocks = priorityClocks.results.filter(clock => clock.tenant_id === 'fixture-tenant-b');
     assert.equal(tenantAClocks.length,20,'Every tenant-A review ticket has an authoritative priority clock');
@@ -191,11 +192,17 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     }
     assert.ok(tenantAClocks.filter(clock => clock.status === 'pending').length >= 2);
     for (const clock of tenantAClocks.filter(clock => clock.status === 'pending')) {
-      assert.equal(clock.stop_reason,'waiting',`${clock.ticket_id} must pause in pending`);
-      assert.equal(clock.active_since,null,`${clock.ticket_id} must have no running interval`);
-      assert.equal(projected.get(clock.ticket_id)?.paused,true);
-      assert.equal(remainingHours(clock.ticket_id),absoluteWindowHours(clock.contract_sla_tier!,clock.criticality_tier!),
-        `${clock.ticket_id} must not accrue while pending from ingestion`);
+      if (clock.waiting_reason) {
+        assert.equal(clock.stop_reason,'waiting',`${clock.ticket_id} must pause while waiting`);
+        assert.equal(clock.active_since,null,`${clock.ticket_id} must have no running interval`);
+        assert.equal(projected.get(clock.ticket_id)?.paused,true);
+      } else {
+        assert.equal(clock.stop_reason,null,`${clock.ticket_id} has no waiting reason`);
+        assert.ok(clock.active_since,`${clock.ticket_id} remains actionable`);
+        assert.equal(projected.get(clock.ticket_id)?.paused,false);
+        assert.ok(remainingHours(clock.ticket_id)<absoluteWindowHours(clock.contract_sla_tier!,clock.criticality_tier!),
+          `${clock.ticket_id} continues accruing while pending without a waiting reason`);
+      }
     }
     assert.ok(tenantAClocks.filter(clock => clock.status === 'resolved' || clock.status === 'closed').length >= 2);
     for (const clock of tenantAClocks.filter(clock => clock.status === 'resolved' || clock.status === 'closed')) {
@@ -203,7 +210,7 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
       assert.equal(clock.active_since,null,`${clock.ticket_id} must have no running interval`);
       assert.equal(projected.get(clock.ticket_id)?.paused,true);
     }
-    assert.equal(tenantBClocks.find(clock => clock.ticket_id === 'beta2-b-email')?.stop_reason,'waiting');
+    assert.equal(tenantBClocks.find(clock => clock.ticket_id === 'beta2-b-email')?.stop_reason,null);
     assert.equal(tenantBClocks.find(clock => clock.ticket_id === 'beta2-b-open-unassigned')?.stop_reason,null);
     assert.equal(effectiveUrgencyWindowHours(48,remainingHours('beta2-api-update')),24);
     assert.equal(effectiveUrgencyWindowHours(48,remainingHours('beta2-security-question')),4);
