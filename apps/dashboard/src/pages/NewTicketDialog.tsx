@@ -48,6 +48,10 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
   const { data: groups } = useGroups();
   const { data: agents } = useAgents();
   const pending = createTicket.isPending;
+  React.useLayoutEffect(() => {
+    // Keep the pending action focused when Ark Select closes asynchronously.
+    if (open && pending) submit.current?.focus();
+  }, [open, pending]);
   const update = <K extends keyof NewTicketDraft>(key: K, value: NewTicketDraft[K]) => {
     if (!pending) setDraft(current => ({ ...current, [key]: value }));
   };
