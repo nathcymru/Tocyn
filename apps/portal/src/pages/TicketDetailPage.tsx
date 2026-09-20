@@ -1,6 +1,6 @@
 import { p } from '../portalStyles';
 import { ParkAlert, ParkButton, ParkEmptyState, ParkField, ParkFileUpload, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
-import { Link as ParkLink } from '@luminatick/ui/components';
+import { Badge as ParkBadge, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -333,9 +333,9 @@ function TicketDetail({ id }: { id: string | undefined }) {
         <div className={detailHeadingBody}>
           <h1 ref={conversationHeading} tabIndex={-1} className={[p.ticketDetailTitle, detailTitleWrap].join(' ')}>
             {ticket.subject}
-            <span className={[p.chatStatusPill, statusColors[ticket.status]].join(' ')}>
-              {ticket.status}
-            </span>
+            <ParkBadge asChild variant="subtle" className={[p.chatStatusPill, statusColors[ticket.status]].join(' ')}>
+              <span>{ticket.status}</span>
+            </ParkBadge>
           </h1>
           <p className={p.ticketDetailMeta}>
             Ticket {ticketReference(ticket, ticketPrefix)} • Created {format(utcTimestamp(ticket.created_at), 'MMM d, yyyy h:mm a')}

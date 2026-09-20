@@ -36,23 +36,25 @@ describe('customer login accessibility', () => {
     expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456', challengeId: undefined });
   });
 
-  it('names the login-method group and uses Park variants for the selected method', () => {
+  it('uses official Park Radio Group anatomy and keyboard selection for the login method', async () => {
     vi.mocked(portalApi.get).mockResolvedValue({});
     mount(LoginPage);
-    expect(screen.getByRole('group', { name: 'Login method' })).toBeTruthy();
-    const magic = screen.getByRole('button', { name: 'Magic Link' });
-    const code = screen.getByRole('button', { name: 'Code (OTP)' });
+    const group = screen.getByRole('radiogroup', { name: 'Login method' });
+    const magic = screen.getByRole('radio', { name: 'Magic Link' });
+    const code = screen.getByRole('radio', { name: 'Code (OTP)' });
     const email = screen.getByLabelText('Email address');
     expect(email.closest('.field__root')).toBeInTheDocument();
     expect(email.closest('.card__root')).toBeInTheDocument();
-    expect(magic.getAttribute('aria-pressed')).toBe('true');
-    expect(magic).toHaveClass('button--variant_surface');
-    expect(code).toHaveClass('button--variant_outline');
-    fireEvent.click(code);
-    expect(magic.getAttribute('aria-pressed')).toBe('false');
-    expect(code.getAttribute('aria-pressed')).toBe('true');
-    expect(magic).toHaveClass('button--variant_outline');
-    expect(code).toHaveClass('button--variant_surface');
+    expect(group).toHaveClass('radio-group__root');
+    expect(magic.closest('.radio-group__item')).toBeInTheDocument();
+    expect(code.closest('.radio-group__item')).toBeInTheDocument();
+    expect(magic).toBeChecked();
+    expect(code).not.toBeChecked();
+    magic.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(magic).not.toBeChecked();
+    expect(code).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Send Code' })).toBeInTheDocument();
   });
 
   it('announces sending/failure and preserves a focusable submit control with no repeated request', async () => {
@@ -84,15 +86,15 @@ describe('customer login accessibility', () => {
     fireEvent.change(email, { target: { value: 'submitted@example.invalid' } });
     const submit = screen.getByRole('button', { name: 'Send Magic Link' });
     submit.focus(); fireEvent.click(submit);
-    const otp = screen.getByRole('button', { name: 'Code (OTP)' });
+    const otp = screen.getByRole('radio', { name: 'Code (OTP)' });
     expect(email.readOnly).toBe(true);
     expect(email.disabled).toBe(false);
-    expect(otp.hasAttribute('disabled')).toBe(false);
-    expect(otp.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(otp);
+    expect(otp).toBeDisabled();
+    fireEvent.click(otp.closest('.radio-group__item')!);
     fireEvent.change(email, { target: { value: 'attempted-change@example.invalid' } });
     expect(email.value).toBe('submitted@example.invalid');
-    expect(screen.getByRole('button', { name: 'Magic Link' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Magic Link' }).closest('.radio-group__item')).toHaveAttribute('data-state', 'checked');
+    expect(screen.getByRole('button', { name: 'Sending...' })).toBeInTheDocument();
     expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/auth/request', expect.objectContaining({
       email: 'submitted@example.invalid', type: 'magic_link',
     }));

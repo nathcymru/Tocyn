@@ -55,7 +55,6 @@ export function Layout() {
               </span>
               <ParkButton
                 onClick={handleLogout}
-                className={p.logout}
                 title="Sign out of all sessions"
                 aria-label="Sign out of all sessions"
               >

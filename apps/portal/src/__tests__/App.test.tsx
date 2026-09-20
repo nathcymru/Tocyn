@@ -41,11 +41,11 @@ describe('portal authentication bootstrap', () => {
     vi.mocked(portalApi.get).mockResolvedValue({});
     window.history.replaceState(null, '', '/login');
     render(<App />);
-    const method = await screen.findByRole('button', { name: 'Code (OTP)' });
-    expect(method).toHaveClass('button--variant_outline');
+    const method = await screen.findByRole('radio', { name: 'Code (OTP)' });
+    expect(method.closest('.radio-group__item')).toBeInTheDocument();
     expect(method.closest('[data-auth-mode]')).toHaveAttribute('data-auth-mode', 'dark');
     expect(document.documentElement).toHaveClass('dark');
-    expect(method).not.toHaveAttribute('style');
+    expect(method.closest('.radio-group__item')).not.toHaveAttribute('style');
   });
 
   it('keeps an explicit light theme when the operating system prefers dark', async () => {
@@ -57,7 +57,7 @@ describe('portal authentication bootstrap', () => {
     vi.mocked(portalApi.get).mockResolvedValue({});
     window.history.replaceState(null, '', '/login');
     render(<App />);
-    const method = await screen.findByRole('button', { name: 'Code (OTP)' });
+    const method = await screen.findByRole('radio', { name: 'Code (OTP)' });
     expect(method.closest('[data-auth-mode]')).toHaveAttribute('data-auth-mode', 'light');
     expect(document.documentElement).not.toHaveClass('dark');
   });
