@@ -11820,6 +11820,10 @@
     border-radius: var(--radii-xl);
 }
 
+  .grid-c_1_\/_-1 {
+    grid-column: 1 / -1;
+}
+
   .bdr_l3 {
     border-radius: var(--radii-l3);
 }

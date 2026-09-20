@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { KnowledgePage } from '../pages/KnowledgePage';
-const api=vi.hoisted(()=>({get:vi.fn(),delete:vi.fn()}));
+const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),delete:vi.fn()}));
 vi.mock('../api/client',()=>({dashboardApi:api}));
 beforeEach(()=>{
  api.get.mockImplementation(async(path:string)=>path.endsWith('categories')?[{id:'category-a',name:'Synthetic category',parent_id:null}]:[{id:'article-a',title:'Synthetic article',category_id:'category-a',created_at:'2026-09-10',is_public:false}]);
@@ -92,6 +92,9 @@ it('shows Park loading and a retryable failure before the article table is empty
  const outage = await screen.findByRole('alert');
  expect(outage).toHaveTextContent('Synthetic knowledge outage');
  expect(screen.queryByText('No articles found')).not.toBeInTheDocument();
+ expect(outage).toHaveClass('emptyState__root');
+ expect(screen.queryByRole('table')).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'Add Root Category'})).not.toBeInTheDocument();
  fail = false;
  fireEvent.click(screen.getByRole('button',{name:'Retry knowledge'}));
  expect(screen.getByRole('status',{name:'Loading knowledge articles'})).toBeInTheDocument();
@@ -99,6 +102,33 @@ it('shows Park loading and a retryable failure before the article table is empty
  expect(screen.queryByRole('table')).not.toBeInTheDocument();
  expect(screen.getByText('No articles found').closest('.emptyState__root')).toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Create article'})).toBeInTheDocument();
+});
+
+it('keeps confirmed categories and articles visible when a refresh fails, then recovers', async () => {
+ let failRefresh = false;
+ api.get.mockImplementation(async (path: string) => {
+   if (failRefresh) throw new Error('Synthetic refresh outage');
+   return path.endsWith('categories') ? [{id:'category-a',name:'Synthetic category',parent_id:null}] :
+     [{id:'article-a',title:'Synthetic article',category_id:'category-a',created_at:'2026-09-10',is_public:false}];
+ });
+ api.post.mockResolvedValue({});
+ render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
+ await screen.findByRole('link',{name:'Edit Synthetic article'});
+ failRefresh = true;
+ fireEvent.click(screen.getByRole('button',{name:'Add Root Category'}));
+ const input = screen.getByRole('textbox',{name:'New root category name'});
+ fireEvent.change(input,{target:{value:'Another category'}});
+ fireEvent.keyDown(input,{key:'Enter'});
+ const warning = await screen.findByRole('alert');
+ expect(warning).toHaveTextContent('Knowledge could not be refreshed');
+ expect(warning).toHaveTextContent('Showing the last loaded categories and articles');
+ expect(screen.getByRole('link',{name:'Edit Synthetic article'})).toBeInTheDocument();
+ expect(screen.getByRole('table')).toBeInTheDocument();
+ expect(screen.queryByRole('status',{name:'Loading knowledge articles'})).not.toBeInTheDocument();
+ failRefresh = false;
+ fireEvent.click(screen.getByRole('button',{name:'Retry knowledge'}));
+ await waitFor(()=>expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+ expect(screen.getByRole('link',{name:'Edit Synthetic article'})).toBeInTheDocument();
 });
 
 it('uses a named Park link to open an article from the table', async () => {

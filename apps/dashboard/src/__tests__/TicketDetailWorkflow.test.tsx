@@ -369,6 +369,80 @@ it('keeps a committed select read-only until its detail refresh succeeds without
   expect(patches).toBe(1);
 });
 
+it('recovers initial support-state and definition reads with separate Park retry actions', async () => {
+  const current = { ticket_id: 'workflow-ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason: null, next_action: null, snoozed_until: null, changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const definitions = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
+  let currentReads = 0;
+  let definitionReads = 0;
+  transport((path) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') return ++currentReads === 1 ? json({ error: 'temporarily unavailable' }, 503) : json(current);
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states') return ++definitionReads === 1 ? json({ error: 'temporarily unavailable' }, 503) : json(definitions);
+    return original(url, options);
+  }));
+  showDetail();
+  await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  expect(await screen.findByRole('heading', { name: 'Current support state could not be loaded' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Support-state definitions could not be loaded' })).toBeInTheDocument();
+  expect(screen.queryByRole('form', { name: 'Support state' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry current support state' }));
+  expect(await screen.findByRole('form', { name: 'Support state' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry support-state definitions' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save support state' })).toBeEnabled());
+  expect(currentReads).toBe(2);
+  expect(definitionReads).toBe(2);
+});
+
+it('keeps confirmed support-state data and unsaved facts through failed refreshes', async () => {
+  const current = { ticket_id: 'workflow-ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason: 'Original', next_action: 'Next step', snoozed_until: null, changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const definitions = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
+  let failCurrent = false;
+  let failDefinitions = false;
+  let writes = 0;
+  transport((path, options) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') {
+      if (options.method === 'PATCH') { writes++; return json(current); }
+      return failCurrent ? json({ error: 'temporarily unavailable' }, 503) : json(current);
+    }
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states') return failDefinitions ? json({ error: 'temporarily unavailable' }, 503) : json(definitions);
+    return original(url, options);
+  }));
+  showDetail();
+  await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  await screen.findByRole('form', { name: 'Support state' });
+  fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: 'My unsaved reason' } });
+  failCurrent = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh current state' }));
+  expect(await screen.findByRole('heading', { name: 'Current support state could not be refreshed' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('My unsaved reason');
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  fireEvent.submit(screen.getByRole('form', { name: 'Support state' }));
+  expect(writes).toBe(0);
+  failCurrent = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry current support state' }));
+  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Current support state could not be refreshed' })).not.toBeInTheDocument());
+  failDefinitions = true;
+  await act(async () => { await client.refetchQueries({ queryKey: ['support-states'] }); });
+  expect(await screen.findByRole('heading', { name: 'Support-state definitions could not be refreshed' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('My unsaved reason');
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  failDefinitions = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry support-state definitions' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save support state' })).toBeEnabled());
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('My unsaved reason');
+  expect(writes).toBe(0);
+});
+
 it('transitions a custom waiting state with its required private facts and retains input after a CAS conflict', async () => {
   const transition = { ticket_id: 'workflow-ticket', definition_id: 'awaiting-customer', lifecycle: 'pending', internal_label: 'Waiting on customer', public_label: 'We need your reply', waiting_reason: 'Awaiting account number', next_action: 'Follow up tomorrow', changed_at: '2026-09-11T00:00:00Z', revision: 4 };
   const definitions = [

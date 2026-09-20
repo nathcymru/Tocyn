@@ -107,7 +107,7 @@ export const UsersPage: React.FC = () => {
           </ParkCard.Root>
         ))}
         {!error && users.length === 0 && (
-          <ParkEmptyState className={css({"py":"6"})} title="No team members found" description="No team members were returned for this workspace." action={<ParkButton type="button" onClick={() => void refetch()}>Refresh team members</ParkButton>} />
+          <ParkEmptyState className={css({ py: '6', gridColumn: '1 / -1' })} title="No team members found" description="No team members were returned for this workspace." action={<ParkButton type="button" onClick={() => void refetch()}>Refresh team members</ParkButton>} />
         )}
       </div>
 
