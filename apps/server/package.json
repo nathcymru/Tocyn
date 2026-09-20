@@ -34,6 +34,7 @@
     "test:conversation-audit": "tsx --test scripts/conversation-audit.test.ts",
     "typecheck:conversation-audit": "tsc -p scripts/tsconfig.conversation-audit.json",
     "fixture:local-beta": "tsx scripts/run-local-tenant-fixture.ts --interactive-credentials --local-beta",
+    "fixture:snooze-review": "tsx scripts/run-local-snooze-review.ts",
     "beta:operator": "tsx scripts/run-local-beta-operator.ts",
     "test:local-beta": "tsx --test scripts/local-beta-guardrails.test.ts scripts/local-beta-atomic.test.ts scripts/sla-local-beta-admission.test.ts",
     "typecheck:local-beta": "tsc -p scripts/tsconfig.local-beta-guardrails.json",
