@@ -1,1 +1,1 @@
-{"extends":"../tsconfig.json","compilerOptions":{"noEmit":true},"include":["snooze-due-runtime.test.ts","snooze-due-runtime-entry.ts","snooze-due-local-entry.ts","local-snooze-controller.ts","local-snooze-controller.test.ts","snooze-due-timer-runtime.test.ts"]}
+{"extends":"../tsconfig.json","compilerOptions":{"noEmit":true},"include":["snooze-due-runtime.test.ts","snooze-due-runtime-entry.ts","snooze-due-local-entry.ts","local-snooze-controller.ts","local-snooze-controller.test.ts","snooze-due-timer-runtime.test.ts","snooze-due-shared-store-runtime.test.ts"]}
