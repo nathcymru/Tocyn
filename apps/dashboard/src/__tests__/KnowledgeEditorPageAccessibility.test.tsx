@@ -100,6 +100,24 @@ it('labels a category-read failure honestly without disabling the editor', async
   expect(await screen.findByRole('option', { name: 'Recovered category' })).toBeInTheDocument();
 });
 
+it('keeps category Retry available when a save also fails', async () => {
+  mocks.get.mockRejectedValueOnce(new Error('Synthetic categories unavailable')).mockResolvedValueOnce([]);
+  mocks.post.mockRejectedValueOnce(new Error('Synthetic save unavailable'));
+  render(<KnowledgeEditorPage />);
+  expect(await screen.findByRole('button', { name: 'Retry categories' })).toBeEnabled();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'Preserved draft' } });
+  await setEditorText('Preserved body');
+  fireEvent.click(screen.getByRole('button', { name: 'Save Article' }));
+  await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+  expect(screen.getByText('Article could not be saved')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Retry categories' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry categories' }));
+  await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(1));
+  expect(screen.getByText('Article could not be saved')).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Content (Markdown)' })).toHaveTextContent('Preserved body');
+  expect(screen.getByRole('button', { name: 'Save Article' })).toBeEnabled();
+});
+
 it('keeps article Retry visible when categories fail later, then reveals category Retry after article recovery', async () => {
   mocks.route.id = 'article-a';
   let rejectCategories!: (error: Error) => void;

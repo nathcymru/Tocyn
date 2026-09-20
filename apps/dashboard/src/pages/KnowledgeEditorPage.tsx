@@ -27,6 +27,7 @@ export const KnowledgeEditorPage: React.FC = () => {
   const tierId = useId();
   const contentId = useId();
   const errorId = useId();
+  const categoryErrorId = useId();
   const routeKey = id ?? '__new__';
   const savingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -49,6 +50,7 @@ export const KnowledgeEditorPage: React.FC = () => {
   const [articleLoadAttempt, setArticleLoadAttempt] = useState(0);
   const [categoryLoadAttempt, setCategoryLoadAttempt] = useState(0);
   const error = articleError ?? formError ?? categoryError;
+  const secondaryCategoryError = formError !== null && articleError === null ? categoryError : null;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -212,6 +214,16 @@ export const KnowledgeEditorPage: React.FC = () => {
               className={styles.error}
             />
           )}
+
+          {secondaryCategoryError && <ParkEmptyState
+            id={categoryErrorId}
+            role="alert"
+            title={errorTitles['category-load']}
+            description={secondaryCategoryError.message}
+            action={<ParkButton onClick={() => { setCategoryError(null); setCategoryLoadAttempt(attempt => attempt + 1); }}>Retry categories</ParkButton>}
+            headingLevel={false}
+            className={styles.error}
+          />}
 
           {!editorReady && !articleError && <div role="status" aria-label="Loading article" className={styles.card}>
             <ParkSkeleton height="8" width="full" />
