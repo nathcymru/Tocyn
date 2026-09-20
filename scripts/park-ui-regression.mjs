@@ -100,6 +100,26 @@ function visit(relative) {
 }
 entries.forEach(visit);
 
+// The temporary native-control compatibility API must not be reintroduced.
+// Historical markdown and generated artifacts are intentionally outside this guard.
+const retiredPrimitives = /\bTocyn(?:Button|Input|Select|Textarea|Panel|EmptyState)(?:Props)?\b/;
+for (const directory of ['apps/dashboard/src', 'apps/portal/src', 'apps/widget/src', 'packages/ui/src', 'tools/ui-browser']) {
+  const pending = [path.join(root, directory)];
+  while (pending.length) {
+    const current = pending.pop();
+    for (const item of fs.readdirSync(current, { withFileTypes: true })) {
+      const target = path.join(current, item.name);
+      if (item.isDirectory()) {
+        if (!['dist', 'generated', 'node_modules'].includes(item.name)) pending.push(target);
+      } else if (/\.(?:ts|tsx|mjs)$/.test(item.name) && retiredPrimitives.test(fs.readFileSync(target, 'utf8'))) {
+        failures.push(`Retired Tocyn compatibility primitive in active source: ${path.relative(root, target)}`);
+      }
+    }
+  }
+}
+const uiExports = JSON.parse(fs.readFileSync(path.join(ui, 'package.json'), 'utf8')).exports;
+if (Object.hasOwn(uiExports, './primitives')) failures.push('Retired @luminatick/ui/primitives package entry returned');
+
 if (failures.length) {
   console.error(`Park UI regression guard failed (${failures.length}):\n${failures.map(item => `- ${item}`).join('\n')}`);
   process.exitCode = 1;

@@ -8,7 +8,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/app-layout.css",
-    "./primitives": "./src/primitives.tsx",
     "./ark": "./src/ark.ts",
     "./dialog": "./src/dialog.tsx",
     "./brand": "./src/brand.tsx",

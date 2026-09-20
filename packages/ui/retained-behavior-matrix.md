@@ -2,6 +2,8 @@
 
 This matrix is the #48 migration boundary after #127. It accounts for retained base behavior without reproducing obsolete page composition.
 
+This is a historical #48 record, not current component-import guidance. References below to `TocynButton`, `TocynInput`, `TocynSelect`, `TocynTextarea` and native-control adoption describe the 10 September 2026 checkpoint. Current Park/Panda migration status is recorded in [the UI theme contract](../../docs/ui-theme-contract.md) and PR #316; new application code uses the installed Park components.
+
 ## Current acceptance position — 10 September 2026
 
 Native controls and retained complex-control migrations are implemented in draft PR167, not yet accepted on main. The chronological receipts below preserve intermediate findings; earlier “remaining” lists are superseded by this section and `.agents/state/ui-48.md`.
