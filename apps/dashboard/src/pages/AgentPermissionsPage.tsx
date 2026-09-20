@@ -27,6 +27,7 @@ export function AgentPermissionsPage() {
   const [policies, setPolicies] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [writeDisabled, setWriteDisabled] = useState(false);
   const savingGuard = useRef(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -55,12 +56,12 @@ export function AgentPermissionsPage() {
   useEffect(() => { void loadPermissions(); }, []);
 
   const handleToggle = (capability: Capability) => {
-    if (savingGuard.current || loading || revision === null || !capability.ownerAllowed || !capability.roleAllowed || capability.key === capability.capability) return;
+    if (savingGuard.current || loading || writeDisabled || revision === null || !capability.ownerAllowed || !capability.roleAllowed || capability.key === capability.capability) return;
     setPolicies(current => ({ ...current, [capability.key]: !current[capability.key] }));
   };
 
   const handleSave = async () => {
-    if (revision === null || savingGuard.current || loading) return;
+    if (revision === null || savingGuard.current || loading || writeDisabled) return;
     savingGuard.current = true;
     try {
       setSaving(true);
@@ -72,8 +73,17 @@ export function AgentPermissionsPage() {
         ? "Permissions saved. Agent sessions have been revoked."
         : "Permissions saved, but the current policy could not be loaded. Reload permissions before making further changes.");
     } catch (err: any) {
-      setError(err.message || 'Failed to save permissions');
-      setStatus('Permissions were not saved. Reload the current policy before retrying a conflict.');
+      if (err?.code === 'feature_disabled') {
+        setWriteDisabled(true);
+        setPolicies(Object.fromEntries(capabilities
+          .filter(capability => capability.key !== capability.capability)
+          .map(capability => [capability.key, capability.tenantAllowed])));
+        setStatus('Permission changes are unavailable in this local review. The saved policy is shown below.');
+        setError(null);
+      } else {
+        setError(err.message || 'Failed to save permissions');
+        setStatus('Permissions were not saved. Reload the current policy before retrying a conflict.');
+      }
     } finally {
       savingGuard.current = false;
       setSaving(false);
@@ -89,9 +99,9 @@ export function AgentPermissionsPage() {
           <h1 className={css({ m: '0', display: 'flex', alignItems: 'center', gap: '2', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}><IconShieldHalved aria-hidden="true" className={css({ w: '5', h: '5', flexShrink: 0 })} /> Agent permissions</h1>
           <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
         </div>
-        <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} loading={saving} loadingText="Saving permissions…">
+        {!writeDisabled && <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} loading={saving} loadingText="Saving permissions…">
           <IconFloppyDisk aria-hidden="true" className={css({ w: '4', h: '4', flexShrink: 0 })} /> Save changes
-        </ParkButton>
+        </ParkButton>}
       </div>
 
       {loading ? <section role="status" aria-label="Loading permissions" aria-busy="true" className={css({ display: 'grid', gap: '3' })}>
@@ -117,7 +127,7 @@ export function AgentPermissionsPage() {
                 <p id={descriptionId} className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
                 {!available && <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Managed by the deployment owner; this tenant cannot enable it.</p>}
               </div>
-              <ParkSwitch.Root checked={checked} disabled={!available || saving || loading || revision === null}
+              <ParkSwitch.Root checked={checked} disabled={!available || saving || loading || revision === null || writeDisabled}
                 onCheckedChange={() => handleToggle(capability)} className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}>
                 <ParkSwitch.Control />
                 <ParkSwitch.HiddenInput aria-describedby={descriptionId} />
