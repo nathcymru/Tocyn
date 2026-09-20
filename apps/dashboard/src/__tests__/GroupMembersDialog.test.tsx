@@ -147,7 +147,10 @@ it('creates through labelled fields, retaining a failed draft and guarding dupli
  expect(description).toHaveAccessibleDescription('Summarise the tickets this team handles.');
  await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'New team'}});
  fireEvent.change(description,{target:{value:'Synthetic team'}});
- const form=within(dialog).getByRole('form');fireEvent.submit(form);fireEvent.submit(form);expect(fixture.create).toHaveBeenCalledTimes(1);
+ const form=within(dialog).getByRole('form');
+ expect(form.querySelector('.dialog__body')?.parentElement).toBe(form);
+ expect(form.querySelector('.dialog__footer')?.parentElement).toBe(form);
+ fireEvent.submit(form);fireEvent.submit(form);expect(fixture.create).toHaveBeenCalledTimes(1);
  expect(name).toBeDisabled();expect(within(dialog).getByRole('button',{name:'Close group editor'})).toBeDisabled();
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});expect(screen.getByRole('dialog')).toBeInTheDocument();
  await act(async()=>reject(new Error('synthetic failure')));const createError=await screen.findByRole('alert');
