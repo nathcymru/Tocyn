@@ -103,16 +103,27 @@ it('keeps header controls reachable in the generated 320 CSS px reflow contract'
   expect(screen.getByRole('button', { name: 'Activity' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Account options' })).toBeInTheDocument();
 
-  // At 320 CSS px, search receives a full-width row after navigation. At
-  // 420px, navigation and search fit together, while later actions wrap.
-  // The 18rem floor leaves room for the scope, icon and optional clear slot.
+  // At 320 CSS px, search receives a full-width row after navigation. Its
+  // input and scope then use separate rows, so neither clips at 200% zoom.
   expect(44 + 18 * 16 + 16 + 2 * 16).toBeGreaterThan(320);
   expect(18 * 16 + 2 * 16).toBeLessThanOrEqual(320);
   expect(44 + 18 * 16 + 16 + 2 * 16).toBeLessThanOrEqual(420);
-  expect(18 * 16 - (84 + 16 + 12 + 17 + 12 + 1 + 40)).toBeGreaterThanOrEqual(100);
+  expect(18 * 16 - (16 + 12 + 16 + 17 + 12 + 40)).toBeGreaterThanOrEqual(100);
+  expect(24 * 16 - (9 * 16 + 16 + 12 + 16 + 17 + 12 + 1 + 40)).toBeGreaterThanOrEqual(100);
   expect(pandaConfigSource).toMatch(/header: \{[^\n]*flexWrap: 'wrap'/);
   expect(pandaConfigSource).toMatch(/pageTitle: \{[^\n]*display: \{ base: 'none', md: 'block' \}/);
-  expect(pandaConfigSource).toMatch(/root: \{[^\n]*minWidth: 'min\(18rem, 100%\)'/);
+  expect(pandaConfigSource).toMatch(/root: \{[^\n]*flexWrap: \{ base: 'wrap', md: 'nowrap' \}[^\n]*minWidth: \{ base: 'min\(18rem, 100%\)', md: '24rem' \}/);
+  expect(pandaConfigSource).toMatch(/scope: \{[^\n]*width: \{ base: '100%', md: '9rem' \}/);
+});
+
+it('keeps compact navigation icons inside the focus target', async () => {
+  await renderReady();
+  const sidebar = document.querySelector('aside.shell__sidebarDesktop');
+  expect(within(sidebar as HTMLElement).getByRole('link', { name: 'Inbox' }).querySelector('svg')).toHaveClass('shell__navigationIcon');
+  // 4rem sidebar minus its 1rem total padding leaves a 3rem link. Its
+  // 0.5rem padding on either side leaves 2rem for the icon.
+  expect(4 * 16 - 2 * 0.5 * 16 - 2 * 0.5 * 16).toBeGreaterThanOrEqual(1.5 * 16);
+  expect(pandaConfigSource).toMatch(/navigationIcon: \{[^\n]*width: '1\.5rem', height: '1\.5rem'/);
 });
 
 it('names account/connection disclosures and restores focus when their child actions close', async () => {

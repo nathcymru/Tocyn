@@ -11,7 +11,7 @@ const blank = () => ({ id: '', legacyStatus: 'open' as SupportLifecycle, interna
 
 export function SupportStatesPage() {
   const { user } = useAuthStore();
-  const { data: states = [], isLoading, error, refetch, loadMore, hasMore, isLoadingMore, isLoadMoreError } = useSupportStates(true);
+  const { data: states = [], dataUpdatedAt, isLoading, error, refetch, loadMore, hasMore, isLoadingMore, isLoadMoreError } = useSupportStates(true);
   const create = useCreateSupportState();
   const update = useUpdateSupportState();
   const deactivate = useDeactivateSupportState();
@@ -23,14 +23,15 @@ export function SupportStatesPage() {
   const [replacementId, setReplacementId] = useState('');
   const [notice, setNotice] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const hasLoadedDefinitions = dataUpdatedAt > 0;
 
   if (user?.role !== 'admin') return <ParkEmptyState role="alert" title="Support states are unavailable" description="Only administrators can manage support states." />;
-  if (isLoading && states.length === 0) return <section role="status" aria-label="Loading support states" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}>
+  if (isLoading && !hasLoadedDefinitions) return <section role="status" aria-label="Loading support states" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}>
     <span className={css({ srOnly: true })}>Loading support states…</span>
     <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} />
     <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
   </section>;
-  if (error && states.length === 0) return <ParkEmptyState role="alert" title="Support states could not be loaded" description="Retry before editing state definitions." action={<ParkButton type="button" onClick={() => void refetch()}>Retry loading support states</ParkButton>} />;
+  if (error && !hasLoadedDefinitions) return <ParkEmptyState role="alert" title="Support states could not be loaded" description="Retry before editing state definitions." action={<ParkButton type="button" onClick={() => void refetch()}>Retry loading support states</ParkButton>} />;
 
   const reset = () => { setForm(blank()); setEditing(null); setErrorMessage(''); };
   const save = async (event: React.FormEvent) => {
@@ -57,7 +58,7 @@ export function SupportStatesPage() {
     {notice && <p role="status">{notice}</p>}{errorMessage && <ParkAlert.Root role="alert" status="error" variant="surface">
       <ParkAlert.Content><ParkAlert.Description>{errorMessage}</ParkAlert.Description></ParkAlert.Content>
     </ParkAlert.Root>}
-    {error && !isLoadMoreError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+    {error && hasLoadedDefinitions && !isLoadMoreError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
       <ParkAlert.Title>Support states could not be refreshed</ParkAlert.Title>
       <ParkAlert.Description>These definitions are the last loaded version and may have changed.</ParkAlert.Description>
       <ParkButton type="button" variant="outline" onClick={() => void refetch()}>Retry loading support states</ParkButton>
@@ -80,7 +81,7 @@ export function SupportStatesPage() {
       </div>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="submit" loading={create.isPending || update.isPending} loadingText="Saving support state…">{editing ? 'Save state' : 'Create state'}</ParkButton>{editing && <ParkButton type="button" variant="outline" onClick={reset}>Cancel edit</ParkButton>}</div>
     </form></ParkCard.Body></ParkCard.Root>
-    {states.length === 0 ? <ParkEmptyState title="No support states found." description="Create a support state to define the operator workflow." headingLevel={false} /> : <ul className={css({"display":"grid","gap":"4"})} aria-label="Support state definitions">{states.map(state => <li key={state.id}>
+    {states.length === 0 ? !error && <ParkEmptyState title="No support states found." description="Create a support state to define the operator workflow." headingLevel={false} /> : <ul className={css({"display":"grid","gap":"4"})} aria-label="Support state definitions">{states.map(state => <li key={state.id}>
       <ParkCard.Root variant="outline"><ParkCard.Body className={css({ display: 'grid', gap: '3' })}>
       <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><div className={css({"minW":0})}><h2 className={css({"fontWeight":"medium","color":"fg.default"})}>{state.internal_label} {!state.is_active && <span className={css({"minW":0})}>(inactive)</span>}</h2><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Customer label: {state.public_label} · Legacy lifecycle: {state.legacy_status}</p><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{state.waiting_reason_required ? 'Waiting reason required' : 'Waiting reason optional'} · {state.next_action_required ? 'Next action required' : 'Next action optional'}</p></div><div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="button" onClick={() => beginEdit(state)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Edit {state.internal_label}</ParkButton>{state.is_active === 1 && state.is_compatibility_default === 0 && <ParkButton type="button" onClick={() => { setDeactivating(state.id); setReplacementId(''); setErrorMessage(''); }} className={css({"minW":0})}>Deactivate {state.internal_label}</ParkButton>}</div></div>
       {deactivating === state.id && <div className={css({"minW":0})}><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>Active tickets must move to an active replacement; this cannot leave tickets without a state.</p><label className={css({"fontWeight":"medium","color":"fg.default","display":"grid","gap":"1","fontSize":"sm"})}>Replacement state<DashboardSelect aria-label="Replacement state" autoFocus value={replacementId} onValueChange={setReplacementId} options={[{ value: '', label: 'Choose a replacement' }, ...states.filter(candidate => candidate.is_active === 1 && candidate.id !== state.id).map(candidate => ({ value: candidate.id, label: `${candidate.internal_label} (${candidate.legacy_status})` }))]} /></label><div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="button" loading={deactivate.isPending} loadingText="Deactivating" onClick={() => void confirmDeactivate(state)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Remap and deactivate</ParkButton><ParkButton type="button" onClick={() => setDeactivating(null)}>Cancel</ParkButton></div></div>}

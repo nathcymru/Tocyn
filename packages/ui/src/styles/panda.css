@@ -2776,23 +2776,25 @@
     .globalSearch__root {
       border: 1px solid;
       background: var(--colors-bg\.input);
+      flex: 1 1 0%;
       margin-inline: auto;
       border-color: var(--colors-border\.input);
       border-radius: var(--radii-l2);
+      flex-wrap: wrap;
       color: var(--colors-text\.primary);
       min-width: min(18rem, 100%);
       width: 100%;
-      max-width: 32rem;
+      max-width: 36rem;
 }
 
     .globalSearch__root,.globalSearch__inputShell {
-      flex: 1 1 0%;
       position: relative;
       display: flex;
       align-items: center;
 }
 
     .globalSearch__inputShell {
+      flex: 1 1 100%;
       min-width: var(--sizes-0);
 }
 
@@ -2830,6 +2832,7 @@
 
     .globalSearch__divider {
       background: var(--colors-border\.input);
+      display: none;
       flex-shrink: 0;
       width: 1px;
       height: 1.5rem;
@@ -2839,7 +2842,7 @@
       display: flex;
       flex-shrink: 0;
       align-items: stretch;
-      width: 5.25rem;
+      width: 100%;
       min-width: var(--sizes-0);
 }
 
@@ -5140,8 +5143,8 @@
     .shell__navigationIcon {
       flex-shrink: 0;
       color: currentColor;
-      width: 2.5rem;
-      height: 2.5rem;
+      width: 1.5rem;
+      height: 1.5rem;
 }
 
     .shell__sidebarDesktop {
@@ -8404,6 +8407,19 @@
 }
       .settingsLayout__content {
         padding: 2rem 1.5rem;
+}
+      .globalSearch__root {
+        flex-wrap: nowrap;
+        min-width: 24rem;
+}
+      .globalSearch__inputShell {
+        flex: 1 1 0%;
+}
+      .globalSearch__divider {
+        display: block;
+}
+      .globalSearch__scope {
+        width: 9rem;
 }
       .page__settingsError {
         padding: 1.5rem;
@@ -12283,10 +12299,6 @@
 
   .c_info\.text {
     color: var(--colors-info\.text);
-}
-
-  .ls_0\.3em {
-    letter-spacing: 0.3em;
 }
 
   .fs_md {

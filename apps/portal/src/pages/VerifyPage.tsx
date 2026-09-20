@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput, ParkProgress } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkPinInput, ParkPinInputSlot, ParkProgress } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
@@ -17,8 +17,10 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
   const { login } = useAuthStore();
 
   const [code, setCode] = useState('');
-  const codeInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (challenge) codeInput.current?.focus(); }, [challenge]);
+  const codeInput = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (challenge) codeInput.current?.querySelector<HTMLInputElement>('[data-scope="pin-input"][data-part="input"]')?.focus();
+  }, [challenge]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,23 +114,41 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
           )}
 
           <form aria-busy={loading} className={p.authForm} onSubmit={handleSubmit}>
-            <ParkField label="Authentication Code">
-              <ParkInput
+            <div className={p.verifyPinWrap}>
+              <ParkPinInput
                 ref={codeInput}
                 name="code"
-                inputMode="numeric"
                 aria-describedby={error ? "portal-verify-error" : undefined}
-                type="text"
                 required
-                value={code}
-                onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
-                className={[p.formControl, p.formControlCode].join(' ')}
-                placeholder="123456"
-                maxLength={6}
+                count={6}
+                value={code.split('')}
+                onValueChange={(details) => { if (!loading) setCode(details.value.join('').replace(/\D/g, '').slice(0, 6)); }}
+                invalid={Boolean(error)}
                 disabled={loading}
-                autoComplete="one-time-code"
-              />
-            </ParkField>
+                readOnly={loading}
+                otp
+                placeholder="0"
+              >
+                <span className={p.visuallyHidden}>Authentication Code</span>
+                {Array.from({ length: 6 }, (_, index) => <ParkPinInputSlot
+                  key={index}
+                  index={index}
+                  aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
+                  aria-describedby={error ? 'portal-verify-error' : undefined}
+                  readOnly={loading}
+                  onInput={(event) => {
+                    // Password managers may fill the entire OTP into one visible cell.
+                    const entered = event.currentTarget.value;
+                    if (!loading && entered.length > 1) setCode(entered.replace(/\D/g, '').slice(0, 6));
+                  }}
+                  onPaste={(event) => {
+                    if (loading) return;
+                    event.preventDefault();
+                    setCode(event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6));
+                  }}
+                />)}
+              </ParkPinInput>
+            </div>
 
             <div>
               <ParkButton

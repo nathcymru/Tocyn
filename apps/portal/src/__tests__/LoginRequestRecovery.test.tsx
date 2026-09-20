@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from '../App';
 import { useAuthStore } from '../store/authStore';
@@ -28,16 +29,18 @@ it('retains the real verification form after wrong OTP and accepts a corrected c
   render(<App />);
   await waitFor(() => expect(useAuthStore.getState().isLoading).toBe(false));
   const code = screen.getByRole('textbox', { name: 'Authentication Code' });
-  fireEvent.change(code, { target: { value: '123456' } });
+  expect(code.closest('.pin-input__root')).toBeInTheDocument();
+  await userEvent.type(code, '123456');
   const submit = screen.getByRole('button', { name: 'Verify Code' });
   submit.focus(); fireEvent.click(submit);
   const error = await screen.findByRole('alert');
   expect(error).toHaveTextContent('Unauthorized');
   expect(code).toHaveAttribute('aria-describedby', error.id);
-  expect(code).toHaveValue('123456');
+  expect(screen.getAllByRole('textbox', { name: /Authentication Code/ }).map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
   expect(submit).toHaveFocus();
   expect(window.location.pathname).toBe('/verify');
-  fireEvent.change(code, { target: { value: '654321' } });
+  await userEvent.click(code);
+  await userEvent.keyboard('{Meta>}a{/Meta}654321');
   fireEvent.click(submit);
   await screen.findByRole('heading', { name: 'Tickets ready' });
   expect(useAuthStore.getState().isAuthenticated).toBe(true);

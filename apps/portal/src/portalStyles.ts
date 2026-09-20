@@ -61,8 +61,9 @@ export const p = {
   verifyLoading: css({ py: '12' }),
   verifyLoadingTitle: heading,
   verifyBack: css({ mt: '4', textAlign: 'center' }),
+  verifyPinWrap: css({ display: 'flex', justifyContent: 'center', minW: '0' }),
+  visuallyHidden: css({ srOnly: true }),
   formControl: full,
-  formControlCode: css({ fontFamily: 'tabular', fontSize: 'xl', letterSpacing: '0.3em', textAlign: 'center' }),
 
   surface,
   ticketList: stack,

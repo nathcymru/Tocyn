@@ -1,17 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { GroupsPage } from '../pages/GroupsPage';
-const fixture=vi.hoisted(()=>({add:vi.fn(),remove:vi.fn(),create:vi.fn(),delete:vi.fn(),refetchGroups:vi.fn(),admin:true,membersError:false,groupsError:false,groupsEmpty:false}));
+const fixture=vi.hoisted(()=>({add:vi.fn(),remove:vi.fn(),create:vi.fn(),delete:vi.fn(),refetchGroups:vi.fn(),refetchMembers:vi.fn(),refetchAgents:vi.fn(),admin:true,membersError:false,membersEmpty:false,agentsError:false,agentsEmpty:false,groupsError:false,groupsEmpty:false}));
 vi.mock('../store/authStore',()=>({useAuthStore:()=>({user:{role:fixture.admin?'admin':'agent'}})}));
 vi.mock('../hooks/useGroups',()=>({
  useGroups:()=>({data:fixture.groupsEmpty?[]:[{id:'group-a',name:'Support',created_at:'2026-09-10'}],isLoading:false,isError:fixture.groupsError,refetch:fixture.refetchGroups}),
  useCreateGroup:()=>({mutateAsync:fixture.create}),useDeleteGroup:()=>({mutateAsync:fixture.delete}),
- useGroupMembers:()=>({data:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'}],isLoading:false,isError:fixture.membersError}),
- useAgents:()=>({data:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'},{id:'candidate-a',full_name:'Available agent',email:'available@example.invalid'}],isLoading:false,isError:false}),
+ useGroupMembers:()=>({data:fixture.membersEmpty?[]:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'}],isLoading:false,isError:fixture.membersError,refetch:fixture.refetchMembers}),
+ useAgents:()=>({data:fixture.agentsEmpty?[]:[{id:'member-a',full_name:'Existing agent',email:'existing@example.invalid'},{id:'candidate-a',full_name:'Available agent',email:'available@example.invalid'}],isLoading:false,isError:fixture.agentsError,refetch:fixture.refetchAgents}),
  useAddMember:()=>({mutateAsync:fixture.add}),useRemoveMember:()=>({mutateAsync:fixture.remove}),
 }));
 beforeEach(()=>{
- fixture.admin=true;fixture.membersError=false;fixture.groupsError=false;fixture.groupsEmpty=false;
+ fixture.admin=true;fixture.membersError=false;fixture.membersEmpty=false;fixture.agentsError=false;fixture.agentsEmpty=false;fixture.groupsError=false;fixture.groupsEmpty=false;
  // JSDOM has no layout; this supplies geometry only, not browser acceptance.
  vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});
 });
@@ -69,11 +69,47 @@ it('requires confirmation before removal and supports cancellation',async()=>{
  await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('Member removed.'));
  expect(fixture.remove).toHaveBeenCalledWith({groupId:'group-a',userId:'member-a'});
 });
-it('does not expose membership mutations to non-admins or offer adds with unavailable membership data',async()=>{
+it('does not expose membership mutations to non-admins or offer adds with stale membership data',async()=>{
  fixture.admin=false;const {dialog}=await openMembers();expect(within(dialog).queryByRole('button',{name:/^(Add|Remove) /})).not.toBeInTheDocument();cleanup();
  fixture.admin=true;fixture.membersError=true;const reopened=await openMembers();
- expect(within(reopened.dialog).getByRole('alert')).toHaveTextContent('Group members could not be loaded');
+ const alert=within(reopened.dialog).getByRole('alert');
+ expect(alert).toHaveClass('alert__root');expect(alert).toHaveTextContent('Group members could not be refreshed');
+ expect(within(reopened.dialog).getByText('Existing agent')).toBeInTheDocument();
+ expect(within(reopened.dialog).getByRole('button',{name:'Remove Existing agent'})).toBeDisabled();
  expect(within(reopened.dialog).getByRole('button',{name:'Add Available agent'})).toBeDisabled();
+ fireEvent.click(within(reopened.dialog).getByRole('button',{name:'Retry members'}));
+ expect(fixture.refetchMembers).toHaveBeenCalledOnce();
+});
+
+it('uses a retryable unavailable state rather than claiming no members on a failed first read',async()=>{
+ fixture.membersError=true;fixture.membersEmpty=true;
+ const {dialog}=await openMembers();
+ expect(within(dialog).getByRole('alert')).toHaveTextContent('Group members could not be loaded');
+ expect(within(dialog).getByRole('heading',{name:'Current Members'})).toBeInTheDocument();
+ expect(within(dialog).queryByText('No members assigned yet.')).not.toBeInTheDocument();
+ fireEvent.click(within(dialog).getByRole('button',{name:'Retry members'}));
+ expect(fixture.refetchMembers).toHaveBeenCalledOnce();
+});
+
+it('retains stale agent rows behind a Park alert and suppresses false search results after refresh failure',async()=>{
+ fixture.agentsError=true;
+ const {dialog}=await openMembers();
+ const alert=within(dialog).getByRole('alert');
+ expect(alert).toHaveClass('alert__root');expect(alert).toHaveTextContent('Agents could not be refreshed');
+ expect(within(dialog).getByRole('button',{name:'Add Available agent'})).toBeDisabled();
+ fireEvent.change(within(dialog).getByRole('textbox',{name:'Search agents'}),{target:{value:'nobody'}});
+ expect(within(dialog).queryByText('No matching agents found.')).not.toBeInTheDocument();
+ fireEvent.click(within(dialog).getByRole('button',{name:'Retry agents'}));
+ expect(fixture.refetchAgents).toHaveBeenCalledOnce();
+});
+
+it('uses a retryable unavailable state rather than an all-assigned claim when agents were never loaded',async()=>{
+ fixture.agentsError=true;fixture.agentsEmpty=true;
+ const {dialog}=await openMembers();
+ expect(within(dialog).getByRole('alert')).toHaveTextContent('Agents could not be loaded');
+ expect(within(dialog).queryByText('All available agents are already in this group.')).not.toBeInTheDocument();
+ fireEvent.click(within(dialog).getByRole('button',{name:'Retry agents'}));
+ expect(fixture.refetchAgents).toHaveBeenCalledOnce();
 });
 
 it('creates through labelled fields, retaining a failed draft and guarding duplicate submissions',async()=>{

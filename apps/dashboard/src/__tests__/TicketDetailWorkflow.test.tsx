@@ -89,6 +89,7 @@ it('lets an untouched conversation navigate after its selection preference is ac
   const router=showDetail();
   await screen.findByText('Customer question');
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/workspace/drafts/workflow-ticket')).toBe(true));
+  await screen.findByText('Workspace preference saved.', undefined, { timeout: 5000 });
   await act(async()=>{void router.navigate('/settings');});
   expect(await screen.findByRole('heading',{name:'General settings'})).toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT')).toBe(true);

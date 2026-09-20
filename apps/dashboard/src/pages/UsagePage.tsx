@@ -31,6 +31,24 @@ function formatNumber(num: number) {
   return num.toString();
 }
 
+function hasMetrics(value: unknown, keys: string[]): value is Record<string, number> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && keys.every(key => typeof (value as Record<string, unknown>)[key] === 'number'
+      && Number.isFinite((value as Record<string, number>)[key])
+      && (value as Record<string, number>)[key] >= 0);
+}
+
+function isUsageStats(value: unknown): value is UsageStats {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const stats = value as Record<string, unknown>;
+  return hasMetrics(stats.d1, ['readQueries', 'writeQueries', 'rowsRead', 'rowsWritten'])
+    && hasMetrics(stats.r2, ['classAOperations', 'classBOperations'])
+    && hasMetrics(stats.workersAi, ['neurons'])
+    && hasMetrics(stats.workers, ['requests', 'cpuTime'])
+    && (stats.durableObjects === undefined || hasMetrics(stats.durableObjects, ['requests', 'cpuTime', 'activeConnections', 'inboundWebsocketMsg', 'outboundWebsocketMsg']))
+    && (stats.vectorize === undefined || hasMetrics(stats.vectorize, ['queried', 'written']));
+}
+
 export function UsagePage() {
   const [data, setData] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +68,8 @@ export function UsagePage() {
       setIsAuthError(false);
       setIsMasterKeyMissing(false);
 
-      const response = await dashboardApi.get<UsageStats>('/settings/usage');
+      const response = await dashboardApi.get<unknown>('/settings/usage');
+      if (!isUsageStats(response)) throw new Error('Usage readings are incomplete. Retry or check provider analytics.');
       setData(response);
       setShowCredentialsForm(false);
     } catch (err: any) {
@@ -260,7 +279,7 @@ export function UsagePage() {
             title="D1 Reads and Writes"
             description="Database row operations"
             icon={IconDatabase}
-            current={(data?.d1?.rowsRead || 0) + (data?.d1?.rowsWritten || 0)}
+            current={data ? data.d1.rowsRead + data.d1.rowsWritten : null}
             limit={LIMITS.d1_reads_writes}
             unit="/ day"
             format={formatNumber}
@@ -271,7 +290,7 @@ export function UsagePage() {
             title="R2 Operations (Class A)"
             description="Writes to storage"
             icon={IconHardDrive}
-            current={data?.r2?.classAOperations || 0}
+            current={data?.r2.classAOperations ?? null}
             limit={LIMITS.r2_class_a}
             unit="/ month"
             format={formatNumber}
@@ -282,7 +301,7 @@ export function UsagePage() {
             title="R2 Operations (Class B)"
             description="Reads from storage"
             icon={IconHardDrive}
-            current={data?.r2?.classBOperations || 0}
+            current={data?.r2.classBOperations ?? null}
             limit={LIMITS.r2_class_b}
             unit="/ month"
             format={formatNumber}
@@ -293,7 +312,7 @@ export function UsagePage() {
             title="Workers Requests"
             description="API calls, widget loads, pages"
             icon={IconChartLine}
-            current={data?.workers?.requests || 0}
+            current={data?.workers.requests ?? null}
             limit={LIMITS.worker_requests}
             unit="/ day"
             format={formatNumber}
@@ -304,7 +323,7 @@ export function UsagePage() {
             title="Workers AI Neurons"
             description="RAG, embedding, auto-responses"
             icon={IconMicrochip}
-            current={data?.workersAi?.neurons || 0}
+            current={data?.workersAi.neurons ?? null}
             limit={LIMITS.ai_neurons}
             unit="/ day"
             format={formatNumber}
@@ -315,7 +334,7 @@ export function UsagePage() {
             title="Durable Objects Requests"
             description="Real-time presence connections"
             icon={IconBolt}
-            current={data?.durableObjects?.requests || 0}
+            current={data?.durableObjects?.requests ?? null}
             limit={LIMITS.do_requests}
             unit="/ day"
             format={formatNumber}
@@ -326,7 +345,7 @@ export function UsagePage() {
             title="Vectorize Queries"
             description="Vector search queries"
             icon={IconDatabase}
-            current={data?.vectorize?.queried || 0}
+            current={data?.vectorize?.queried ?? null}
             limit={LIMITS.vectorize_queries}
             unit="/ month"
             format={formatNumber}
@@ -337,7 +356,7 @@ export function UsagePage() {
             title="Vectorize Writes"
             description="Vector index updates"
             icon={IconDatabase}
-            current={data?.vectorize?.written || 0}
+            current={data?.vectorize?.written ?? null}
             limit={LIMITS.vectorize_writes}
             unit="/ month"
             format={formatNumber}
@@ -353,7 +372,7 @@ interface StatCardProps {
   title: string;
   description: string;
   icon: React.ElementType;
-  current: number;
+  current: number | null;
   limit: number;
   unit: string;
   format?: (n: number) => string;
@@ -361,8 +380,8 @@ interface StatCardProps {
 }
 
 function StatCard({ title, description, icon: Icon, current, limit, unit, format, bgClass }: StatCardProps) {
-  const percentage = Math.min((current / limit) * 100, 100);
-  const displayCurrent = format ? format(current) : current;
+  const percentage = current === null ? null : Math.min((current / limit) * 100, 100);
+  const displayCurrent = current === null ? 'Unavailable' : format ? format(current) : current;
   const displayLimit = format ? format(limit) : limit;
 
   return <ParkCard.Root variant="outline">
@@ -376,7 +395,9 @@ function StatCard({ title, description, icon: Icon, current, limit, unit, format
           <strong>{displayCurrent}</strong><p className={css({ color: 'text.muted', fontSize: 'xs' })}>of {displayLimit} {unit}</p>
         </div>
       </div>
-      <ParkProgress value={percentage} label={`${percentage.toFixed(1)}% Used · Free Tier Limit`} />
+      {percentage === null
+        ? <p className={css({ color: 'text.muted', fontSize: 'sm' })}>This reading was not returned by the provider.</p>
+        : <ParkProgress value={percentage} label={`${percentage.toFixed(1)}% Used · Free Tier Limit`} />}
     </ParkCard.Body>
   </ParkCard.Root>;
 }

@@ -93,6 +93,40 @@ it('keeps cached definitions and identifies them as stale after a failed refresh
   expect(attempts).toBe(3);
 });
 
+it('keeps an unsaved first-state draft visible when a cached empty list fails to refresh', async () => {
+  let attempts = 0;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states' && options.method === 'GET') {
+      attempts += 1;
+      if (attempts === 2) throw new Error('synthetic refresh failure');
+      return json([]);
+    }
+    return json({});
+  }));
+  const client = renderPage();
+  expect(await screen.findByText('No support states found.')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('State ID'), { target: { value: 'first-state' } });
+  fireEvent.change(screen.getByLabelText('Internal label'), { target: { value: 'First state draft' } });
+  fireEvent.change(screen.getByLabelText('Customer-visible label'), { target: { value: 'We are working on this' } });
+
+  await act(async () => { await client.invalidateQueries({ queryKey: ['support-states'] }); });
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert).toHaveTextContent('Support states could not be refreshed');
+  expect(screen.getByRole('form', { name: 'Create support state' })).toBeInTheDocument();
+  expect(screen.getByLabelText('State ID')).toHaveValue('first-state');
+  expect(screen.getByLabelText('Internal label')).toHaveValue('First state draft');
+  expect(screen.getByLabelText('Customer-visible label')).toHaveValue('We are working on this');
+  expect(screen.queryByText('No support states found.')).not.toBeInTheDocument();
+  expect(screen.queryByText('Support states could not be loaded')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading support states' }));
+  await waitFor(() => expect(screen.queryByText('Support states could not be refreshed')).not.toBeInTheDocument());
+  expect(screen.getByLabelText('Internal label')).toHaveValue('First state draft');
+  expect(screen.getByText('No support states found.')).toBeInTheDocument();
+  expect(attempts).toBe(3);
+});
+
 it('does not expose state administration to an agent', () => {
   useAuthStore.getState().setAuth('synthetic-agent', { id: 'agent', tenant_id: 'tenant-a', email: 'agent@example.invalid', full_name: 'Agent', role: 'agent', mfa_enabled: true });
   renderPage();

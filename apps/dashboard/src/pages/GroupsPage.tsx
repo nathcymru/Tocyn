@@ -313,19 +313,25 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
         <ParkDialog.Body className={css({ display: 'grid', gap: '5', minW: '0' })}>
           {operationError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{operationError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
           {status && <p role="status" className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{status}</p>}
-          {membersError && <ParkEmptyState role="alert" title="Group members could not be loaded" description="Retry before changing membership." action={<ParkButton type="button" onClick={() => void refetchMembers()}>Retry members</ParkButton>} />}
+          {membersError && (members?.length ? <ParkAlert.Root role="alert" status="error">
+            <ParkAlert.Content>
+              <ParkAlert.Title>Group members could not be refreshed</ParkAlert.Title>
+              <ParkAlert.Description>These members are the last loaded version. Retry before changing membership.</ParkAlert.Description>
+              <ParkButton type="button" onClick={() => void refetchMembers()}>Retry members</ParkButton>
+            </ParkAlert.Content>
+          </ParkAlert.Root> : <ParkEmptyState role="alert" title="Group members could not be loaded" description="Retry before changing membership." action={<ParkButton type="button" onClick={() => void refetchMembers()}>Retry members</ParkButton>} />)}
           {removingId && <div role="group" aria-label="Confirm member removal" className={css({"minW":0})}>
             <p>Remove {members?.find(member => member.id === removingId)?.full_name || members?.find(member => member.id === removingId)?.email || 'this member'} from the group?</p>
-            <ParkButton ref={confirmRemovalButton} disabled={pending} onClick={() => changeMember(removingId, true)}>Remove member</ParkButton>
+            <ParkButton ref={confirmRemovalButton} disabled={pending || isLoadingMembers || membersError} onClick={() => changeMember(removingId, true)}>Remove member</ParkButton>
             <ParkButton disabled={pending} onClick={() => { setRemovingId(null); closeButton.current?.focus(); }}>Cancel removal</ParkButton>
           </div>}
           {/* Current Members Section */}
           <div>
-            <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"fg.default"})}>Current Members ({members?.length || 0})</h3>
+            <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"fg.default"})}>Current Members{members?.length ? ` (${members.length})` : !isLoadingMembers && !membersError ? ' (0)' : ''}</h3>
             <div className={css({"display":"grid","gap":"4"})}>
               {isLoadingMembers ? (
                 <div role="status" aria-label="Loading group members" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading members…</span><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /></div>
-              ) : members?.length === 0 ? (
+              ) : !membersError && members?.length === 0 ? (
                 <ParkEmptyState title="No members assigned yet." className={css({"py":"6"})} />
               ) : (
                 members?.map(member => (
@@ -345,7 +351,7 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                     </div>
                     {isAdmin && (
                       <ParkButton
-                        disabled={pending} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
+                        disabled={pending || isLoadingMembers || membersError} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
                         className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Remove member"
                       >
@@ -373,7 +379,13 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
               </InputGroup>
 
               <div className={css({"display":"grid","gap":"4"})}>
-                {agentsError && <ParkEmptyState role="alert" title="Agents could not be loaded" description="Retry to find agents who can join this group." action={<ParkButton type="button" onClick={() => void refetchAgents()}>Retry agents</ParkButton>} />}
+                {agentsError && (agents?.length ? <ParkAlert.Root role="alert" status="error">
+                  <ParkAlert.Content>
+                    <ParkAlert.Title>Agents could not be refreshed</ParkAlert.Title>
+                    <ParkAlert.Description>These agents are the last loaded version. Retry before adding anyone to the group.</ParkAlert.Description>
+                    <ParkButton type="button" onClick={() => void refetchAgents()}>Retry agents</ParkButton>
+                  </ParkAlert.Content>
+                </ParkAlert.Root> : <ParkEmptyState role="alert" title="Agents could not be loaded" description="Retry to find agents who can join this group." action={<ParkButton type="button" onClick={() => void refetchAgents()}>Retry agents</ParkButton>} />)}
                 {agentsLoading && <div role="status" aria-label="Loading available agents" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading agents…</span><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /></div>}
                 {availableAgents?.map(agent => (
                   <ParkButton
@@ -391,10 +403,10 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
                     <IconUserPlus aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                   </ParkButton>
                 ))}
-                {availableAgents?.length === 0 && searchTerm && (
+                {!agentsError && availableAgents?.length === 0 && searchTerm && (
                   <ParkEmptyState title="No matching agents found." className={css({"py":"6"})} />
                 )}
-                {availableAgents?.length === 0 && !searchTerm && (
+                {!agentsError && availableAgents?.length === 0 && !searchTerm && (
                   <ParkEmptyState title="All available agents are already in this group." className={css({"py":"6"})} />
                 )}
               </div>

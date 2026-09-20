@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { LoginPage } from '../pages/LoginPage';
 import { MemoryRouter } from 'react-router-dom';
 import { portalApi } from '../api/client';
@@ -67,7 +68,7 @@ it('keeps OTP verification in the login page, retains the challenge and permits 
   fireEvent.click(screen.getByRole('button', { name: 'Send Code' }));
   const input = await screen.findByLabelText('Authentication Code');
   expect(input).toHaveFocus();
-  fireEvent.change(input, { target: { value: '123456' } });
+  await userEvent.type(input, '123456');
   fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Wrong code');
   expect(portalApi.post).toHaveBeenLastCalledWith('/auth/verify', { token: '123456', challengeId: 'synthetic-challenge' });
@@ -81,7 +82,7 @@ it('restores an OTP challenge from login history after reload', async () => {
   render(<MemoryRouter initialEntries={[{ pathname: '/login', search: '?key=synthetic-public-key', state: {
     authStep: 'verify', challenge: { email: 'test@example.invalid', challengeId: 'restored-challenge' }
   } }]}><LoginPage /></MemoryRouter>);
-  fireEvent.change(await screen.findByLabelText('Authentication Code'), { target: { value: '123456' } });
+  await userEvent.type(await screen.findByLabelText('Authentication Code'), '123456');
   fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Retry code');
   expect(portalApi.post).toHaveBeenLastCalledWith('/auth/verify', { token: '123456', challengeId: 'restored-challenge' });
