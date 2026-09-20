@@ -823,6 +823,7 @@ it('keeps the custom list position and selected conversation when its draft refu
   detailNavigation.flush.mockResolvedValue(false);
   showInbox('/inbox/priority-follow-up/ticket-20');
   await screen.findByRole('heading',{name:'Conversation ticket-20'});
+  await screen.findByRole('option',{name:/Fixture conversation 20/});
   const pane=screen.getByRole('region',{name:'Conversations'});
   pane.scrollTop=640;
   const list=screen.getByRole('listbox',{name:'Conversation list'});
