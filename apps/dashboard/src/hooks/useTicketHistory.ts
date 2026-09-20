@@ -32,10 +32,16 @@ export function useTicketHistory(ticketId: string, enabled: boolean) {
   return useInfiniteQuery({
     queryKey: ['ticket', ticketId, 'history', generation, user?.tenant_id, user?.id, user?.role],
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => {
+    queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams({ limit: '5' });
       if (pageParam) params.set('cursor', pageParam);
-      return dashboardApi.get<TicketHistoryResponse>(`/tickets/${ticketId}/history?${params}`);
+      const page = await dashboardApi.get<TicketHistoryResponse>(`/tickets/${ticketId}/history?${params}`);
+      if (!page || !Array.isArray(page.events) ||
+        page.events.some(event => !event || typeof event.recordedAt !== 'string' || !event.actor || typeof event.facts !== 'object' || event.facts === null) ||
+        (page.nextCursor !== null && typeof page.nextCursor !== 'string')) {
+        throw new Error('Ticket history response is invalid. Retry loading ticket history.');
+      }
+      return page;
     },
     getNextPageParam: page => page.nextCursor ?? undefined,
     enabled: !!ticketId && enabled,

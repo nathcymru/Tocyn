@@ -97,6 +97,7 @@ beforeEach(()=>{
     if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0},triageOverdueCount:0});
     if(url.startsWith('/api/tickets?'))return json({data:tickets,meta:{page:1,limit:20,total:20,total_pages:1}});
     if(url==='/api/ticket-sla/projections')return json(Object.fromEntries(tickets.map(ticket=>[ticket.id,unavailableSla])));
+    if(url.includes('/history?'))return json({events:[],nextCursor:null});
     return json([]);
   }));
 });

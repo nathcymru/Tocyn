@@ -75,6 +75,13 @@ it('records an authorized selected ticket and persists context-panel preference 
   await waitFor(()=>expect(writes.some((value:any)=>value.panel==='conversation')).toBe(true));
 });
 
+it('shows retryable history failure when a successful response has invalid shape',async()=>{
+  show(preference(3,'details','workspace-ticket'),200,{historyPage:()=>json([])});
+  expect(await screen.findByText('Ticket history unavailable')).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Retry ticket history'})).toBeInTheDocument();
+  expect(screen.getByRole('heading',{name:'Workspace ticket'})).toBeInTheDocument();
+});
+
 it('does not re-record a selected ticket after preference conflict and restores server preferences explicitly',async()=>{
   const writes=show(preference(3,'details','workspace-ticket'),409);
   const trigger=await screen.findByRole('button',{name:'Hide ticket context'});

@@ -47,6 +47,7 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
       {id:'open-governed-action-guidance',label:'Open action safety guidance',description:'Opens the documented action security boundary in a new tab.',slot:'more',capability:'tools.reference.read',kind:'external-link',href:'https://github.com/nathcymru/Tocyn/blob/main/docs/security/capability-permissions.md',enabled:true},
     ]});
     if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
+    if(path===`/api/tickets/${ticket.id}/history`) return json({events:[],nextCursor:null});
     if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/')) {
       if (path.endsWith('/responsible-owner') && options.method === 'PATCH') {
         const { ownerId } = JSON.parse(String(options.body));
@@ -846,26 +847,29 @@ it('advertises and guards the separate confirmation read after mutation pending 
   let patches = 0;
   let postPatchReads = 0;
   const confirmation = deferred<Response>();
-  transport((_path, options) => {
+  transport((path, options) => {
     if (options.method === 'PATCH') {
       patches++;
       Object.assign(ticket, JSON.parse(String(options.body)));
       return json({ success: true });
     }
-    if (patches && ++postPatchReads > 1) return confirmation.promise;
+    if (patches && path === `/api/tickets/${ticket.id}`) {
+      postPatchReads++;
+      return confirmation.promise;
+    }
     return json(ticket);
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const priority = screen.getByRole('combobox', { name: 'Legacy priority' });
   priority.focus(); await chooseSelect('Legacy priority', 'High');
-  await waitFor(() => expect(postPatchReads).toBe(2));
+  await waitFor(() => expect(postPatchReads).toBe(1));
   for (const select of screen.getAllByRole('combobox').filter(element => element.getAttribute('aria-label') !== 'Message format')) expect(select).toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Message format' })).not.toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Message format' }).closest('[data-scope="select"][data-part="root"]')?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
   expect(screen.getByRole('combobox', { name: 'Legacy priority' })).toBe(priority);
   expect(['trigger', 'list']).toContain(document.activeElement?.getAttribute('data-part'));
   await userEvent.click(priority);
-  expect(priority).toHaveTextContent('High');
+  expect(priority).toHaveTextContent('Normal');
   expect(patches).toBe(1);
   await act(async () => { confirmation.resolve(json(ticket)); });
   await waitFor(() => {
@@ -1259,19 +1263,20 @@ it('waits for all pending attachment outcomes before unlocking a partial-failure
 
 it('replaces a pre-commit read when event and mutation invalidations overlap',async()=>{
   const stale=deferred<Response>();let hold=false;let reads=0;
-  transport((_path,options)=>{
+  transport((path,options)=>{
     if(options.method==='PATCH'){
       Object.assign(ticket,JSON.parse(String(options.body)));
       Socket.latest.emit({type:'ticket.updated',payload:{id:ticket.id}});
       return json({success:true});
     }
-    reads++;if(hold){hold=false;return stale.promise;}return json(ticket);
+    if(path===`/api/tickets/${ticket.id}`){reads++;if(hold){hold=false;return stale.promise;}}
+    return json(ticket);
   });
   showDetail();await screen.findByText('Customer question');
   const old=structuredClone(ticket);hold=true;
   let oldRequest:Promise<void>;
   act(()=>{oldRequest=client.invalidateQueries({queryKey:['ticket','workflow-ticket']});});
-  await waitFor(()=>expect(reads).toBeGreaterThan(2));
+  await waitFor(()=>expect(reads).toBeGreaterThan(1));
   ticket.articles.push({id:'live-message',body:'Post-event authoritative message',sender_type:'agent',is_internal:false,created_at:'2026-09-09T00:01:00Z'});
   act(()=>Socket.latest.emit({type:'article.created',payload:{ticket_id:ticket.id}}));
   await chooseSelect('Status', 'Resolved');
@@ -1280,7 +1285,7 @@ it('replaces a pre-commit read when event and mutation invalidations overlap',as
   await act(async()=>{stale.resolve(json(old));await oldRequest!;});
   expect(screen.getByRole('combobox',{name:'Status'})).toHaveTextContent('Resolved');
   expect(screen.getByText('Post-event authoritative message')).toBeInTheDocument();
-  expect(reads).toBeGreaterThan(2);
+  expect(reads).toBeGreaterThan(1);
 });
 
 
