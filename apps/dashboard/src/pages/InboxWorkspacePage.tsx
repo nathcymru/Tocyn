@@ -29,6 +29,28 @@ const queueViews={mentions:{label:'Mentions',description:'Actionable conversatio
 const queueOrder=['mentions','mine','unassigned','drafts','actionable','snoozed'] as const;
 type NaturalFilters={owner:'All tickets'|'My tickets'|'Unassigned';created:'hour'|'day'|'week'|'month'|'quarter'|'anytime';customer:string;sort:WorkspacePreference['sort'];search:string};
 const defaultNaturalFilters:NaturalFilters={owner:'All tickets',created:'anytime',customer:'anyone',sort:'priority_focus',search:''};
+// The Park Splitter supplies the interaction. This instance widens its hit area
+// while keeping the visible divider narrow and retaining Park's focus ring.
+const inboxResizeTrigger = css({
+  position: 'relative',
+  minW: '6',
+  w: '6',
+  flexShrink: 0,
+  bg: 'transparent',
+  _before: {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '50%',
+    w: '0.5',
+    bg: 'gray.outline.border',
+    rounded: 'full',
+    transform: 'translateX(-50%)',
+    pointerEvents: 'none',
+  },
+  _focusVisible: { focusVisibleRing: 'outside' },
+});
 function ownerForView(view:string):NaturalFilters['owner']{return view==='mine'?'My tickets':view==='unassigned'?'Unassigned':'All tickets';}
 const naturalSortOptions:Readonly<Record<NaturalFilters['sort'],string>>={updated_desc:'recently updated',updated_asc:'least recently updated',created_desc:'newest first',created_asc:'oldest first',priority_desc:'highest impact',priority_asc:'lowest impact',sla_priority:'contract SLA',priority_focus:'default focus',priority_criticality:'criticality matrix',priority_commitment:'SLA commitment'};
 function naturalSortLabel(sort:NaturalFilters['sort']){return naturalSortOptions[sort];}
@@ -130,7 +152,7 @@ function InboxWorkspace(){
     <ParkSplitter.Panel id="inbox-list" role="region" aria-label="Conversations" className={clsx(page.inboxList,conversationId&&page.inboxMobileHidden)}>
       <ConversationList activeView={activeView} selectedTicketId={conversationId??null} routeReady={routeReady} advanceRef={advance} classificationRefreshRef={classificationRefresh} onAdvanceNotice={setAdvanceNotice} />
     </ParkSplitter.Panel>
-    <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" />
+    <ParkSplitter.ResizeTrigger id="inbox-list:inbox-detail" aria-label="Resize conversation panes" className={inboxResizeTrigger} />
     <ParkSplitter.Panel id="inbox-detail" role="region" aria-label="Active conversation" className={clsx(page.inboxDetail,!conversationId&&page.inboxMobileHidden)}>
       {advanceNotice && <p role="status">{advanceNotice}</p>}
       {conversationId?<TicketDetailPage id={conversationId} workspaceBackHref={`/inbox/${activeView}`} onResolved={onResolved} onClassificationSaved={onClassificationSaved} />:<EmptyConversation />}
