@@ -1,5 +1,16 @@
 import '@testing-library/jest-dom';
 
+// Ark's Radio Group measures its selected indicator; JSDOM has no observer.
+if (typeof window !== 'undefined' && typeof window.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(window, 'ResizeObserver', { configurable: true, writable: true, value: ResizeObserverStub });
+  Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, writable: true, value: ResizeObserverStub });
+}
+
 if (typeof window !== 'undefined' && (!window.localStorage || typeof window.localStorage.getItem !== 'function')) {
   const store = new Map<string, string>();
   const localStoragePolyfill = {

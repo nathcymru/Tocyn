@@ -109,6 +109,13 @@ describe('portal conversation accessibility and recovery', () => {
     expect(screen.getByRole('heading', { name: 'Ticket list destination' })).toBeInTheDocument();
   });
 
+  it('renders the conversation status with the official Park Badge recipe', async () => {
+    setupReads(); mountDetail();
+    const heading = await screen.findByRole('heading', { name: /Accepted conversation/ });
+    const status = within(heading).getByText('open');
+    expect(status).toHaveClass('badge', 'badge--variant_subtle');
+  });
+
   it('uses Park Dialog and Field anatomy, focuses its first field and returns focus after Escape', async () => {
     setupReads(); mountList();
     const opener = await screen.findByRole('button', { name: 'New Ticket' });

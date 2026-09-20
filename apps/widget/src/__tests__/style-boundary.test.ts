@@ -45,6 +45,15 @@ describe('shared stylesheet entry boundaries', () => {
     expect(widgetMain.indexOf('appendLegacyWidgetCss(shadow)')).toBeGreaterThan(widgetMain.indexOf('shadow.appendChild(primitiveStyleElement)'));
   });
 
+  it('uses the Park button focus ring without a second widget launcher ring', async () => {
+    const [widgetStyles, buttonRecipe] = await Promise.all([
+      source('../widgetStyles.ts'),
+      source('../../../../packages/ui/src/theme/recipes/button.ts'),
+    ]);
+    expect(buttonRecipe).toContain("focusVisibleRing: 'outside'");
+    expect(widgetStyles).not.toContain('_focusVisible: { boxShadow:');
+  });
+
   it('rebinds the default Park palette where the light tokens exist in the ShadowRoot', async () => {
     const pandaCss = await source('../../../../packages/ui/src/styles/panda.css');
     expect(w.host.split(' ')).toContain('color-palette_gray');

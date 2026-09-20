@@ -16,8 +16,6 @@ const tiny = css({ fontSize: 'xs', color: 'text.muted' });
 const icon = css({ w: '4', h: '4', flexShrink: 0 });
 const inset = css({ p: { base: '4', md: '6' } });
 const full = css({ w: 'full' });
-const focusable = css({ _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } });
-const badge = css({ display: 'inline-flex', alignItems: 'center', rounded: 'full', px: '2', py: '0.5', fontSize: 'xs', fontWeight: 'semibold', textTransform: 'capitalize' });
 const form = css({ display: 'flex', flexDirection: 'column', gap: '5' });
 const buttonIcon = css({ w: '4', h: '4', flexShrink: 0 });
 
@@ -32,7 +30,6 @@ export const p = {
   brandName: css({ fontSize: 'lg' }),
   user: row,
   userLabel: css({ color: 'text.muted', fontSize: 'sm', display: { base: 'none', sm: 'inline' } }),
-  logout: focusable,
   logoutIcon: icon,
   main: page,
   routeLoading: page,
@@ -44,7 +41,7 @@ export const p = {
   authForm: form,
   authLegend: label,
   authMethods: css({ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '2' }),
-  authMethod: full,
+  authMethod: css({ w: 'full', minH: '10' }),
   authTurnstile: css({ display: 'flex', justifyContent: 'center' }),
   authSubmit: css({ w: 'full', justifyContent: 'center' }),
   authIcon: buttonIcon,
@@ -100,7 +97,7 @@ export const p = {
   ticketDetailTitle: css({ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2', fontSize: '2xl', fontWeight: 'bold' }),
   ticketDetailMeta: muted,
   chatBackIcon: icon,
-  chatStatusPill: badge,
+  chatStatusPill: css({ textTransform: 'capitalize' }),
   chatStatus: muted,
   chatSurface: css({ overflow: 'hidden' }),
   chatItem: css({ display: 'flex', flexDirection: 'column', gap: '1' }),

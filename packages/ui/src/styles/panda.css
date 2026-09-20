@@ -11859,10 +11859,6 @@
     padding-block: var(--spacing-8);
 }
 
-  .py_0\.5 {
-    padding-block: var(--spacing-0\.5);
-}
-
   .py_12 {
     padding-block: var(--spacing-12);
 }
@@ -13390,10 +13386,6 @@
 
   .focusVisible\:ring-o_2px:is(:focus-visible, [data-focus-visible]) {
     outline-offset: 2px;
-}
-
-  .focusVisible\:bx-sh_0_0_0_4px_var\(--colors-bg\\\.surface\)\,_var\(--shadows-lg\):is(:focus-visible, [data-focus-visible]) {
-    box-shadow: 0 0 0 4px var(--colors-bg\.surface), var(--shadows-lg);
 }
 
   .hover\:bg_bg\.subtle:not(:disabled):hover {

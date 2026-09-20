@@ -1,6 +1,6 @@
 import { p } from '../portalStyles';
 import { css } from '@luminatick/ui/styled-system/css';
-import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput, ParkRadioGroup } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { VerifyPage } from './VerifyPage';
@@ -146,31 +146,27 @@ export function LoginPage() {
               />
             </ParkField>
 
-            <fieldset>
-              <legend className={p.authLegend}>Login method</legend>
+            <ParkRadioGroup.Root
+              value={type}
+              onValueChange={({ value }) => {
+                if (!loading && !success && (value === 'magic_link' || value === 'otp')) setType(value);
+              }}
+              disabled={loading || success}
+            >
+              <ParkRadioGroup.Label className={p.authLegend}>Login method</ParkRadioGroup.Label>
               <div className={p.authMethods}>
-                <ParkButton
-                  type="button"
-                  onClick={() => { if (!loading && !success) setType('magic_link'); }}
-                  aria-pressed={type === 'magic_link'}
-                  variant={type === 'magic_link' ? 'surface' : 'outline'}
-                  className={p.authMethod}
-                  aria-disabled={loading || success}
-                >
-                  Magic Link
-                </ParkButton>
-                <ParkButton
-                  type="button"
-                  onClick={() => { if (!loading && !success) setType('otp'); }}
-                  aria-pressed={type === 'otp'}
-                  variant={type === 'otp' ? 'surface' : 'outline'}
-                  className={p.authMethod}
-                  aria-disabled={loading || success}
-                >
-                  Code (OTP)
-                </ParkButton>
+                <ParkRadioGroup.Item value="magic_link" className={p.authMethod}>
+                  <ParkRadioGroup.ItemControl><ParkRadioGroup.Indicator /></ParkRadioGroup.ItemControl>
+                  <ParkRadioGroup.ItemText>Magic Link</ParkRadioGroup.ItemText>
+                  <ParkRadioGroup.ItemHiddenInput />
+                </ParkRadioGroup.Item>
+                <ParkRadioGroup.Item value="otp" className={p.authMethod}>
+                  <ParkRadioGroup.ItemControl><ParkRadioGroup.Indicator /></ParkRadioGroup.ItemControl>
+                  <ParkRadioGroup.ItemText>Code (OTP)</ParkRadioGroup.ItemText>
+                  <ParkRadioGroup.ItemHiddenInput />
+                </ParkRadioGroup.Item>
               </div>
-            </fieldset>
+            </ParkRadioGroup.Root>
 
             {siteKey && (
               <div className={p.authTurnstile}>

@@ -84,7 +84,7 @@ it('keeps OTP verification in the login page, retains the challenge and permits 
     .mockRejectedValueOnce(new Error('Wrong code'));
   render(<MemoryRouter initialEntries={['/login']}><LoginPage /></MemoryRouter>);
   fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'test@example.invalid' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Code (OTP)' }));
+  await userEvent.click(screen.getByText('Code (OTP)'));
   fireEvent.click(screen.getByRole('button', { name: 'Send Code' }));
   const input = await screen.findByLabelText('Authentication Code');
   expect(input).toHaveFocus();
