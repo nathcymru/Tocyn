@@ -1,5 +1,4 @@
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
@@ -34,6 +33,7 @@ export const KnowledgePage: React.FC = () => {
   }>({ isOpen: false, type: null, id: null, title: '' });
 
   const deleteTitleId = React.useId();
+  const deleteDescriptionId = React.useId();
   const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
   const deleteCancel = React.useRef<HTMLButtonElement>(null);
   const heading = React.useRef<HTMLHeadingElement>(null);
@@ -308,6 +308,10 @@ export const KnowledgePage: React.FC = () => {
         {/* Main Content */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeContent}>
           <ParkCard.Body>
+            {loadState === 'ready' && filteredDocs.length === 0 ? (
+              <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false}
+                action={<ParkButton onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}>Create article</ParkButton>} />
+            ) : (
             <ParkTable.Root className={pageStyles.knowledgeTable}>
               <ParkTable.Head>
                 <ParkTable.Row>
@@ -351,45 +355,35 @@ export const KnowledgePage: React.FC = () => {
                     </ParkTable.Cell>
                   </ParkTable.Row>
                 ))}
-                {loadState === 'ready' && filteredDocs.length === 0 && (
-                  <ParkTable.Row>
-                    <ParkTable.Cell colSpan={5}>
-                      <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false}
-                        action={<ParkButton onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}>Create article</ParkButton>} />
-                    </ParkTable.Cell>
-                  </ParkTable.Row>
-                )}
               </ParkTable.Body>
             </ParkTable.Root>
+            )}
           </ParkCard.Body>
         </ParkCard.Root>
       </div>
 
       {deleteStatus && <p role="status">{deleteStatus}</p>}
-      <TocynDialog open={deleteConfirm.isOpen} busy={deleting} labelledBy={deleteTitleId} initialFocusEl={() => deleteCancel.current}
-        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} onOpenChange={next => { if (!next) closeDelete(); }}>
-          <div>
-            <h3 id={deleteTitleId}>Confirm Deletion</h3>
-            <p>{deleteConfirm.title}</p>
-            {deleteError && <ParkAlert.Root role="alert" status="error" variant="surface">
-              <ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content>
-            </ParkAlert.Root>}
-            <div>
-              <ParkButton
-                ref={deleteCancel} disabled={deleting} onClick={closeDelete}
-               
-              >
-                Cancel
-              </ParkButton>
-              <ParkButton
-                disabled={deleting} onClick={executeDelete}
-               
-              >
-                Delete
-              </ParkButton>
-            </div>
-          </div>
-      </TocynDialog>
+      <ParkDialog.Root open={deleteConfirm.isOpen} onOpenChange={({ open }) => { if (!open && !deleting) closeDelete(); }}
+        initialFocusEl={() => deleteCancel.current}
+        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current}
+        closeOnEscape={!deleting} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={deleteTitleId} aria-describedby={deleteDescriptionId}>
+            <ParkDialog.Header><ParkDialog.Title id={deleteTitleId}>Confirm Deletion</ParkDialog.Title></ParkDialog.Header>
+            <ParkDialog.Body>
+              <ParkDialog.Description id={deleteDescriptionId}>{deleteConfirm.title}</ParkDialog.Description>
+              {deleteError && <ParkAlert.Root role="alert" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton type="button" ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={deleting} onClick={executeDelete}>Delete</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 };

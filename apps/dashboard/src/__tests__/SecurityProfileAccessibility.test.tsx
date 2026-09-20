@@ -58,6 +58,26 @@ it.each(['agent','admin'])('does not expose disabling mandatory MFA for %s',role
   useAuthStore.getState().setAuth('synthetic-session',{...user,role,mfa_enabled:true});render(<SecurityProfilePage/>);
   expect(screen.queryByRole('button',{name:'Disable 2FA'})).not.toBeInTheDocument();expect(screen.getByText(/mandatory for your role/)).toBeInTheDocument();expect(dashboardApi.post).not.toHaveBeenCalled();
 });
+it('uses Park dialog anatomy and returns focus to the disable trigger after idle Escape',async()=>{
+  useAuthStore.getState().setAuth('synthetic-session',{...user,role:'customer',mfa_enabled:true});
+  render(<SecurityProfilePage/>);
+  const trigger=screen.getByRole('button',{name:'Disable 2FA'});
+  trigger.focus();fireEvent.click(trigger);
+  const dialog=await screen.findByRole('dialog',{name:'Disable two-factor authentication?'});
+  expect(dialog).toHaveClass('dialog__content');
+  expect(dialog).toHaveAccessibleDescription('This will make your account less secure and sign you out. You will need to sign in again.');
+  expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+  expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Disable two-factor authentication?');
+  expect(dialog.querySelector('.dialog__body .dialog__description')).toHaveTextContent('sign you out');
+  expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Cancel'}));
+  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());
+  fireEvent.pointerDown(document.body);fireEvent.click(document.body);
+  expect(dialog).toBeInTheDocument();
+  fireEvent.keyDown(dialog,{key:'Escape'});
+  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(()=>expect(trigger).toHaveFocus());
+  expect(dashboardApi.post).not.toHaveBeenCalled();
+});
 it('confirms optional disabling with safe focus, blocks pending dismissal and retains enabled state after failure',async()=>{
   useAuthStore.getState().setAuth('synthetic-session',{...user,role:'customer',mfa_enabled:true});
   let reject!:(error:Error)=>void;vi.mocked(dashboardApi.post).mockImplementationOnce(()=>new Promise((_resolve,failure)=>{reject=failure;}));
@@ -66,9 +86,13 @@ it('confirms optional disabling with safe focus, blocks pending dismissal and re
   trigger.focus();fireEvent.click(trigger);
   const dialog=await screen.findByRole('dialog',{name:'Disable two-factor authentication?'});
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());
-  fireEvent.click(within(dialog).getByRole('button',{name:'Disable 2FA'}));fireEvent.keyDown(dialog,{key:'Escape'});
+  fireEvent.click(within(dialog).getByRole('button',{name:'Disable 2FA'}));
+  expect(within(dialog).getByRole('button',{name:'Cancel'})).toBeDisabled();
+  expect(within(dialog).getByRole('button',{name:'Disable 2FA'})).toBeDisabled();
+  fireEvent.keyDown(dialog,{key:'Escape'});
   expect(dialog).toBeInTheDocument();expect(dashboardApi.post).toHaveBeenCalledTimes(1);
   await act(async()=>reject(new Error('synthetic failure')));
+  expect(within(dialog).getByRole('alert')).toHaveClass('alert__root');
   expect(within(dialog).getByRole('alert')).toHaveTextContent('remains shown as enabled');expect(useAuthStore.getState().user?.mfa_enabled).toBe(true);
   fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));await waitFor(()=>expect(trigger).toHaveFocus());
 });

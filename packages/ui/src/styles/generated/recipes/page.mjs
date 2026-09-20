@@ -16,14 +16,6 @@ const pageCompoundVariants = [
         "marginInline": "auto"
       }
     }
-  },
-  {
-    "kind": "knowledge",
-    "css": {
-      "knowledgeWorkspace": {
-        "gridTemplateColumns": "minmax(15rem, 20rem) minmax(0, 1fr)"
-      }
-    }
   }
 ]
 

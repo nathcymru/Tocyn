@@ -71,7 +71,7 @@ export function OperatorThemeControl() {
   const theme = useOperatorThemeContext(); const busy = theme.status === 'loading' || theme.status === 'saving';
   const localStatus = theme.status === 'error' || theme.status === 'conflict' ? '' : theme.error
     || (theme.status === 'saved' ? 'Appearance saved.' : theme.status === 'unsaved' ? 'Unsaved appearance choice.' : '');
-  return <section aria-labelledby="appearance-title" data-tocyn-appearance className={css({ display: 'grid', gap: '4' })}>
+  return <section aria-labelledby="appearance-title" data-tocyn-appearance className={css({ display: 'grid', gap: '4', py: '1' })}>
     <h3 id="appearance-title">Appearance</h3>
     <ParkRadioGroup.Root value={theme.mode} onValueChange={({ value }) => theme.updateMode(value as OperatorThemeMode)} disabled={busy} aria-label="Theme mode">
       {(['system', 'light', 'dark'] as const).map(mode => <ParkRadioGroup.Item key={mode} value={mode}>
@@ -91,9 +91,9 @@ export function OperatorPreferencesControl() {
   const busy = preferences.status === 'loading' || preferences.status === 'saving' || preferences.schemaUnavailable || preferences.status === 'conflict';
   const localStatus = preferences.error || (preferences.status === 'saved' ? 'Workspace preferences saved.'
     : preferences.status === 'unsaved' ? 'Unsaved workspace preferences.' : '');
-  return <section aria-labelledby="workspace-preferences-title" data-tocyn-appearance data-tocyn-preferences className={css({ display: 'grid', gap: '4' })}>
+  return <section aria-labelledby="workspace-preferences-title" data-tocyn-appearance data-tocyn-preferences className={css({ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', minW: '0', w: 'full', gap: '4', py: '1' })}>
     <h3 id="workspace-preferences-title">Workspace preferences</h3>
-    <fieldset disabled={busy} className={css({ display: 'grid', gap: '3' })}>
+    <fieldset disabled={busy} className={css({ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', minW: '0', w: 'full', gap: '3', m: '0', p: '0', border: '0' })}>
       <DashboardSelect label="Workspace density" aria-label="Workspace density" disabled={busy} value={preferences.density} onValueChange={value => preferences.update({ density: value as OperatorDensity })} options={[{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }]} />
       <DashboardSelect label="Workspace text size" aria-label="Workspace text size" disabled={busy} value={preferences.fontScale} onValueChange={value => preferences.update({ fontScale: value as OperatorFontScale })} options={[{ value: 'normal', label: 'Standard' }, { value: 'large', label: 'Large' }, { value: 'larger', label: 'Largest' }]} />
       <ParkCheckbox.Root checked={preferences.focusMode} disabled={busy} onCheckedChange={({ checked }) => preferences.update({ focusMode: checked === true })}><ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control><ParkCheckbox.Label>Focus mode</ParkCheckbox.Label><ParkCheckbox.HiddenInput /></ParkCheckbox.Root>
@@ -104,7 +104,7 @@ export function OperatorPreferencesControl() {
       <DashboardSelect label="Activity interruption level" aria-label="Activity interruption level" disabled={busy} value={preferences.interruptionLevel} onValueChange={value => preferences.update({ interruptionLevel: value as 'standard' | 'quiet' })} options={[{ value: 'standard', label: 'Standard' }, { value: 'quiet', label: 'Quiet — refresh activity manually' }]} />
       <ParkCheckbox.Root checked={preferences.advanceAfterResolve} disabled={busy} onCheckedChange={({ checked }) => preferences.update({ advanceAfterResolve: checked === true })}><ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control><ParkCheckbox.Label>Advance after resolving a conversation</ParkCheckbox.Label><ParkCheckbox.HiddenInput /></ParkCheckbox.Root>
     </fieldset>
-    <div className={css({ display: 'flex', gap: '2', flexWrap: 'wrap' })}><ParkButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</ParkButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <ParkButton type="button" onClick={preferences.retry}>Retry workspace preferences</ParkButton>}{preferences.status === 'conflict' && <ParkButton type="button" onClick={preferences.restore}>Restore server preferences</ParkButton>}</div>
+    <div className={css({ display: 'flex', minW: '0', w: 'full', gap: '2', flexWrap: 'wrap', '& > button': { minW: '0', maxW: 'full', h: 'auto', minH: '10', py: '2', whiteSpace: 'normal' } })}><ParkButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</ParkButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <ParkButton type="button" onClick={preferences.retry}>Retry workspace preferences</ParkButton>}{preferences.status === 'conflict' && <ParkButton type="button" onClick={preferences.restore}>Restore server preferences</ParkButton>}</div>
     {preferences.status === 'loading' || preferences.status === 'saving'
       ? <div role="status" aria-live="polite"><ParkProgress value={null} label={preferences.status === 'loading' ? 'Restoring workspace preferences…' : 'Saving workspace preferences…'} /></div>
       : localStatus && <ParkAlert.Root role={preferences.error ? 'alert' : 'status'} aria-live={preferences.error ? undefined : 'polite'} status={preferences.error ? 'error' : preferences.status === 'saved' ? 'success' : 'info'}><ParkAlert.Content><ParkAlert.Description>{localStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}

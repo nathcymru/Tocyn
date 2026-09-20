@@ -1,13 +1,15 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FiltersSettingsPage } from '../pages/FiltersSettingsPage';
-const mutations=vi.hoisted(()=>({create:vi.fn(),update:vi.fn(),remove:vi.fn()}));
-vi.mock('../hooks/useFilters',()=>({useFilters:()=>({data:[],isLoading:false}),useCreateFilter:()=>({mutateAsync:mutations.create,isPending:false}),useUpdateFilter:()=>({mutateAsync:mutations.update,isPending:false}),useDeleteFilter:()=>({mutateAsync:mutations.remove,isPending:false})}));
-beforeEach(()=>{vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});});
+const mutations=vi.hoisted(()=>({create:vi.fn(),update:vi.fn(),remove:vi.fn(),list:vi.fn()}));
+vi.mock('../hooks/useFilters',()=>({useFilters:()=>({data:mutations.list(),isLoading:false}),useCreateFilter:()=>({mutateAsync:mutations.create,isPending:false}),useUpdateFilter:()=>({mutateAsync:mutations.update,isPending:false}),useDeleteFilter:()=>({mutateAsync:mutations.remove,isPending:false})}));
+beforeEach(()=>{mutations.list.mockReturnValue([]);vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks();});
 async function openEditor(){
  render(<FiltersSettingsPage/>);const opener=screen.getByRole('button',{name:'Create Filter'});opener.focus();fireEvent.click(opener);
  const dialog=await screen.findByRole('dialog',{name:'Create Filter'});const name=within(dialog).getByRole('textbox',{name:'Filter Name'});
+ expect(dialog).toHaveAttribute('data-scope','dialog');expect(dialog).toHaveAttribute('data-part','content');expect(dialog).toHaveClass('dialog__content');
+ expect(dialog.parentElement).toHaveClass('dialog__positioner');expect(document.querySelector('[data-scope="dialog"][data-part="backdrop"]')).toHaveClass('dialog__backdrop');
  await waitFor(()=>expect(name).toHaveFocus());return {opener,dialog,name};
 }
 it('bounds duplicate submissions and preserves the dialog through pending Escape, then returns focus on success',async()=>{
@@ -40,4 +42,20 @@ it('retains a failed draft and sends its labelled conditions on retry',async()=>
 it('cancels by Escape without submitting and restores the opener',async()=>{
  const {opener}=await openEditor();fireEvent.keyDown(document.activeElement!,{key:'Escape'});
  await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());await waitFor(()=>expect(opener).toHaveFocus());expect(mutations.create).not.toHaveBeenCalled();
+});
+it('loads the selected filter into the Park editor and saves its updated conditions',async()=>{
+ mutations.list.mockReturnValue([{id:'saved-filter',name:'Saved view',is_system:0,conditions:[{field:'status',operator:'equals',value:'open'}]}]);
+ mutations.update.mockResolvedValueOnce({});
+ render(<FiltersSettingsPage/>);
+ const opener=screen.getByRole('button',{name:'Edit Saved view'});opener.focus();fireEvent.click(opener);
+ const dialog=await screen.findByRole('dialog',{name:'Edit Filter'});
+ expect(dialog).toHaveClass('dialog__content');
+ const name=within(dialog).getByRole('textbox',{name:'Filter Name'});expect(name).toHaveValue('Saved view');
+ expect(within(dialog).getByRole('textbox',{name:'Condition 1 value'})).toHaveValue('open');
+ await waitFor(()=>expect(name).toHaveFocus());fireEvent.change(name,{target:{value:'Revised view'}});
+ fireEvent.change(within(dialog).getByRole('textbox',{name:'Condition 1 value'}),{target:{value:'pending'}});
+ fireEvent.submit(within(dialog).getByRole('form'));
+ await waitFor(()=>expect(mutations.update).toHaveBeenCalledWith({id:'saved-filter',name:'Revised view',conditions:[{field:'status',operator:'equals',value:'pending'}]}));
+ await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Edit Filter'})).not.toBeInTheDocument());
+ await waitFor(()=>expect(opener).toHaveFocus());
 });

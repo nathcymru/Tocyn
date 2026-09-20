@@ -6,8 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { composeEventHandlers } from '../index';
 import { createListCollection } from '@ark-ui/react';
-import { TocynDialog, TocynConfirmDialog } from '../dialog';
-import { ParkButton, ParkInput, ParkSelect, ParkTextarea, ParkEmptyState, type ParkButtonProps } from '../park';
+import { ParkButton, ParkDialog, ParkInput, ParkSelect, ParkTextarea, ParkEmptyState, type ParkButtonProps } from '../park';
 
 afterEach(cleanup);
 
@@ -102,33 +101,24 @@ const consumerInputProps = { type: 'search', auditTag: 'filter', 'aria-label': '
 void consumerButtonProps;
 void consumerInputProps;
 
-it('forwards dialog content refs and caller ARIA descriptions through the shared wrappers',async()=>{
-  const ref=React.createRef<HTMLDivElement>();const confirmation=React.createRef<HTMLDivElement>();const key=vi.fn();
-  const {unmount}=render(<TocynDialog open labelledBy="dialog-title" aria-describedby="caller-description" onOpenChange={()=>{}} ref={ref} onKeyDown={key}>
-    <h2 id="dialog-title">Reference test</h2><p id="caller-description">Caller supplied description</p><button>Close</button>
-  </TocynDialog>);
-  const dialog=await screen.findByRole('dialog',{name:'Reference test'});expect(ref.current).toBe(dialog);expect(dialog).toHaveAccessibleDescription('Caller supplied description');
-  fireEvent.keyDown(dialog,{key:'x'});expect(key).toHaveBeenCalledOnce();unmount();expect(ref.current).toBeNull();
-  render(<TocynConfirmDialog open ref={confirmation} title="Confirmation reference" description="Action description" confirmLabel="Confirm" onConfirm={()=>{}} onOpenChange={()=>{}}/>);
-  const confirm=await screen.findByRole('dialog',{name:'Confirmation reference'});expect(confirmation.current).toBe(confirm);expect(confirm).toHaveAccessibleDescription('Action description');
-});
-
-it('renders confirmation failures with Park Alert anatomy without changing busy actions', async () => {
-  const onConfirm = vi.fn();
-  const onOpenChange = vi.fn();
-  const props = { open: true, title: 'Confirm removal', description: 'Review this action', confirmLabel: 'Remove', error: 'Could not remove item', onConfirm, onOpenChange };
-  const { rerender } = render(<TocynConfirmDialog {...props} busy />);
-  const dialog = await screen.findByRole('dialog', { name: 'Confirm removal' });
-  expect(dialog).toHaveAccessibleDescription('Review this action');
-  const alert = within(dialog).getByRole('alert');
-  expect(alert).toHaveClass('alert__root');
-  expect(alert.querySelector('.alert__description')).toHaveTextContent('Could not remove item');
-  expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeDisabled();
-  expect(within(dialog).getByRole('button', { name: 'Remove' })).toBeDisabled();
-  rerender(<TocynConfirmDialog {...props} busy={false} />);
-  const cancel = within(dialog).getByRole('button', { name: 'Cancel' });
-  cancel.focus();
-  expect(cancel).toHaveFocus();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
-  expect(onConfirm).toHaveBeenCalledOnce();
+it('forwards official Park Dialog content refs and caller ARIA descriptions', async () => {
+  const ref = React.createRef<HTMLDivElement>();
+  const key = vi.fn();
+  const { unmount } = render(<ParkDialog.Root open onOpenChange={() => undefined}>
+    <ParkDialog.Backdrop />
+    <ParkDialog.Positioner><ParkDialog.Content ref={ref} aria-labelledby="dialog-title" aria-describedby="caller-description" onKeyDown={key}>
+      <ParkDialog.Title id="dialog-title">Reference test</ParkDialog.Title>
+      <ParkDialog.Description id="caller-description">Caller supplied description</ParkDialog.Description>
+      <ParkDialog.Footer><ParkButton type="button">Close</ParkButton></ParkDialog.Footer>
+    </ParkDialog.Content></ParkDialog.Positioner>
+  </ParkDialog.Root>);
+  const dialog = await screen.findByRole('dialog', { name: 'Reference test' });
+  expect(ref.current).toBe(dialog);
+  expect(dialog).toHaveClass('dialog__content');
+  expect(dialog).toHaveAccessibleDescription('Caller supplied description');
+  expect(dialog.querySelector('.dialog__footer')).toBeInTheDocument();
+  fireEvent.keyDown(dialog, { key: 'x' });
+  expect(key).toHaveBeenCalledOnce();
+  unmount();
+  expect(ref.current).toBeNull();
 });

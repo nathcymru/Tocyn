@@ -1,7 +1,6 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
-import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
 import { Badge, Field } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +32,9 @@ export function EmailChannelPage() {
   const queryClient = useQueryClient();
   const heading = React.useRef<HTMLHeadingElement>(null);
   const removalOpener = React.useRef<HTMLButtonElement | null>(null);
+  const removalCancel = React.useRef<HTMLButtonElement | null>(null);
+  const removalTitleId = React.useId();
+  const removalDescriptionId = React.useId();
   const removalGuard = React.useRef(false);
   const removalSucceeded = React.useRef(false);
   const [removal, setRemoval] = useState<SupportEmail | null>(null);
@@ -343,10 +345,29 @@ export function EmailChannelPage() {
         )}
       </ParkCard.Body></ParkCard.Root>
       {removeStatus && <p role="status">{removeStatus}</p>}
-      <TocynConfirmDialog open={removeOpen} busy={removing} title={`Remove email channel: ${removal?.email_address ?? ''}`}
-        description="Remove this configured email channel?" confirmLabel={removing ? 'Removing...' : 'Remove channel'} error={removeError}
-        onConfirm={handleRemove} onOpenChange={next => { if (!next && !removalGuard.current) setRemoveOpen(false); }}
-        finalFocusEl={() => removalSucceeded.current ? heading.current : removalOpener.current} />
+      <ParkDialog.Root open={removeOpen} onOpenChange={({ open }) => { if (!open && !removing && !removalGuard.current) setRemoveOpen(false); }}
+        initialFocusEl={() => removalCancel.current}
+        finalFocusEl={() => removalSucceeded.current ? heading.current : removalOpener.current}
+        closeOnEscape={!removing} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={removalTitleId} aria-describedby={removalDescriptionId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={removalTitleId}>{`Remove email channel: ${removal?.email_address ?? ''}`}</ParkDialog.Title>
+            </ParkDialog.Header>
+            <ParkDialog.Body>
+              <ParkDialog.Description id={removalDescriptionId}>Remove this configured email channel?</ParkDialog.Description>
+              {removeError && <ParkAlert.Root role="alert" aria-atomic="true" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{removeError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton ref={removalCancel} type="button" disabled={removing} onClick={() => setRemoveOpen(false)}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={removing} onClick={handleRemove}>{removing ? 'Removing...' : 'Remove channel'}</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 }

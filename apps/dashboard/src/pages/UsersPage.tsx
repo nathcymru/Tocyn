@@ -1,7 +1,6 @@
 import { css } from '@luminatick/ui/styled-system/css';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { useAuthStore } from '../store/authStore';
-import { TocynDialog } from '@luminatick/ui/dialog';
 import { Badge } from '@luminatick/ui/components';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState } from 'react';
@@ -112,32 +111,38 @@ export const UsersPage: React.FC = () => {
         )}
       </div>
 
-      <TocynDialog open={Boolean(selectedUser && modalType)} onOpenChange={open => { if (!open) closeDialog(); }}
-        labelledBy={dialogTitleId} initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}>
-        {selectedUser && <>
-          <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
-            <ParkDialog.Title id={dialogTitleId}>
-              {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'User Profile' : 'User Activity Log'}
-            </ParkDialog.Title>
-            <ParkButton type="button" variant="plain" ref={closeControl} aria-label="Close user details" onClick={closeDialog}>
-              <X aria-hidden="true" className={css({ w: '4', h: '4' })} />
-            </ParkButton>
-          </ParkDialog.Header>
-          <ParkDialog.Body className={css({ display: 'grid', gap: '4', minW: '0' })}>
-            <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: '0' })}>
-              <ParkAvatar size="md"><ParkAvatarFallback>{initials(selectedUser.full_name || selectedUser.email)}</ParkAvatarFallback></ParkAvatar>
-              <div className={css({ minW: '0' })}>
-                <p className={css({ m: '0', fontWeight: 'semibold', color: 'fg.default' })}>{selectedUser.full_name || 'Unnamed User'}</p>
-                <p className={css({ m: '0', color: 'fg.muted', overflowWrap: 'anywhere' })}>{selectedUser.email}</p>
-              </div>
-            </div>
-            {modalType === 'capacity' ? <OperatorCapacityPanel userId={selectedUser.id} editable={administrator} />
-              : modalType === 'edit' ? <ParkEmptyState headingLevel={false} title="Profile editing is unavailable" description="Users can update their own security profile. This directory view is read-only." />
-              : <ParkEmptyState headingLevel={false} title="User activity is unavailable" description="No activity records have been loaded." />}
-          </ParkDialog.Body>
-          <ParkDialog.Footer><ParkButton type="button" variant="outline" onClick={closeDialog}>Close</ParkButton></ParkDialog.Footer>
-        </>}
-      </TocynDialog>
+      <ParkDialog.Root open={Boolean(selectedUser && modalType)} onOpenChange={({ open }) => { if (!open) closeDialog(); }}
+        initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}
+        closeOnEscape closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={dialogTitleId}>
+            {selectedUser && <>
+              <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+                <ParkDialog.Title id={dialogTitleId}>
+                  {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'User Profile' : 'User Activity Log'}
+                </ParkDialog.Title>
+                <ParkButton type="button" variant="plain" ref={closeControl} aria-label="Close user details" onClick={closeDialog}>
+                  <X aria-hidden="true" className={css({ w: '4', h: '4' })} />
+                </ParkButton>
+              </ParkDialog.Header>
+              <ParkDialog.Body className={css({ display: 'grid', gap: '4', minW: '0' })}>
+                <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: '0' })}>
+                  <ParkAvatar size="md"><ParkAvatarFallback>{initials(selectedUser.full_name || selectedUser.email)}</ParkAvatarFallback></ParkAvatar>
+                  <div className={css({ minW: '0' })}>
+                    <p className={css({ m: '0', fontWeight: 'semibold', color: 'fg.default' })}>{selectedUser.full_name || 'Unnamed User'}</p>
+                    <p className={css({ m: '0', color: 'fg.muted', overflowWrap: 'anywhere' })}>{selectedUser.email}</p>
+                  </div>
+                </div>
+                {modalType === 'capacity' ? <OperatorCapacityPanel userId={selectedUser.id} editable={administrator} />
+                  : modalType === 'edit' ? <ParkEmptyState headingLevel={false} title="Profile editing is unavailable" description="Users can update their own security profile. This directory view is read-only." />
+                  : <ParkEmptyState headingLevel={false} title="User activity is unavailable" description="No activity records have been loaded." />}
+              </ParkDialog.Body>
+              <ParkDialog.Footer><ParkButton type="button" variant="outline" onClick={closeDialog}>Close</ParkButton></ParkDialog.Footer>
+            </>}
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 };

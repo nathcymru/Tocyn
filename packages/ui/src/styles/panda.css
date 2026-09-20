@@ -287,44 +287,6 @@
     color-scheme: dark;
 }
 
-  [data-tocyn-appearance] {
-    padding-block: 0.25rem;
-}
-
-  [data-tocyn-appearance] button,[data-tocyn-appearance] label {
-    min-height: 44px;
-}
-
-  [data-tocyn-appearance] label {
-    gap: 0.5rem;
-    display: flex;
-    align-items: center;
-}
-
-  [data-tocyn-appearance] label + label {
-    margin-top: 0.25rem;
-}
-
-  [data-tocyn-appearance] fieldset {
-    padding: var(--spacing-0);
-    margin-top: 0.5rem;
-}
-
-  [data-tocyn-appearance] fieldset + div {
-    gap: 0.5rem;
-    display: flex;
-    flex-wrap: wrap;
-    margin-top: 0.5rem;
-}
-
-  [data-tocyn-appearance] fieldset + div button {
-    padding: 0.25rem 0.75rem;
-}
-
-  [data-tocyn-appearance] > p[role="status"] {
-    margin-top: 0.5rem;
-}
-
   :root[data-tocyn-focus-mode="true"] [data-tocyn-focus-decoration] {
     display: none;
 }
@@ -3016,6 +2978,11 @@
       min-width: var(--sizes-0);
 }
 
+    .page__knowledgeContent .emptyState__description {
+      white-space: normal;
+      overflow-wrap: anywhere;
+}
+
     .page__knowledgeTable {
       border-collapse: collapse;
       table-layout: fixed;
@@ -5234,7 +5201,7 @@
       height: 2.5rem;
 }
 
-    .shell__mobileDialog {
+    .shell__mobileDialog.dialog__content {
       margin: var(--spacing-0);
       padding: 0.5rem;
       inset-block: var(--spacing-0);
@@ -5246,12 +5213,12 @@
       overflow-y: auto;
 }
 
-    .shell__mobileDialogLabelled {
+    .shell__mobileDialogLabelled.dialog__content {
       width: 14rem;
       max-width: 90vw;
 }
 
-    .shell__mobileDialogCompact {
+    .shell__mobileDialogCompact.dialog__content {
       width: 5rem;
 }
 
@@ -5259,17 +5226,21 @@
       height: calc(100dvh - 4rem);
 }
 
-    .shell__mobileClose,.shell__mobileTrigger {
+    .shell__mobileClose {
       padding: 0.5rem;
+      width: 2.5rem;
+      height: 2.5rem;
 }
 
-    .shell__mobileTrigger,.shell__personaTrigger {
+    .shell__mobileTrigger {
+      padding: 0.5rem;
       display: inline-flex;
 }
 
     .shell__personaTrigger {
       padding: 0.125rem;
       position: relative;
+      display: inline-flex;
       flex-shrink: 0;
       align-items: center;
       justify-content: center;
@@ -8648,6 +8619,7 @@
   .page__content--kind_knowledge {
     gap: 1.5rem;
     display: grid;
+    align-content: start;
     max-width: 96rem;
 }
 
@@ -11545,10 +11517,6 @@
     background: var(--colors-accent\.primary);
 }
 
-  .bg_bg\.default {
-    background: var(--colors-bg\.default);
-}
-
   .p_2 {
     padding: var(--spacing-2);
 }
@@ -11795,10 +11763,6 @@
 
   .grid-tc_1fr {
     grid-template-columns: 1fr;
-}
-
-  .grid-tc_minmax\(15rem\,_20rem\)_minmax\(0\,_1fr\) {
-    grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
 }
 
   .d_grid {
@@ -12651,10 +12615,6 @@
     margin-top: 0.75rem;
 }
 
-  .max-w_32rem {
-    max-width: 32rem;
-}
-
   .w_90\% {
     width: 90%;
 }
@@ -12993,6 +12953,10 @@
     min-width: 15rem;
 }
 
+  .max-w_calc\(100vw_-_2rem\) {
+    max-width: calc(100vw - 2rem);
+}
+
   .max-h_min\(28rem\,_70vh\) {
     max-height: min(28rem, 70vh);
 }
@@ -13117,6 +13081,10 @@
     margin: var(--spacing-0);
 }
 
+  .\[\&_\>_button\]\:py_2 > button {
+    padding-block: var(--spacing-2);
+}
+
   .\[\&_\>_\*\:not\(\:first-child\)\:not\(\:last-child\)\]\:bdr_0 > *:not(:first-child):not(:last-child) {
     border-radius: 0;
 }
@@ -13141,8 +13109,12 @@
     font-variant-numeric: tabular-nums;
 }
 
-  .\[\&\[aria-current\=\"page\"\]\]\:fw_semibold[aria-current="page"] {
+  .\[\&\[aria-current\=\"page\"\]\]\:fw_semibold[aria-current="page"],.\[\&\[data-current\=\"true\"\]\]\:fw_semibold[data-current="true"] {
     font-weight: var(--font-weights-semibold);
+}
+
+  .\[\&_\>_button\]\:white-space_normal > button {
+    white-space: normal;
 }
 
   .\[\&_h2\]\:fs_2xl h2 {
@@ -13187,6 +13159,22 @@
 
   .\[\&_svg\]\:h_auto svg {
     height: auto;
+}
+
+  .\[\&_\>_button\]\:min-w_0 > button {
+    min-width: var(--sizes-0);
+}
+
+  .\[\&_\>_button\]\:max-w_full > button {
+    max-width: var(--sizes-full);
+}
+
+  .\[\&_\>_button\]\:h_auto > button {
+    height: auto;
+}
+
+  .\[\&_\>_button\]\:min-h_10 > button {
+    min-height: var(--sizes-10);
 }
 
   .last\:bd-b-w_0:last-child {

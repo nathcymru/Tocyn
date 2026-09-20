@@ -1,7 +1,6 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
-import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
 import { Badge, Field as ParkField } from '@luminatick/ui/components';
 import React, { useEffect, useState } from 'react';
 import { dashboardApi } from '../api/client';
@@ -52,6 +51,9 @@ function conditionCount(value: string | null | undefined) {
 export const AutomationPage: React.FC = () => {
   const heading = React.useRef<HTMLHeadingElement>(null);
   const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
+  const deleteCancel = React.useRef<HTMLButtonElement | null>(null);
+  const deleteTitleId = React.useId();
+  const deleteDescriptionId = React.useId();
   const deleteGuard = React.useRef(false);
   const deleteSucceeded = React.useRef(false);
   const [deletion, setDeletion] = useState<AutomationRule | null>(null);
@@ -423,10 +425,29 @@ export const AutomationPage: React.FC = () => {
           ))
         )}
       </div>
-      <TocynConfirmDialog open={deleteOpen} busy={deleting} title={`Delete rule: ${deletion?.name ?? ''}`}
-        description="Delete this automation rule? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete rule'} error={deleteError}
-        onConfirm={handleDelete} onOpenChange={next => { if (!next && !deleteGuard.current) setDeleteOpen(false); }}
-        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
+      <ParkDialog.Root open={deleteOpen} onOpenChange={({ open }) => { if (!deleting && !deleteGuard.current) setDeleteOpen(open); }}
+        initialFocusEl={() => deleteCancel.current}
+        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current}
+        closeOnEscape={!deleting} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={deleteTitleId} aria-describedby={deleteDescriptionId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={deleteTitleId}>{`Delete rule: ${deletion?.name ?? ''}`}</ParkDialog.Title>
+            </ParkDialog.Header>
+            <ParkDialog.Body>
+              <ParkDialog.Description id={deleteDescriptionId}>Delete this automation rule? This action cannot be undone.</ParkDialog.Description>
+              {deleteError && <ParkAlert.Root role="alert" aria-atomic="true" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton ref={deleteCancel} type="button" disabled={deleting} onClick={() => setDeleteOpen(false)}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={deleting} onClick={handleDelete}>{deleting ? 'Deleting...' : 'Delete rule'}</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 };

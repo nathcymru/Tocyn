@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { ParkAlert, ParkButton, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkDialog, ParkTextarea } from '@luminatick/ui/park';
 import { Field as ParkField } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useTicketAssignment } from '../hooks/useTicketAssignment';
@@ -9,7 +8,7 @@ import { DashboardSelect } from './DashboardSelect';
 
 const assignmentStyles = {
   panel: css({ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }),
-  dialog: css({ width: '100%', maxWidth: '32rem', display: 'grid', gap: '0.75rem', padding: '1.5rem' }),
+  dialogBody: css({ width: '100%', display: 'grid', gap: '0.75rem' }),
   note: css({ margin: '0', color: 'text.muted' }),
 };
 
@@ -49,26 +48,36 @@ function AssignmentPanel({ ticketId, ownerId, fresh, disabled, agents, refreshTi
     {!fresh && <p role="status">Refresh current ticket details before assigning.</p>}
     {admin && <ParkButton ref={trigger} type="button" aria-disabled={unavailable} onClick={() => { if (!unavailable) setOpen(true); }}>Override assignment capacity</ParkButton>}
     {!open && status}
-    <TocynDialog open={open} onOpenChange={setOpen} labelledBy={titleId}
-      initialFocusEl={() => close.current} finalFocusEl={() => trigger.current}>
-      <div className={assignmentStyles.dialog}>
-        <h2 id={titleId}>Override assignment capacity</h2>
-        <ParkButton ref={close} type="button" onClick={() => setOpen(false)}>Close assignment override</ParkButton>
-        <p className={assignmentStyles.note}>Administrators can explicitly override availability or the assignment ceiling. Current access rules still apply. The reason is recorded in the internal audit.</p>
-        <p>Current owner: {ownerId === null ? 'Unassigned' : agents.find(agent => agent.id === ownerId)?.full_name || 'Assigned operator'}</p>
-        <DashboardSelect id={ownerIdInput} label="Assign to operator" value={selected} disabled={action.blocked} onValueChange={setSelected} options={[{ value: '', label: 'Choose an operator' }, ...agents.map(agent => ({ value: agent.id, label: agent.full_name || agent.email }))]} />
-        <ParkField.Root>
-          <ParkField.Label htmlFor={reasonId}>Override reason</ParkField.Label>
-          <ParkTextarea id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
-          <ParkField.HelperText>A reason is required. Keep it brief.</ParkField.HelperText>
-        </ParkField.Root>
-        {reason.trim() && !reasonValid && <ParkAlert.Root role="alert" status="error" variant="surface">
-          <ParkAlert.Content><ParkAlert.Description>The reason is too long. Shorten it before assigning.</ParkAlert.Description></ParkAlert.Content>
-        </ParkAlert.Root>}
-        <ParkButton type="button" disabled={!fresh || disabled || action.blocked || !selected || !reasonValid}
-          onClick={() => action.override(selected, ownerId, reason)}>Assign with audited override</ParkButton>
-        {status}
-      </div>
-    </TocynDialog>
+    <ParkDialog.Root open={open} onOpenChange={({ open: next }) => setOpen(next)}
+      initialFocusEl={() => close.current} finalFocusEl={() => trigger.current}
+      closeOnInteractOutside={false} lazyMount unmountOnExit size="lg">
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={titleId}>
+          <ParkDialog.Header>
+            <ParkDialog.Title id={titleId}>Override assignment capacity</ParkDialog.Title>
+            <ParkButton ref={close} type="button" variant="plain" onClick={() => setOpen(false)}>Close assignment override</ParkButton>
+          </ParkDialog.Header>
+          <ParkDialog.Body className={assignmentStyles.dialogBody}>
+            <p className={assignmentStyles.note}>Administrators can explicitly override availability or the assignment ceiling. Current access rules still apply. The reason is recorded in the internal audit.</p>
+            <p>Current owner: {ownerId === null ? 'Unassigned' : agents.find(agent => agent.id === ownerId)?.full_name || 'Assigned operator'}</p>
+            <DashboardSelect id={ownerIdInput} label="Assign to operator" value={selected} disabled={action.blocked} onValueChange={setSelected} options={[{ value: '', label: 'Choose an operator' }, ...agents.map(agent => ({ value: agent.id, label: agent.full_name || agent.email }))]} />
+            <ParkField.Root>
+              <ParkField.Label htmlFor={reasonId}>Override reason</ParkField.Label>
+              <ParkTextarea id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
+              <ParkField.HelperText>A reason is required. Keep it brief.</ParkField.HelperText>
+            </ParkField.Root>
+            {reason.trim() && !reasonValid && <ParkAlert.Root role="alert" status="error" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>The reason is too long. Shorten it before assigning.</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>}
+            {status}
+          </ParkDialog.Body>
+          <ParkDialog.Footer>
+            <ParkButton type="button" disabled={!fresh || disabled || action.blocked || !selected || !reasonValid}
+              onClick={() => action.override(selected, ownerId, reason)}>Assign with audited override</ParkButton>
+          </ParkDialog.Footer>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>
   </div>;
 }

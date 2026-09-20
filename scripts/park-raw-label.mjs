@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-const activeAppTsx = /^apps\/(?:dashboard|portal|widget)\/src\/.+\.tsx$/;
+const activeAppTsx = /^(?:apps\/(?:dashboard|portal|widget)\/src\/.+|tools\/ui-browser\/fixture\/.+)\.tsx$/;
 
 /** Reject native labels in rendered app JSX while keeping Park slot labels. */
 export function parkRawLabelFailure(relative, node, sourceFile) {

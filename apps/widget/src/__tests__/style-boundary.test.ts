@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { widgetBrandColor } from '../widgetStyles';
+import { w, widgetBrandColor } from '../widgetStyles';
 import { appendLegacyWidgetCss } from '../compatibility-styles';
 
 const source = (relativePath: string) => readFile(
@@ -43,6 +43,13 @@ describe('shared stylesheet entry boundaries', () => {
     expect(widgetMain.toLowerCase()).not.toContain('tailwind');
     expect(widgetMain).not.toContain('document.head.appendChild');
     expect(widgetMain.indexOf('appendLegacyWidgetCss(shadow)')).toBeGreaterThan(widgetMain.indexOf('shadow.appendChild(primitiveStyleElement)'));
+  });
+
+  it('rebinds the default Park palette where the light tokens exist in the ShadowRoot', async () => {
+    const pandaCss = await source('../../../../packages/ui/src/styles/panda.css');
+    expect(w.host.split(' ')).toContain('color-palette_gray');
+    expect(pandaCss).toMatch(/\.color-palette_gray\s*\{[^}]*--colors-color-palette-solid-bg:\s*var\(--colors-gray-solid-bg\)/);
+    expect(pandaCss).toMatch(/:where\(:root, \.light\)\s*\{[^}]*--colors-gray-solid-bg:/);
   });
 
   it('keeps the optional host CSS absent by default and accepts only a primitive string inside the ShadowRoot', () => {

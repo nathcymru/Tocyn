@@ -3,10 +3,10 @@ import { css } from '@luminatick/ui/styled-system/css';
 // The shared Panda sheet is injected into the widget ShadowRoot. These styles
 // compose Park controls and read the validated tenant colour from one CSS var.
 export const w = {
-  host: css({ position: 'fixed', bottom: '5', right: '5', zIndex: 'modal', fontFamily: 'primary', color: 'text.primary' }),
+  host: css({ position: 'fixed', bottom: '5', right: '5', zIndex: 'modal', fontFamily: 'primary', color: 'text.primary', colorPalette: 'gray' }),
   launcherWrap: css({ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }),
   panel: css({ display: 'flex', w: { base: 'calc(100vw - 2.5rem)', sm: '24rem' }, maxH: 'min(600px, calc(100dvh - 7.5rem))', flexDirection: 'column', mb: '4', bg: 'bg.surface', rounded: 'lg', boxShadow: 'xl', overflow: 'hidden', borderWidth: '1px', borderTopWidth: '3px', borderColor: 'border.default', borderTopColor: 'var(--widget-brand-color)' }),
-  panelHeader: css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: '4', bg: 'bg.default', color: 'fg.default', borderBottomWidth: '1px', borderColor: 'border.default' }),
+  panelHeader: css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: '4', bg: 'bg.surface', color: 'fg.default', borderBottomWidth: '1px', borderColor: 'border.default' }),
   panelTitle: css({ m: '0', fontSize: 'lg', fontWeight: 'semibold' }),
   close: css({ display: 'grid', minW: '11', minH: '11', placeItems: 'center' }),
   closeIcon: css({ w: '6', h: '6' }),
@@ -33,10 +33,10 @@ export const w = {
   aiMessageRow: css({ display: 'flex', justifyContent: 'flex-start' }),
   aiMessageRowUser: css({ justifyContent: 'flex-end' }),
   aiMessage: css({ maxW: '85%', overflowWrap: 'break-word', whiteSpace: 'pre-wrap', px: '3', py: '2', rounded: 'lg', fontSize: 'sm' }),
-  aiMessageUser: css({ bg: 'bg.subtle', color: 'fg.default', borderWidth: '1px', borderColor: 'border.default' }),
-  aiMessageAssistant: css({ bg: 'bg.default', color: 'fg.default', borderWidth: '1px', borderColor: 'border.default' }),
+  aiMessageUser: css({ bg: 'bg.input', color: 'fg.default', borderWidth: '1px', borderColor: 'border.default' }),
+  aiMessageAssistant: css({ bg: 'bg.surface', color: 'fg.default', borderWidth: '1px', borderColor: 'border.default' }),
   aiWaiting: css({ display: 'flex', justifyContent: 'flex-start' }),
-  aiWaitingBubble: css({ display: 'grid', gap: '2', px: '3', py: '2', rounded: 'lg', bg: 'bg.subtle' }),
+  aiWaitingBubble: css({ display: 'grid', gap: '2', px: '3', py: '2', rounded: 'lg', bg: 'bg.input' }),
   aiWaitingLabel: css({ color: 'text.muted', fontSize: 'sm' }),
   aiComposer: css({ display: 'flex', gap: '2' }),
   chatInput: css({ minW: '0', flex: '1' }),

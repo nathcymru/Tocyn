@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -54,7 +54,16 @@ it('opens by keyboard with close focus and Escape returns to the override opener
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   show(); const opener = screen.getByRole('button', { name: 'Override assignment capacity' });
   opener.focus(); await userEvent.keyboard('{Enter}');
+  const dialog = await screen.findByRole('dialog', { name: 'Override assignment capacity' });
+  expect(dialog).toHaveClass('dialog__content');
+  expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+  expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Override assignment capacity');
+  expect(dialog.querySelector('.dialog__body')).toContainElement(screen.getByRole('combobox', { name: 'Assign to operator' }));
+  expect(dialog.querySelector('.dialog__footer')).toContainElement(screen.getByRole('button', { name: 'Assign with audited override' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Close assignment override' })).toHaveFocus());
+  fireEvent.pointerDown(document.body);
+  fireEvent.click(document.body);
+  expect(dialog).toBeInTheDocument();
   await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
   await userEvent.tab({ shift: true }); expect(screen.getByLabelText('Override reason')).toHaveFocus();
   await userEvent.tab(); expect(screen.getByRole('button', { name: 'Close assignment override' })).toHaveFocus();

@@ -17,6 +17,13 @@ async function openDelete(category:boolean){
 }
 it('exposes named category actions and cancels back to the category opener without deleting',async()=>{
  const {opener,dialog}=await openDelete(true);expect(dialog).toHaveTextContent('Synthetic category');
+ expect(dialog).toHaveClass('dialog__content');
+ expect(dialog).toHaveAccessibleDescription('Are you sure you want to delete the category "Synthetic category"?');
+ expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+ expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Confirm Deletion');
+ expect(dialog.querySelector('.dialog__body .dialog__description')).toHaveTextContent('Synthetic category');
+ expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Cancel'}));
+ fireEvent.pointerDown(document.body);fireEvent.click(document.body);expect(dialog).toBeInTheDocument();
  fireEvent.keyDown(document.activeElement!,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  await waitFor(()=>expect(opener).toHaveFocus());expect(api.delete).not.toHaveBeenCalled();
  expect(screen.getByRole('button',{name:'Add subcategory to Synthetic category'}).parentElement).not.toHaveClass('hidden');
@@ -75,6 +82,8 @@ it('shows Park loading and a retryable failure before the article table is empty
  fireEvent.click(screen.getByRole('button',{name:'Retry knowledge'}));
  expect(screen.getByRole('status',{name:'Loading knowledge articles'})).toBeInTheDocument();
  expect(await screen.findByText('No articles found')).toBeInTheDocument();
+ expect(screen.queryByRole('table')).not.toBeInTheDocument();
+ expect(screen.getByText('No articles found').closest('.emptyState__root')).toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Create article'})).toBeInTheDocument();
 });
 
@@ -82,4 +91,5 @@ it('uses a named Park button to open an article from the table', async () => {
  render(<MemoryRouter><KnowledgePage/></MemoryRouter>);
  const edit = await screen.findByRole('button',{name:'Edit Synthetic article'});
  expect(edit).toBeInTheDocument();
+ expect(screen.getByRole('table')).toBeInTheDocument();
 });

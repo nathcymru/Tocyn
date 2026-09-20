@@ -2,9 +2,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FiltersSettingsPage } from '../pages/FiltersSettingsPage';
 import { AutomationPage } from '../pages/AutomationPage';
-import type { TocynConfirmDialogProps } from '@luminatick/ui/dialog';
-interface ExtendedConfirmation extends TocynConfirmDialogProps { auditLabel?: string }
-const descriptionContract:Pick<ExtendedConfirmation,'description'|'confirmLabel'|'auditLabel'>={description:'Confirmation',confirmLabel:'Delete',auditLabel:'synthetic'};
 const fixture=vi.hoisted(()=>({remove:vi.fn(),get:vi.fn()}));
 vi.mock('../api/client',()=>({dashboardApi:{get:fixture.get,delete:fixture.remove}}));
 vi.mock('../hooks/useFilters',()=>({useFilters:()=>({data:[{id:'filter-a',name:'Synthetic filter',conditions:[]}],isLoading:false}),useCreateFilter:()=>({mutateAsync:vi.fn()}),useUpdateFilter:()=>({mutateAsync:vi.fn()}),useDeleteFilter:()=>({mutateAsync:fixture.remove})}));
@@ -20,6 +17,11 @@ for(const entry of [
  async function open(){render(<entry.Page/>);const opener=await screen.findByRole('button',{name:entry.opener});opener.focus();fireEvent.click(opener);const dialog=await screen.findByRole('dialog',{name:entry.title});await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());return{opener,dialog};}
  it(`names/describes ${entry.kind} confirmation and restores focus on cancellation without mutation`,async()=>{
   const {opener,dialog}=await open();expect(dialog).toHaveAccessibleDescription(/cannot be undone/);
+  expect(dialog).toHaveAttribute('data-scope','dialog');expect(dialog).toHaveAttribute('data-part','content');expect(dialog).toHaveClass('dialog__content');
+  expect(dialog.parentElement).toHaveAttribute('data-part','positioner');
+  expect(dialog.querySelector('[data-part="title"]')).toHaveTextContent(entry.title);
+  expect(dialog.querySelector('[data-part="description"]')).toHaveTextContent('This action cannot be undone.');
+  expect(dialog.querySelector('.dialog__footer')).toBeInTheDocument();
   expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveAttribute('type','button');
   fireEvent.keyDown(document.activeElement!,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());await waitFor(()=>expect(opener).toHaveFocus());expect(fixture.remove).not.toHaveBeenCalled();
  });

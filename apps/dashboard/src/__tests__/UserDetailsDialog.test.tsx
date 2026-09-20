@@ -12,7 +12,14 @@ it.each([['Profile details','User Profile'],['View Activity','User Activity Log'
   const opener=screen.getByRole('button',{name:triggerName});opener.focus();fireEvent.click(opener);
   const dialog=await screen.findByRole('dialog',{name:title});
   expect(dialog).toHaveAttribute('aria-modal','true');
+  expect(dialog).toHaveClass('dialog__content');
+  expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+  expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent(title);
+  expect(dialog.querySelector('.dialog__body')).toBeInTheDocument();
+  expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Close'}));
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Close user details'})).toHaveFocus());
+  fireEvent.pointerDown(document.body);fireEvent.click(document.body);
+  expect(dialog).toBeInTheDocument();
   fireEvent.keyDown(document.activeElement!,{key:'Escape'});
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(()=>expect(opener).toHaveFocus());

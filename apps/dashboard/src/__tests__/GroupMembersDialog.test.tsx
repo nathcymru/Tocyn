@@ -19,6 +19,9 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks();});
 async function openMembers(){
  render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Members'});opener.focus();fireEvent.click(opener);
  const dialog=await screen.findByRole('dialog',{name:'Manage Members: Support'});
+ expect(dialog).toHaveAttribute('data-scope','dialog');expect(dialog).toHaveAttribute('data-part','content');expect(dialog).toHaveClass('dialog__content');
+ expect(dialog.parentElement).toHaveClass('dialog__positioner');expect(document.querySelector('[data-scope="dialog"][data-part="backdrop"]')).toHaveClass('dialog__backdrop');
+ expect(dialog.querySelector('[data-part="title"]')).toHaveTextContent('Manage Members: Support');
  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Close group members'})).toHaveFocus());return {opener,dialog};
 }
 it('keeps the Park table structure and unifies the member search icon with its input',async()=>{
@@ -36,6 +39,24 @@ it('offers a retryable empty state when the group list cannot be loaded',()=>{
  expect(screen.getByRole('alert')).toHaveTextContent('Groups could not be loaded');
  fireEvent.click(screen.getByRole('button',{name:'Retry groups'}));
  expect(fixture.refetchGroups).toHaveBeenCalledOnce();
+});
+it('gives the zero-groups state the full card width instead of a four-column table cell', async () => {
+ fixture.groupsEmpty=true;
+ render(<GroupsPage/>);
+ const empty=screen.getByRole('region',{name:'No groups found.'});
+ expect(empty).toHaveClass('emptyState__root');
+ expect(empty.parentElement).toHaveClass('card__body');
+ expect(empty.closest('.card__root')).toBeInTheDocument();
+ expect(empty.closest('table')).toBeNull();
+ expect(screen.queryByRole('table')).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Create Group'}));
+ expect(await screen.findByRole('dialog',{name:'New Support Group'})).toBeInTheDocument();
+});
+it('keeps a non-admin zero-groups state without a create action', () => {
+ fixture.groupsEmpty=true;fixture.admin=false;
+ render(<GroupsPage/>);
+ expect(screen.getByRole('region',{name:'No groups found.'})).toHaveTextContent('No groups are available in this workspace.');
+ expect(screen.queryByRole('button',{name:'Create Group'})).not.toBeInTheDocument();
 });
 it('labels member actions and restores the opener on Escape',async()=>{
  const {opener,dialog}=await openMembers();
@@ -116,6 +137,9 @@ it('creates through labelled fields, retaining a failed draft and guarding dupli
  let reject!:(error:Error)=>void;fixture.create.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
  render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Create Group'});opener.focus();fireEvent.click(opener);
  const dialog=await screen.findByRole('dialog',{name:'New Support Group'});const name=within(dialog).getByRole('textbox',{name:'Group Name'});
+ expect(dialog).toHaveAttribute('data-scope','dialog');expect(dialog).toHaveAttribute('data-part','content');expect(dialog).toHaveClass('dialog__content');
+ expect(dialog.parentElement).toHaveClass('dialog__positioner');expect(document.querySelector('[data-scope="dialog"][data-part="backdrop"]')).toHaveClass('dialog__backdrop');
+ expect(dialog.querySelector('[data-part="title"]')).toHaveTextContent('New Support Group');
  expect(name.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
  expect(name).toHaveAccessibleDescription('Use a short, clear team name.');
  const description=within(dialog).getByRole('textbox',{name:'Description (Optional)'});
@@ -142,6 +166,8 @@ it('cancels group deletion safely and locks failed/retried deletion until comple
  let reject!:(error:Error)=>void;fixture.delete.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});
  render(<GroupsPage/>);const opener=screen.getByRole('button',{name:'Delete Support'});opener.focus();fireEvent.click(opener);
  let dialog=await screen.findByRole('dialog',{name:'Delete group: Support'});const cancel=within(dialog).getByRole('button',{name:'Cancel'});
+ expect(dialog).toHaveAttribute('data-part','content');expect(dialog).toHaveClass('dialog__content');
+ expect(dialog.parentElement).toHaveClass('dialog__positioner');expect(dialog.querySelector('[data-part="title"]')).toHaveTextContent('Delete group: Support');
  await waitFor(()=>expect(cancel).toHaveFocus());fireEvent.click(cancel);await waitFor(()=>expect(opener).toHaveFocus());expect(fixture.delete).not.toHaveBeenCalled();
  fireEvent.click(opener);dialog=await screen.findByRole('dialog',{name:'Delete group: Support'});
  const remove=within(dialog).getByRole('button',{name:'Delete group'});

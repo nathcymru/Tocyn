@@ -10,7 +10,16 @@ beforeEach(()=>{client=new QueryClient({defaultOptions:{queries:{retry:false},mu
 afterEach(()=>{cleanup();client.clear();vi.restoreAllMocks();vi.resetAllMocks();});
 async function open(){render(<QueryClientProvider client={client}><EmailChannelPage/></QueryClientProvider>);const opener=await screen.findByRole('button',{name:'Remove support@example.invalid'});opener.focus();fireEvent.click(opener);const dialog=await screen.findByRole('dialog',{name:'Remove email channel: support@example.invalid'});await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Cancel'})).toHaveFocus());return{opener,dialog};}
 it('requires confirmation and restores focus on cancellation without a provider or deletion request',async()=>{
- const {opener}=await open();fireEvent.keyDown(document.activeElement!,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());await waitFor(()=>expect(opener).toHaveFocus());expect(api.delete).not.toHaveBeenCalled();
+ const {opener,dialog}=await open();
+ expect(dialog).toHaveClass('dialog__content');
+ expect(dialog).toHaveAccessibleDescription('Remove this configured email channel?');
+ expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+ expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Remove email channel: support@example.invalid');
+ expect(dialog.querySelector('.dialog__body .dialog__description')).toHaveTextContent('Remove this configured email channel?');
+ expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Cancel'}));
+ fireEvent.pointerDown(document.body);fireEvent.click(document.body);
+ expect(dialog).toBeInTheDocument();
+ fireEvent.keyDown(document.activeElement!,{key:'Escape'});await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());await waitFor(()=>expect(opener).toHaveFocus());expect(api.delete).not.toHaveBeenCalled();
 });
 it('guards pending removal and preserves an unconfirmed target for retry',async()=>{
  let reject!:(error:Error)=>void;api.delete.mockImplementationOnce(()=>new Promise((_resolve,r)=>{reject=r;})).mockResolvedValueOnce({});const {dialog}=await open();const remove=within(dialog).getByRole('button',{name:'Remove channel'});fireEvent.click(remove);fireEvent.click(remove);await waitFor(()=>expect(api.delete).toHaveBeenCalledTimes(1));

@@ -207,6 +207,7 @@ it('keeps the sole account menu in the mobile header when navigation dialog open
   expect(within(dialog).queryByRole('button', { name: 'Account options' })).not.toBeInTheDocument();
   // Ark correctly makes the background header inert while the modal dialog is open.
   expect(document.querySelector('header.shell__header')).toContainElement(account);
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Close navigation' })).toHaveFocus());
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(dialog).not.toBeInTheDocument());
   account.focus();
@@ -305,7 +306,11 @@ it('keeps the account menu concise and connection recovery reachable', async () 
 
 it('closes mobile navigation after a selected destination and focuses the workspace', async () => {
   await renderReady(); fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
-  fireEvent.click(within(await screen.findByRole('dialog', { name: 'Navigation' })).getByRole('link', { name: 'Dashboard home' }));
+  const navigation = await screen.findByRole('dialog', { name: 'Navigation' });
+  expect(navigation).toHaveClass('dialog__content', 'shell__mobileDialog');
+  expect(navigation.closest('[data-part="positioner"]')).toHaveClass('dialog__positioner');
+  expect(document.querySelector('[data-tocyn-dialog-edge]')).not.toBeInTheDocument();
+  fireEvent.click(within(navigation).getByRole('link', { name: 'Dashboard home' }));
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('main', { name: 'Workspace' })).toHaveFocus();
   expect(screen.getByRole('heading')).toHaveTextContent('Route /');
@@ -467,12 +472,29 @@ it('guards overlapping sign-outs and still clears local authentication when serv
   await renderReady(); await userEvent.click(screen.getByRole('button', { name: 'Account options' }));
   const signOut = await screen.findByRole('menuitem', { name: 'Log out' });
   fireEvent.click(signOut);
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirm Logout' });
+  expect(dialog).toHaveClass('dialog__content');
+  expect(dialog.querySelector('.dialog__title')).toHaveTextContent('Confirm Logout');
+  expect(dialog.querySelector('.dialog__description')).toHaveTextContent('You are about to log out');
   const confirm = await screen.findByRole('button', { name: 'Log Out (10)' });
   fireEvent.click(confirm); fireEvent.click(confirm); expect(dashboardApi.post).toHaveBeenCalledTimes(1);
+  expect(confirm).toBeDisabled();
   await act(async () => reject(new Error('Synthetic failure')));
   expect(useAuthStore.getState().user).toBeNull();
   expect(screen.getByRole('heading')).toHaveTextContent('/login');
   expect(screen.getByRole('alert')).toHaveTextContent('Server sign-out could not be confirmed');
+});
+
+it('returns focus to the account trigger after dismissing the logout confirmation', async () => {
+  await renderReady();
+  const account = screen.getByRole('button', { name: 'Account options' });
+  await userEvent.click(account);
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Log out' }));
+  const confirmation = await screen.findByRole('alertdialog', { name: 'Confirm Logout' });
+  await waitFor(() => expect(within(confirmation).getByRole('button', { name: 'Cancel' })).toHaveFocus());
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(confirmation).not.toBeInTheDocument());
+  await waitFor(() => expect(account).toHaveFocus());
 });
 
 it('contains focus in mobile navigation and restores the persona menu after closing', async () => {

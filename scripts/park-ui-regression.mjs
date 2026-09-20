@@ -18,6 +18,7 @@ for (const retired of [
   'apps/dashboard/src/components/ConversationSlaStatus.tsx',
   'apps/dashboard/vite.config.js',
   'packages/ui/src/primitives.tsx',
+  'packages/ui/src/dialog.tsx',
   'packages/ui/src/workspace.tsx',
   'packages/ui/src/workspace-region.tsx',
 ]) {
@@ -88,9 +89,9 @@ const unresolved = [...css.matchAll(/:\s*((?:colors\.)?(?:colorPalette|gray|blue
 for (const [, value] of unresolved.slice(0, 20)) failures.push(`Generated CSS has unresolved token ${value}`);
 if (unresolved.length > 20) failures.push(`${unresolved.length - 20} more unresolved token declarations`);
 
-// Follow only application imports reachable from app entries. Historical and
-// test-only files are deliberately outside this rendered-surface check.
-const entries = ['apps/dashboard/src/App.tsx', 'apps/portal/src/App.tsx', 'apps/widget/src/App.tsx',
+// Follow rendered app and browser-fixture imports. Historical and unit-test
+// files are deliberately outside this rendered-surface check.
+const entries = ['apps/dashboard/src/App.tsx', 'apps/portal/src/App.tsx', 'apps/widget/src/App.tsx', 'tools/ui-browser/fixture/main.tsx',
   ...fs.readdirSync(path.join(ui, 'src')).filter(name => name.endsWith('.tsx')).map(name => `packages/ui/src/${name}`)];
 const loadedCss = [css, 'packages/ui/src/styles/app-layout.css']
   .map(value => value.endsWith('.css') ? fs.readFileSync(path.join(root, value), 'utf8') : value).join('\n');
@@ -159,7 +160,7 @@ entries.forEach(visit);
 
 // The temporary native-control compatibility API must not be reintroduced.
 // Historical markdown and generated artifacts are intentionally outside this guard.
-const retiredPrimitives = /\b(?:Tocyn(?:Button|Input|Select|Textarea|Panel|EmptyState|IconProps)(?:Props)?|WorkspaceShell|WorkspaceRegion|WorkViewNavigator|ActiveConversation|ContextPanel)\b/;
+const retiredPrimitives = /\b(?:Tocyn(?:Button|Input|Select|Textarea|Panel|EmptyState|IconProps|Dialog|ConfirmDialog)(?:Props)?|WorkspaceShell|WorkspaceRegion|WorkViewNavigator|ActiveConversation|ContextPanel)\b/;
 for (const directory of ['apps/dashboard/src', 'apps/portal/src', 'apps/widget/src', 'packages/ui/src', 'tools/ui-browser']) {
   const pending = [path.join(root, directory)];
   while (pending.length) {
@@ -168,14 +169,17 @@ for (const directory of ['apps/dashboard/src', 'apps/portal/src', 'apps/widget/s
       const target = path.join(current, item.name);
       if (item.isDirectory()) {
         if (!['dist', 'generated', 'node_modules'].includes(item.name)) pending.push(target);
-      } else if (/\.(?:ts|tsx|mjs)$/.test(item.name) && retiredPrimitives.test(fs.readFileSync(target, 'utf8'))) {
-        failures.push(`Retired Tocyn compatibility primitive in active source: ${path.relative(root, target)}`);
+      } else if (/\.(?:ts|tsx|mjs)$/.test(item.name)) {
+        const activeSource = fs.readFileSync(target, 'utf8');
+        if (retiredPrimitives.test(activeSource)) failures.push(`Retired Tocyn compatibility primitive in active source: ${path.relative(root, target)}`);
+        if (/['"]@luminatick\/ui\/dialog['"]/.test(activeSource)) failures.push(`Retired dialog package import in active source: ${path.relative(root, target)}`);
       }
     }
   }
 }
 const uiExports = JSON.parse(fs.readFileSync(path.join(ui, 'package.json'), 'utf8')).exports;
 if (Object.hasOwn(uiExports, './primitives')) failures.push('Retired @luminatick/ui/primitives package entry returned');
+if (Object.hasOwn(uiExports, './dialog')) failures.push('Retired @luminatick/ui/dialog package entry returned');
 
 if (failures.length) {
   console.error(`Park UI regression guard failed (${failures.length}):\n${failures.map(item => `- ${item}`).join('\n')}`);

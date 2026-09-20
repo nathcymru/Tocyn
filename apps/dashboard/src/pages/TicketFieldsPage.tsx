@@ -1,6 +1,5 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
-import { TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import { Badge, Field } from '@luminatick/ui/components';
 import React, { useState } from 'react';
@@ -170,8 +169,12 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
   };
 
   return (
-    <TocynDialog open={open} busy={mutation.isPending} onOpenChange={next => { if (!next) close(); }}
-      labelledBy={titleId} initialFocusEl={() => initialFocus.current} finalFocusEl={finalFocusEl}>
+    <ParkDialog.Root open={open} onOpenChange={({ open: next }) => { if (!next && !mutation.isPending) close(); }}
+      initialFocusEl={() => initialFocus.current} finalFocusEl={finalFocusEl}
+      closeOnEscape={!mutation.isPending} closeOnInteractOutside={false} lazyMount unmountOnExit>
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={titleId}>
         <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
           <ParkDialog.Title id={titleId}>Create Ticket Field</ParkDialog.Title>
           <ParkButton type="button" variant="plain" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close}>
@@ -244,6 +247,8 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
           </ParkDialog.Footer>
           </fieldset>
         </form></ParkDialog.Body>
-    </TocynDialog>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>
   );
 }

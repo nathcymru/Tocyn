@@ -790,6 +790,11 @@ it('opens the active inbox New Ticket dialog with Park anatomy and restores trig
   const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
   expect(dialog).toHaveAttribute('data-scope','dialog');
   expect(dialog).toHaveAttribute('data-part','content');
+  expect(dialog).toHaveClass('dialog__content');
+  expect(dialog.parentElement).toHaveAttribute('data-part','positioner');
+  expect(dialog.parentElement).toHaveClass('dialog__positioner');
+  expect(document.querySelector('[data-scope="dialog"][data-part="backdrop"]')).toHaveClass('dialog__backdrop');
+  expect(within(dialog).getByRole('heading',{name:'Create New Ticket'})).toHaveAttribute('data-part','title');
   await waitFor(()=>expect(within(dialog).getByRole('textbox',{name:'Subject'})).toHaveFocus());
   fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
   await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Create New Ticket'})).not.toBeInTheDocument());

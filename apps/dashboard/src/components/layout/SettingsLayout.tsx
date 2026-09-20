@@ -6,6 +6,7 @@ import {
   IconUser, IconUsers, IconWpforms,
 } from '@luminatick/ui/icons';
 import { ParkButton, ParkEmptyState, ParkMenu } from '@luminatick/ui/park';
+import { Portal } from '@ark-ui/react/portal';
 import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
@@ -36,8 +37,8 @@ const styles = {
   title: css({ m: '0', color: 'fg.default', fontSize: 'xl', fontWeight: 'semibold' }),
   trigger: css({ display: 'inline-flex', minW: '11rem', justifyContent: 'space-between', alignItems: 'center', gap: '3' }),
   triggerIcon: css({ w: '4', h: '4', flexShrink: '0' }),
-  menu: css({ zIndex: '50', minW: '15rem', maxH: 'min(28rem, 70vh)', overflowY: 'auto' }),
-  item: css({ display: 'flex', minW: '0', alignItems: 'center', gap: '3', textDecoration: 'none', '&[aria-current="page"]': { fontWeight: 'semibold' } }),
+  menu: css({ zIndex: '50', minW: '15rem', maxW: 'calc(100vw - 2rem)', maxH: 'min(28rem, 70vh)', overflowY: 'auto' }),
+  item: css({ display: 'flex', minW: '0', alignItems: 'center', gap: '3', textDecoration: 'none', '&[aria-current="page"]': { fontWeight: 'semibold' }, '&[data-current="true"]': { fontWeight: 'semibold' } }),
   itemIcon: css({ w: '4', h: '4', flexShrink: '0' }),
   content: css({ minW: '0' }),
 };
@@ -101,14 +102,24 @@ export function SettingsLayout() {
               </ParkMenu.ItemGroup>
               {channels.length > 0 && <>
                 <ParkMenu.Separator />
-                <ParkMenu.ItemGroup>
-                  <ParkMenu.ItemGroupLabel>Channels</ParkMenu.ItemGroupLabel>
-                  {channels.map(item => <ParkMenu.Item key={item.href} value={item.href} asChild>
-                    <NavLink to={item.href} className={styles.item}>
-                      <item.icon aria-hidden="true" className={styles.itemIcon} />{item.name}
-                    </NavLink>
-                  </ParkMenu.Item>)}
-                </ParkMenu.ItemGroup>
+                {/* A narrow viewport cannot fit another 15rem menu beside this 15rem parent. */}
+                <ParkMenu.Root positioning={{ strategy: 'fixed', overlap: true, overflowPadding: 8 }}>
+                  <ParkMenu.TriggerItem className={styles.item} data-current={channels.some(item => item.href === pathname) ? 'true' : undefined}>
+                    <IconEnvelope aria-hidden="true" className={styles.itemIcon} />Channels
+                    <ParkMenu.Indicator aria-hidden="true" className={styles.triggerIcon} />
+                  </ParkMenu.TriggerItem>
+                  <Portal>
+                    <ParkMenu.Positioner>
+                      <ParkMenu.Content aria-label="Channels" className={styles.menu}>
+                        {channels.map(item => <ParkMenu.Item key={item.href} value={item.href} asChild>
+                          <NavLink to={item.href} className={styles.item}>
+                            <item.icon aria-hidden="true" className={styles.itemIcon} />{item.name}
+                          </NavLink>
+                        </ParkMenu.Item>)}
+                      </ParkMenu.Content>
+                    </ParkMenu.Positioner>
+                  </Portal>
+                </ParkMenu.Root>
               </>}
             </ParkMenu.Content>
           </ParkMenu.Positioner>

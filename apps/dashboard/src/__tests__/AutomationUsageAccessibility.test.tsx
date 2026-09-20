@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { UsagePage } from '../pages/UsagePage';
 import { ApiError } from '../api/client';
@@ -12,7 +12,7 @@ const usageStats = {
  workers: { requests: 0, cpuTime: 0 },
 };
 vi.mock('../api/client',()=>({dashboardApi:api,ApiError:class ApiError extends Error {status:number;constructor(message:string,status:number){super(message);this.status=status;}}}));
-afterEach(()=>{cleanup();vi.resetAllMocks();});
+afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();vi.resetAllMocks();});
 it('associates automation labels, exposes status state, and swaps conditional action controls',async()=>{
  api.get.mockResolvedValue([]);render(<AutomationPage/>);fireEvent.click(await screen.findByRole('button',{name:'Create Rule'}));
  expect(screen.getByRole('button',{name:'Close automation editor'})).toBeInTheDocument();
@@ -63,6 +63,51 @@ it('retains last-loaded automation rules with a Park retry alert after refresh f
  await waitFor(()=>expect(screen.getByText('Current rule')).toBeInTheDocument());
  expect(screen.queryByText('Automation rules could not be refreshed')).not.toBeInTheDocument();
  expect(api.get).toHaveBeenCalledTimes(3);
+});
+
+it('uses Park dialog anatomy and fences automation deletion through focus, Escape and busy retry', async () => {
+ const rule = {id:'rule-a',name:'Synthetic rule',event_type:'ticket.created',action_type:'webhook',conditions:'[]',action_config:'{}',is_active:true};
+ api.get.mockResolvedValue([rule]);
+ let rejectDelete!: (error: Error) => void;
+ api.delete.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectDelete = reject; })).mockResolvedValueOnce({});
+ vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function(this: HTMLElement) {
+   return (this.isConnected && !this.closest('[hidden]') ? [new DOMRect(0, 0, 100, 44)] : []) as unknown as DOMRectList;
+ });
+ vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+ render(<AutomationPage/>);
+ const opener = await screen.findByRole('button', { name: 'Delete Synthetic rule' });
+ await userEvent.click(opener);
+ let dialog = await screen.findByRole('dialog', { name: 'Delete rule: Synthetic rule' });
+ expect(dialog).toHaveClass('dialog__content');
+ expect(dialog).toHaveAccessibleDescription('Delete this automation rule? This action cannot be undone.');
+ expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+ expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Delete rule: Synthetic rule');
+ expect(dialog.querySelector('.dialog__body .dialog__description')).toHaveTextContent('This action cannot be undone.');
+ expect(dialog.querySelector('.dialog__footer')).toContainElement(screen.getByRole('button', { name: 'Cancel' }));
+ await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
+ fireEvent.pointerDown(document.body); fireEvent.click(document.body);
+ expect(dialog).toBeInTheDocument();
+ await userEvent.keyboard('{Escape}');
+ await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+ await waitFor(() => expect(opener).toHaveFocus());
+
+ await userEvent.click(opener);
+ dialog = await screen.findByRole('dialog', { name: 'Delete rule: Synthetic rule' });
+ await userEvent.click(screen.getByRole('button', { name: 'Delete rule' }));
+ expect(screen.getByRole('button', { name: 'Deleting...' })).toBeDisabled();
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+ await userEvent.keyboard('{Escape}');
+ expect(dialog).toBeInTheDocument();
+ await act(async () => rejectDelete(new Error('Synthetic delete failure')));
+ const alert = await screen.findByRole('alert');
+ expect(alert).toHaveClass('alert__root');
+ expect(alert).toHaveTextContent('Rule could not be deleted. Try again.');
+ expect(screen.getByRole('button', { name: 'Delete rule' })).toBeEnabled();
+ await userEvent.click(screen.getByRole('button', { name: 'Delete rule' }));
+ await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+ await waitFor(() => expect(screen.getByRole('heading', { name: 'Automation Rules' })).toHaveFocus());
+ expect(api.delete).toHaveBeenCalledTimes(2);
+ expect(api.delete).toHaveBeenLastCalledWith('/automations/rule-a');
 });
 
 it('names usage credential inputs when the local API reports missing configuration', async () => {

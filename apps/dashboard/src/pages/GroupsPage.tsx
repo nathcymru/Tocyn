@@ -1,5 +1,4 @@
 import { css } from '@luminatick/ui/styled-system/css';
-import { TocynDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable, ParkTextarea } from '@luminatick/ui/park';
 import { Field as ParkField, InputGroup } from '@luminatick/ui/components';
 import React, { useState } from 'react';
@@ -125,7 +124,12 @@ export const GroupsPage: React.FC = () => {
 
       {groupStatus && <p role="status" className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{groupStatus}</p>}
       {groupsError && Boolean(groups?.length) && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>The group list could not be refreshed.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton></ParkAlert.Content></ParkAlert.Root>}
-      <TocynDialog open={isCreating} busy={creating} labelledBy={createTitle} initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current} onOpenChange={next => { if (!next) closeCreate(); }}>
+      <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!open && !creating) closeCreate(); }}
+        initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current}
+        closeOnEscape={!creating} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={createTitle}>
           <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
             <ParkDialog.Title id={createTitle}>New Support Group</ParkDialog.Title>
             <ParkButton type="button" variant="plain" aria-label="Close group editor" disabled={creating} onClick={closeCreate}>
@@ -178,10 +182,15 @@ export const GroupsPage: React.FC = () => {
             </fieldset>
           </form>
           </ParkDialog.Body>
-      </TocynDialog>
-      <TocynDialog open={deleteOpen} busy={deleting} labelledBy={deleteTitle} initialFocusEl={() => deleteCancel.current}
-        finalFocusEl={() => deleteSucceeded.current ? pageHeading.current : deleteOpener.current}
-        onOpenChange={next => { if (!next) closeDelete(); }}>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
+      <ParkDialog.Root open={deleteOpen} onOpenChange={({ open }) => { if (!open && !deleting) closeDelete(); }}
+        initialFocusEl={() => deleteCancel.current} finalFocusEl={() => deleteSucceeded.current ? pageHeading.current : deleteOpener.current}
+        closeOnEscape={!deleting} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={deleteTitle}>
           <ParkDialog.Header><ParkDialog.Title id={deleteTitle}>Delete group: {deleteGroup?.name}</ParkDialog.Title></ParkDialog.Header>
           <ParkDialog.Body>
           <p>Delete this group? It must not have any active tickets. This action cannot be undone.</p>
@@ -191,10 +200,12 @@ export const GroupsPage: React.FC = () => {
             <ParkButton type="button" variant="outline" ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</ParkButton>
             <ParkButton type="button" variant="outline" colorPalette="red" loading={deleting} loadingText="Deleting group…" onClick={handleDeleteGroup}>Delete group</ParkButton>
           </ParkDialog.Footer>
-      </TocynDialog>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
 
-      {groupsError && !groups?.length ? <ParkEmptyState role="alert" title="Groups could not be loaded" description="Retry to load groups before managing members." action={<ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton>} /> : <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
-        <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
+      {groupsError && !groups?.length ? <ParkEmptyState role="alert" title="Groups could not be loaded" description="Retry to load groups before managing members." action={<ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton>} /> : <ParkCard.Root variant="outline"><ParkCard.Body className={groups?.length ? css({ minW: '0', overflowX: 'auto' }) : css({ minW: '0' })}>
+        {!groups?.length ? <ParkEmptyState title="No groups found." description={isAdmin ? 'Create a group to organize your team.' : 'No groups are available in this workspace.'} className={css({ minW: '0', w: 'full', overflowWrap: 'anywhere' })} /> : <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
           <ParkTable.Head>
             <ParkTable.Row>
               <ParkTable.Header>Group Name</ParkTable.Header>
@@ -204,14 +215,7 @@ export const GroupsPage: React.FC = () => {
             </ParkTable.Row>
           </ParkTable.Head>
           <ParkTable.Body>
-            {!groups?.length ? (
-              <ParkTable.Row>
-                <ParkTable.Cell colSpan={4}>
-                  <ParkEmptyState title="No groups found." description={isAdmin ? 'Create a group to organize your team.' : 'No groups are available in this workspace.'} className={css({ minW: '0' })} />
-                </ParkTable.Cell>
-              </ParkTable.Row>
-            ) : (
-              groups?.map((group) => (
+            {groups.map((group) => (
                 <ParkTable.Row key={group.id}>
                   <ParkTable.Cell className={css({ fontWeight: 'medium', color: 'fg.default' })}>{group.name}</ParkTable.Cell>
                   <ParkTable.Cell className={css({ color: 'fg.muted', overflowWrap: 'anywhere' })}>{group.description || 'No description'}</ParkTable.Cell>
@@ -237,10 +241,9 @@ export const GroupsPage: React.FC = () => {
                     )}
                   </div></ParkTable.Cell>
                 </ParkTable.Row>
-              ))
-            )}
+              ))}
           </ParkTable.Body>
-        </ParkTable.Root>
+        </ParkTable.Root>}
       </ParkCard.Body></ParkCard.Root>}
 
       {managingGroupId && managingGroup && (
@@ -301,7 +304,12 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
   );
 
   return (
-    <TocynDialog open={open} busy={pending} labelledBy={titleId} initialFocusEl={() => closeButton.current} finalFocusEl={finalFocusEl} onOpenChange={next => { if (!next) close(); }}>
+    <ParkDialog.Root open={open} onOpenChange={({ open: nextOpen }) => { if (!nextOpen && !pending) close(); }}
+      initialFocusEl={() => closeButton.current} finalFocusEl={finalFocusEl}
+      closeOnEscape={!pending} closeOnInteractOutside={false} lazyMount unmountOnExit>
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={titleId}>
         <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
           <div>
             <ParkDialog.Title id={titleId}>Manage Members: {group.name}</ParkDialog.Title>
@@ -419,6 +427,8 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
         <ParkDialog.Footer>
           <ParkButton type="button" variant="outline" disabled={pending} onClick={close}>Done</ParkButton>
         </ParkDialog.Footer>
-    </TocynDialog>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>
   );
 };

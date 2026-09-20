@@ -16,6 +16,20 @@ async function openEditor(){
  const dialog=await screen.findByRole('dialog',{name:'Create Ticket Field'});
  const label=within(dialog).getByRole('textbox',{name:'Display Label'});await waitFor(()=>expect(label).toHaveFocus());return{opener,dialog,label};
 }
+it('uses installed Park Dialog anatomy and returns focus after idle Escape without discarding a field remotely',async()=>{
+ const {opener,dialog}=await openEditor();
+ expect(dialog).toHaveClass('dialog__content');
+ expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+ expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Create Ticket Field');
+ expect(dialog.querySelector('.dialog__body')).toBeInTheDocument();
+ expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Cancel'}));
+ fireEvent.pointerDown(document.body);fireEvent.click(document.body);
+ expect(dialog).toBeInTheDocument();
+ fireEvent.keyDown(document.activeElement!,{key:'Escape'});
+ await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+ await waitFor(()=>expect(opener).toHaveFocus());
+ expect(dashboardApi.post).not.toHaveBeenCalled();
+});
 it('preserves generated and overridden names, options and active state in the submitted payload',async()=>{
  vi.mocked(dashboardApi.post).mockResolvedValue({});const invalidate=vi.spyOn(client,'invalidateQueries');
  const {opener,dialog,label}=await openEditor();fireEvent.change(label,{target:{value:'Device Model'}});

@@ -1,4 +1,3 @@
-import { TocynDialog } from '@luminatick/ui/dialog';
 import { Field } from '@luminatick/ui/components';
 import { ParkAlert, ParkButton, ParkDialog, ParkInput, ParkTextarea } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
@@ -66,9 +65,12 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
     }
   };
 
-  return <TocynDialog open={open} onOpenChange={onOpenChange} busy={pending}
-    labelledBy={titleId} initialFocusEl={() => subject.current} finalFocusEl={() => trigger.current}
-    className={css({ w: 'min(100% - 2rem, 40rem)', maxH: 'calc(100dvh - 2rem)', overflowY: 'auto' })}>
+  return <ParkDialog.Root open={open} onOpenChange={({ open: nextOpen }) => { if (!pending) onOpenChange(nextOpen); }}
+    initialFocusEl={() => subject.current} finalFocusEl={() => trigger.current}
+    closeOnEscape={!pending} closeOnInteractOutside={false} lazyMount unmountOnExit>
+    <ParkDialog.Backdrop />
+    <ParkDialog.Positioner>
+    <ParkDialog.Content aria-labelledby={titleId} className={css({ w: 'min(100% - 2rem, 40rem)', maxH: 'calc(100dvh - 2rem)', overflowY: 'auto' })}>
     <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
       <ParkDialog.Title id={titleId}>Create New Ticket</ParkDialog.Title>
       <ParkButton type="button" variant="plain" aria-label="Close new ticket" aria-disabled={pending} onClick={close}>
@@ -128,5 +130,7 @@ export function NewTicketDialog({ open, onOpenChange, trigger, onCreated }: {
         {pending ? 'Creating…' : 'Create Ticket'}
       </ParkButton>
     </ParkDialog.Footer>
-  </TocynDialog>;
+    </ParkDialog.Content>
+    </ParkDialog.Positioner>
+  </ParkDialog.Root>;
 }

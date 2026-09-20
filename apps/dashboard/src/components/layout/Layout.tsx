@@ -1,7 +1,6 @@
 import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
-import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkDialog, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { IconButton as ParkIconButton, Link as ParkLink } from '@luminatick/ui/components';
 import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
@@ -47,6 +46,10 @@ function UserMenu({ onNavigate, desktop, labelled, open, onOpenChange }: { onNav
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [logoutCountdown, setLogoutCountdown] = useState(10);
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const accountTrigger = useRef<HTMLButtonElement>(null);
+  const logoutCancel = useRef<HTMLButtonElement>(null);
+  const logoutTitleId = React.useId();
+  const logoutDescriptionId = React.useId();
   const shellStyles = ParkShell();
   const handleNavigate = (path: string) => { onNavigate?.(); navigate(path); };
   useEffect(() => {
@@ -68,7 +71,7 @@ function UserMenu({ onNavigate, desktop, labelled, open, onOpenChange }: { onNav
   return <>
   <ParkMenu.Root open={open} onOpenChange={({ open: nextOpen }) => onOpenChange(nextOpen)} positioning={{ placement: desktop ? 'top-start' : 'bottom-end', strategy: 'fixed' }}>
     <ParkMenu.Trigger asChild>
-      <ParkButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={cn(shellStyles.personaTrigger, desktop && labelled && shellStyles.personaTriggerLabelled)}>
+      <ParkButton ref={accountTrigger} type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={cn(shellStyles.personaTrigger, desktop && labelled && shellStyles.personaTriggerLabelled)}>
         <span className={shellStyles.personaAvatarWrap}>
           <ParkAvatar className={shellStyles.personaAvatar}>
             <ParkAvatarFallback name={user?.full_name || 'Operator'} />
@@ -92,17 +95,21 @@ function UserMenu({ onNavigate, desktop, labelled, open, onOpenChange }: { onNav
       </ParkMenu.Content>
     </ParkMenu.Positioner>
   </ParkMenu.Root>
-  <TocynConfirmDialog
-    open={logoutOpen}
-    onOpenChange={setLogoutOpen}
-    role="alertdialog"
-    busy={logoutBusy}
-    title="Confirm Logout"
-    description="You are about to log out of the system. Please ensure any active work is saved before proceeding. You will need to sign in again to resume access."
-    cancelLabel="Cancel"
-    confirmLabel={`Log Out (${logoutCountdown})`}
-    onConfirm={() => void handleLogout()}
-  />
+  <ParkDialog.Root open={logoutOpen} onOpenChange={({ open: next }) => { if (!logoutBusy) setLogoutOpen(next); }}
+    initialFocusEl={() => logoutCancel.current} finalFocusEl={() => accountTrigger.current}
+    closeOnEscape={!logoutBusy} closeOnInteractOutside={false} lazyMount unmountOnExit>
+    <ParkDialog.Backdrop />
+    <ParkDialog.Positioner>
+      <ParkDialog.Content role="alertdialog" aria-labelledby={logoutTitleId} aria-describedby={logoutDescriptionId}>
+        <ParkDialog.Header><ParkDialog.Title id={logoutTitleId}>Confirm Logout</ParkDialog.Title></ParkDialog.Header>
+        <ParkDialog.Body><ParkDialog.Description id={logoutDescriptionId}>You are about to log out of the system. Please ensure any active work is saved before proceeding. You will need to sign in again to resume access.</ParkDialog.Description></ParkDialog.Body>
+        <ParkDialog.Footer>
+          <ParkButton ref={logoutCancel} type="button" disabled={logoutBusy} onClick={() => setLogoutOpen(false)}>Cancel</ParkButton>
+          <ParkButton type="button" disabled={logoutBusy} onClick={() => void handleLogout()}>{`Log Out (${logoutCountdown})`}</ParkButton>
+        </ParkDialog.Footer>
+      </ParkDialog.Content>
+    </ParkDialog.Positioner>
+  </ParkDialog.Root>
   </>;
 }
 
@@ -423,16 +430,23 @@ function LayoutContent() {
           <aside className={shellStyles.sidebarDesktop}>
             <SidebarContent personaHost={setSidebarPersonaHost} />
           </aside>
-          <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
-          labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
-          finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
-          data-tocyn-dialog-edge=""
-          className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
-          <ParkVisuallyHidden id={`${mobileDialogId}-title`}>Navigation</ParkVisuallyHidden>
-          <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
-            className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
-          <div className={shellStyles.mobileContent}><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
-          </TocynDialog>
+          <ParkDialog.Root ids={{ content: mobileDialogId }} open={isSidebarOpen} onOpenChange={({ open }) => setIsSidebarOpen(open)}
+            initialFocusEl={() => navigationClose.current}
+            finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
+            closeOnInteractOutside={false} lazyMount unmountOnExit>
+            <ParkDialog.Backdrop />
+            <ParkDialog.Positioner>
+              <ParkDialog.Content aria-labelledby={`${mobileDialogId}-title`}
+                className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
+                <ParkVisuallyHidden id={`${mobileDialogId}-title`}>Navigation</ParkVisuallyHidden>
+                <div className={css({ display: 'flex', justifyContent: 'flex-end' })}>
+                  <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
+                    className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
+                </div>
+                <div className={shellStyles.mobileContent}><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
+              </ParkDialog.Content>
+            </ParkDialog.Positioner>
+          </ParkDialog.Root>
 
           <div className={shellStyles.main}>
             <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn(shellStyles.content, isInboxRoute ? shellStyles.contentInbox : shellStyles.contentStandard, !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && shellStyles.contentPadded)}>

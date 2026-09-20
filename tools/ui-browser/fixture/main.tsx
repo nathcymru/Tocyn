@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { ParkButton, ParkInput, ParkSelect, ParkTextarea } from '../../../packages/ui/src/park';
+import { ParkAlert, ParkButton, ParkDialog, ParkInput, ParkSelect, ParkTextarea } from '../../../packages/ui/src/park';
+import { Field as ParkField } from '../../../packages/ui/src/components/ui';
 import { Tabs, Combobox, Splitter, Popover } from '../../../packages/ui/src/components/ui';
 import { Listbox, createListCollection } from '@ark-ui/react';
 import { composeEventHandlers } from '../../../packages/ui/src/types';
-import { TocynConfirmDialog } from '../../../packages/ui/src/dialog';
 
 const mode=new URLSearchParams(location.search).get('style');
 if(mode==='none')document.querySelector('#tocyn-style')?.remove();
@@ -17,26 +17,36 @@ function Fixture(){
  const [choice,setChoice]=React.useState('');const [sizes,setSizes]=React.useState<number[]>([]);
  const [form,setForm]=React.useState('');const [selected,setSelected]=React.useState('');const [tab,setTab]=React.useState('first');
  const [open,setOpen]=React.useState(false);const [busy,setBusy]=React.useState(false);const [error,setError]=React.useState('');
- const [calls,setCalls]=React.useState(0);const [cancelled,setCancelled]=React.useState(0);const pending=React.useRef(false);const opener=React.useRef<HTMLButtonElement>(null);
+ const [calls,setCalls]=React.useState(0);const [cancelled,setCancelled]=React.useState(0);const pending=React.useRef(false);const opener=React.useRef<HTMLButtonElement>(null);const cancel=React.useRef<HTMLButtonElement>(null);
  return <main><h1>Primitive interaction fixture</h1><span data-motion-probe style={{transitionDuration:"5s",animationDuration:"5s"}}>Motion probe</span>
   <form aria-label="Park controls" onSubmit={event=>{event.preventDefault();setForm(JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))));}}>
-   <label htmlFor="subject">Subject</label><ParkInput id="subject" name="subject" required />
+   <ParkField.Root required><ParkField.Label>Subject</ParkField.Label><ParkInput name="subject" required /></ParkField.Root>
    <ParkSelect.Root collection={priorities} defaultValue={['normal']}>
     <ParkSelect.Label>Priority</ParkSelect.Label>
     <ParkSelect.Control><ParkSelect.Trigger><ParkSelect.ValueText /></ParkSelect.Trigger></ParkSelect.Control>
     <ParkSelect.HiddenSelect name="priority" />
     <ParkSelect.Positioner><ParkSelect.Content><ParkSelect.List>{priorities.items.map(item=><ParkSelect.Item key={item.value} item={item}><ParkSelect.ItemText>{item.label}</ParkSelect.ItemText></ParkSelect.Item>)}</ParkSelect.List></ParkSelect.Content></ParkSelect.Positioner>
    </ParkSelect.Root>
-   <label htmlFor="body">Details</label><ParkTextarea id="body" name="body" required />
+   <ParkField.Root required><ParkField.Label>Details</ParkField.Label><ParkTextarea name="body" required /></ParkField.Root>
    <ParkButton type="submit">Save form</ParkButton>
   </form><output aria-label="Form result">{form}</output>
   <ParkButton onClick={composeEventHandlers(event=>event.preventDefault(),()=>setCancelled(count=>count+1))}>Cancel internal action</ParkButton>
   <output aria-label="Internal calls">{cancelled}</output><ParkButton aria-label="Busy action" loading>Busy</ParkButton>
   <ParkButton ref={opener} onClick={()=>{setError('');setOpen(true);}}>Open confirmation</ParkButton>
-  <TocynConfirmDialog open={open} onOpenChange={setOpen} busy={busy} title="Confirm synthetic action" description="Only a local failed action will be simulated." confirmLabel="Confirm action" error={error} finalFocusEl={()=>opener.current} onConfirm={()=>{
+  <ParkDialog.Root open={open} onOpenChange={details=>{if(!busy)setOpen(details.open);}} closeOnEscape={!busy} closeOnInteractOutside={false} initialFocusEl={()=>cancel.current} finalFocusEl={()=>opener.current}>
+   <ParkDialog.Backdrop />
+   <ParkDialog.Positioner><ParkDialog.Content>
+    <ParkDialog.Header><ParkDialog.Title>Confirm synthetic action</ParkDialog.Title></ParkDialog.Header>
+    <ParkDialog.Body><ParkDialog.Description>Only a local failed action will be simulated.</ParkDialog.Description>
+     {error&&<ParkAlert.Root role="alert" status="error" variant="surface"><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+    </ParkDialog.Body>
+    <ParkDialog.Footer><ParkButton type="button" ref={cancel} disabled={busy} onClick={()=>setOpen(false)}>Cancel</ParkButton>
+    <ParkButton type="button" disabled={busy} onClick={()=>{
    if(pending.current)return;pending.current=true;setBusy(true);setCalls(count=>count+1);
    setTimeout(()=>{setError('Synthetic failure. The draft is retained.');pending.current=false;setBusy(false);},300);
-  }}/><output aria-label="Confirmation calls">{calls}</output>
+    }}>Confirm action</ParkButton></ParkDialog.Footer>
+   </ParkDialog.Content></ParkDialog.Positioner>
+  </ParkDialog.Root><output aria-label="Confirmation calls">{calls}</output>
   <Tabs.Root value={tab} onValueChange={details=>setTab(details.value)} activationMode="manual">
    <Tabs.List aria-label="Work panes"><Tabs.Trigger value="first">First pane</Tabs.Trigger><Tabs.Trigger value="second">Second pane</Tabs.Trigger></Tabs.List>
    <Tabs.Content value="first">First content</Tabs.Content><Tabs.Content value="second">Second content</Tabs.Content>

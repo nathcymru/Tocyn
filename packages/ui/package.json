@@ -9,7 +9,6 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/app-layout.css",
     "./ark": "./src/ark.ts",
-    "./dialog": "./src/dialog.tsx",
     "./brand": "./src/brand.tsx",
     "./auth-layout": "./src/auth-layout.tsx",
     "./park": "./src/park.tsx",

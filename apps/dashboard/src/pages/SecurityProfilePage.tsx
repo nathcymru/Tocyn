@@ -1,5 +1,4 @@
-import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { ParkAlert, ParkButton, ParkCard, ParkField, ParkInput } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkField, ParkInput } from '@luminatick/ui/park';
 import { Badge } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect, useRef } from 'react';
@@ -48,6 +47,9 @@ export function SecurityProfilePage() {
   const codeInput = useRef<HTMLInputElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const disableButton = useRef<HTMLButtonElement>(null);
+  const disableCancel = useRef<HTMLButtonElement>(null);
+  const disableTitleId = React.useId();
+  const disableDescriptionId = React.useId();
   const [disableOpen, setDisableOpen] = useState(false);
   useEffect(() => { setSetupData(null); setCode(''); setDisableOpen(false); }, [sessionGeneration]);
   useEffect(() => {
@@ -124,10 +126,29 @@ export function SecurityProfilePage() {
 
   return (
     <div className={securityStyles.page}>
-      <TocynConfirmDialog open={disableOpen} onOpenChange={setDisableOpen} busy={isLoading}
-        title="Disable two-factor authentication?" description="This will make your account less secure and sign you out. You will need to sign in again."
-        confirmLabel="Disable 2FA" error={error ?? undefined} onConfirm={() => { void disableMfa(); }}
-        finalFocusEl={() => user.mfa_enabled ? disableButton.current : heading.current} />
+      <ParkDialog.Root open={disableOpen} onOpenChange={({ open }) => { if (!isLoading) setDisableOpen(open); }}
+        initialFocusEl={() => disableCancel.current}
+        finalFocusEl={() => user.mfa_enabled ? disableButton.current : heading.current}
+        closeOnEscape={!isLoading} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={disableTitleId} aria-describedby={disableDescriptionId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={disableTitleId}>Disable two-factor authentication?</ParkDialog.Title>
+            </ParkDialog.Header>
+            <ParkDialog.Body>
+              <ParkDialog.Description id={disableDescriptionId}>This will make your account less secure and sign you out. You will need to sign in again.</ParkDialog.Description>
+              {error && <ParkAlert.Root role="alert" aria-atomic="true" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton ref={disableCancel} type="button" disabled={isLoading} onClick={() => setDisableOpen(false)}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={isLoading} onClick={() => { void disableMfa(); }}>Disable 2FA</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
       <div>
         <h1 ref={heading} tabIndex={-1} className={securityStyles.title}>Security Profile</h1>
         <p className={securityStyles.description}>

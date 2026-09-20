@@ -1,6 +1,5 @@
 import { DashboardSelect } from '../components/DashboardSelect';
 import { css } from '@luminatick/ui/styled-system/css';
-import { TocynDialog, TocynConfirmDialog } from '@luminatick/ui/dialog';
 import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import { Badge, Field as ParkField } from '@luminatick/ui/components';
 import React, { useState } from 'react';
@@ -35,6 +34,9 @@ export function FiltersSettingsPage() {
   const deleteFilter = useDeleteFilter();
 
   const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
+  const deleteCancel = React.useRef<HTMLButtonElement>(null);
+  const deleteTitleId = React.useId();
+  const deleteDescriptionId = React.useId();
   const heading = React.useRef<HTMLHeadingElement>(null);
   const deletionGuard = React.useRef(false);
   const deleteSucceeded = React.useRef(false);
@@ -161,10 +163,26 @@ export function FiltersSettingsPage() {
       </div>
 
       {deleteStatus && <p role="status">{deleteStatus}</p>}
-      <TocynConfirmDialog open={deleteOpen} busy={deleting} title={`Delete filter: ${deletion?.name ?? ''}`}
-        description="Delete this filter? This action cannot be undone." confirmLabel={deleting ? 'Deleting...' : 'Delete filter'} error={deleteError}
-        onConfirm={handleDelete} onOpenChange={next => { if (!next && !deletionGuard.current) setDeleteOpen(false); }}
-        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} />
+      <ParkDialog.Root open={deleteOpen} onOpenChange={({ open }) => { if (!open && !deleting && !deletionGuard.current) setDeleteOpen(false); }}
+        initialFocusEl={() => deleteCancel.current} finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current}
+        closeOnEscape={!deleting} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={deleteTitleId} aria-describedby={deleteDescriptionId}>
+            <ParkDialog.Body>
+              <ParkDialog.Title id={deleteTitleId}>Delete filter: {deletion?.name ?? ''}</ParkDialog.Title>
+              <ParkDialog.Description id={deleteDescriptionId}>Delete this filter? This action cannot be undone.</ParkDialog.Description>
+              {deleteError && <ParkAlert.Root role="alert" aria-atomic="true" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton type="button" ref={deleteCancel} disabled={deleting} onClick={() => { if (!deletionGuard.current) setDeleteOpen(false); }}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={deleting} onClick={handleDelete}>{deleting ? 'Deleting...' : 'Delete filter'}</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
       {isError && !filters?.length ? <ParkEmptyState role="alert" title="Filters could not be loaded" description="Retry to load saved filters before editing them." action={<ParkButton type="button" onClick={() => void refetch()}>Retry filters</ParkButton>} /> : <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
         {isError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>The filter list could not be refreshed.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetch()}>Retry filters</ParkButton></ParkAlert.Content></ParkAlert.Root>}
         <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
@@ -219,8 +237,12 @@ export function FiltersSettingsPage() {
         </ParkTable.Root>
       </ParkCard.Body></ParkCard.Root>}
 
-      <TocynDialog open={isModalOpen} busy={saving} onOpenChange={open => { if (!open) handleCloseModal(); }}
-        labelledBy={titleId} initialFocusEl={() => nameInput.current} finalFocusEl={() => opener.current}>
+      <ParkDialog.Root open={isModalOpen} onOpenChange={({ open }) => { if (!open && !saving) handleCloseModal(); }}
+        initialFocusEl={() => nameInput.current} finalFocusEl={() => opener.current}
+        closeOnEscape={!saving} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={titleId}>
           <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
               <ParkDialog.Title id={titleId}>
                 {editingFilter ? 'Edit Filter' : 'Create Filter'}
@@ -308,7 +330,9 @@ export function FiltersSettingsPage() {
               </ParkDialog.Footer>
               </fieldset>
             </form></ParkDialog.Body>
-      </TocynDialog>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 }

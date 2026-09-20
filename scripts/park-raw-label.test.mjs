@@ -15,10 +15,9 @@ function failures(relative, content) {
   return found;
 }
 
-test('rejects opening and self-closing raw labels in active app TSX', () => {
+test('rejects opening and self-closing raw labels in active app and browser fixture TSX', () => {
   const source = `<><label htmlFor="name">Name</label>\n<label /></>`;
-  for (const app of ['dashboard', 'portal', 'widget']) {
-    const relative = `apps/${app}/src/App.tsx`;
+  for (const relative of ['apps/dashboard/src/App.tsx', 'apps/portal/src/App.tsx', 'apps/widget/src/App.tsx', 'tools/ui-browser/fixture/main.tsx']) {
     assert.deepEqual(failures(relative, source), [
       `Native label remains in active application source: ${relative}:1`,
       `Native label remains in active application source: ${relative}:2`,
