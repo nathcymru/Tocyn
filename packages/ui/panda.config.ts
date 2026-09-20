@@ -418,10 +418,10 @@ export default {
           className: 'globalSearch',
           slots: ['root', 'inputShell', 'icon', 'input', 'shortcut', 'divider', 'scope', 'clear', 'popover', 'status', 'results', 'result', 'preview'],
           base: {
-            root: { position: 'relative', display: 'flex', flexWrap: { base: 'wrap', md: 'nowrap' }, flex: '1', minWidth: { base: 'min(18rem, 100%)', md: '24rem' }, width: '100%', maxWidth: '36rem', marginInline: 'auto', alignItems: 'center', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.input', color: 'text.primary' },
+            root: { position: 'relative', display: 'flex', flexWrap: { base: 'wrap', md: 'nowrap' }, flex: '1', minWidth: { base: 'min(18rem, 100%)', md: '24rem' }, width: '100%', maxWidth: '36rem', marginInline: 'auto', alignItems: 'center', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.input', color: 'text.primary', '&:has(.globalSearch__input:is(:focus-visible, [data-focus-visible]))': { outlineWidth: 'var(--focus-ring-width, 2px)', outlineStyle: 'solid', outlineColor: 'var(--global-color-focus-ring, #005FCC)', outlineOffset: '2px' } },
             inputShell: { position: 'relative', display: 'flex', flex: { base: '1 1 100%', md: '1 1 0%' }, minWidth: '0', alignItems: 'center' },
             icon: { position: 'static', flexShrink: '0', width: '1rem', height: '1rem', marginInlineStart: '0.75rem', color: 'icon.muted', pointerEvents: 'none' },
-            input: { flex: '1', width: '0', minWidth: '0', minHeight: '2.75rem', border: '0', borderRadius: 'l2', background: 'transparent', paddingInline: '0.5rem', outline: '0' },
+            input: { flex: '1', width: '0', minWidth: '0', minHeight: '2.75rem', border: '0', borderRadius: 'l2', background: 'transparent', paddingInline: '0.5rem', outline: '0', '&:is(:focus-visible, [data-focus-visible])': { outline: 'none' } },
             shortcut: { position: 'static', flexShrink: '0', marginInlineEnd: '0.75rem', color: 'text.muted', fontSize: '0.75rem', pointerEvents: 'none', whiteSpace: 'nowrap' },
             divider: { display: { base: 'none', md: 'block' }, width: '1px', height: '1.5rem', flexShrink: '0', background: 'border.input' },
             scope: { display: 'flex', flexShrink: '0', width: { base: '100%', md: '9rem' }, minWidth: '0', alignItems: 'stretch' },

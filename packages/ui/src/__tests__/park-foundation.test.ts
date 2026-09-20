@@ -36,10 +36,12 @@ describe('Park UI foundation', () => {
     expect(css).not.toMatch(/:focus-visible\s*\{[^}]*outline-width: 2px !important/);
   });
 
-  it('lets the installed Park Input provide the search field focus ring', () => {
+  it('places the Park search focus ring around the full composite', () => {
     const css = read('src/styles/panda.css');
     expect(css).toMatch(/\.input--variant_outline:is\(:focus-visible, \[data-focus-visible\]\)\s*\{[^}]*outline-width: var\(--focus-ring-width, 1px\)/);
-    expect(css).not.toMatch(/\.globalSearch__input:is\(:focus-visible, \[data-focus-visible\]\)/);
+    expect(css).toMatch(/\.globalSearch__root:has\(\.globalSearch__input:is\(:focus-visible, \[data-focus-visible\]\)\)\s*\{[^}]*outline-width: var\(--focus-ring-width, 2px\);[^}]*outline-style: solid;[^}]*outline-color: var\(--global-color-focus-ring, #005FCC\);[^}]*outline-offset: 2px;/);
+    expect(css).toMatch(/\.globalSearch__input:is\(:focus-visible, \[data-focus-visible\]\)\s*\{[^}]*outline: var\(--borders-none\)/);
+    expect(css.indexOf('\n    .globalSearch__input:is(:focus-visible, [data-focus-visible])')).toBeGreaterThan(css.indexOf('\n  .input--variant_outline:is(:focus-visible, [data-focus-visible])'));
   });
 
   it('reserves indicator space in every Select size without overriding the logical end inset', () => {
