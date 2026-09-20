@@ -4,6 +4,7 @@ export type ArticleBodyFormat = typeof ARTICLE_BODY_FORMATS[number];
 export const DEFAULT_ARTICLE_BODY_FORMAT: ArticleBodyFormat = 'plain';
 
 export * from './src/collaboration';
+export * from './priority-matrix';
 
 /**
  * Converts storage values into the explicit format contract. Only a missing
