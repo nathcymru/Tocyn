@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -63,20 +64,22 @@ test('supported interactive npm beta launcher removes credentials/state after Ct
     let output = '';
     let stateDirectory: string | undefined;
     let runDirectory: string | undefined;
+    const existingRuns = new Set(readdirSync(tmpdir()).filter(name => name.startsWith('tocyn-local-tenants-')));
     try {
       terminal = spawn('python3', ['-c', ptyBridge, 'npm', 'run', 'fixture:local-beta', '--workspace=apps/server'], { cwd: repositoryRoot, env, stdio: ['pipe', 'pipe', 'pipe'] });
       const capture = (chunk: Buffer) => {
         output += chunk.toString();
         if (output.length > 128 * 1024) output = output.slice(-128 * 1024);
-        const state = /Local operator state: ([^\r\n]+)/.exec(output)?.[1];
-        if (state && basename(state) === 'state' && basename(dirname(state)).startsWith('tocyn-local-tenants-')) {
-          stateDirectory = state;
-          runDirectory = dirname(state);
-        }
       };
       terminal.stdout!.on('data', capture);
       terminal.stderr!.on('data', capture);
-      await until(() => !!stateDirectory && output.includes('Stop this command to erase its run-owned state.'),
+      await until(() => {
+        const newRuns = readdirSync(tmpdir()).filter(name => name.startsWith('tocyn-local-tenants-') && !existingRuns.has(name));
+        if (newRuns.length !== 1) return false;
+        runDirectory = join(tmpdir(), newRuns[0]);
+        stateDirectory = join(runDirectory, 'state');
+        return existsSync(stateDirectory) && output.includes('READY') && output.includes('Press Ctrl+C to stop the server and erase its run-owned state.');
+      },
         'Interactive guarded fixture must become ready without disclosing terminal output', 30000);
       assert.ok(runDirectory && existsSync(runDirectory));
       assert.ok(existsSync(resolve(runDirectory, '.dev.vars')), 'The actual fixture creates private local credentials');

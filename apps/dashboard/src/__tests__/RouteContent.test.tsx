@@ -25,10 +25,31 @@ it('announces pending route code and then renders it',async()=>{
   let finish!:(module:{default:()=>React.JSX.Element})=>void;
   const Page=lazy(()=>new Promise<{default:()=>React.JSX.Element}>(resolve=>{finish=resolve;}));
   render(<MemoryRouter><RouteContent><Page/></RouteContent></MemoryRouter>);
-  expect(screen.getByRole('status')).toHaveTextContent('Loading page');
+  const loading = screen.getByRole('status', { name: 'Loading page' });
+  expect(loading).toHaveTextContent('Loading page');
+  expect(loading.querySelectorAll('.skeleton')).toHaveLength(4);
   await act(async()=>finish({default:()=> <h1>Loaded ticket page</h1>}));
   expect(screen.getByRole('heading',{name:'Loaded ticket page'})).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+it('adds Park progress with updated status when a route takes longer to load', () => {
+  vi.useFakeTimers();
+  try {
+    const Page = lazy(() => new Promise<{ default: () => React.JSX.Element }>(() => {}));
+    const { unmount } = render(<MemoryRouter><RouteContent><Page /></RouteContent></MemoryRouter>);
+    const loading = screen.getByRole('status', { name: 'Loading page' });
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(4);
+    expect(loading.querySelector('.progress__root')).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(loading.querySelector('.progress__root')).toBeInTheDocument();
+    expect(loading).toHaveTextContent('Preparing this page…');
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(loading).toHaveTextContent('This page is taking longer than expected to load…');
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 it('focuses a safe load-error message, offers a real reload and permits another route without changing auth',async()=>{
   vi.spyOn(console,'error').mockImplementation(()=>{});

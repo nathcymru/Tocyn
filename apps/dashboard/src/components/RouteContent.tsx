@@ -1,6 +1,6 @@
-import { Component, createRef, Suspense, type ReactNode } from 'react';
+import { Component, createRef, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ParkAlert, ParkButton, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkProgress, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 
 const styles = {
@@ -34,11 +34,25 @@ export function RouteContent({ children, persistent = false }: { children: React
 }
 
 function RouteSkeleton() {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    const preparing = window.setTimeout(() => setElapsedSeconds(2), 2_000);
+    const slow = window.setTimeout(() => setElapsedSeconds(5), 5_000);
+    return () => {
+      window.clearTimeout(preparing);
+      window.clearTimeout(slow);
+    };
+  }, []);
+  const slowLoadMessage = elapsedSeconds >= 5
+    ? 'This page is taking longer than expected to load…'
+    : 'Preparing this page…';
   return <section className={styles.skeleton} role="status" aria-label="Loading page" aria-busy="true">
     <ParkSkeleton height="8" width="50%" />
     <ParkSkeleton height="4" width="80%" />
     <ParkSkeleton height="4" width="100%" />
     <ParkSkeleton height="4" width="70%" />
-    <ParkVisuallyHidden>Loading page</ParkVisuallyHidden>
+    {elapsedSeconds >= 2
+      ? <ParkProgress value={null} label={slowLoadMessage} />
+      : <ParkVisuallyHidden>Loading page</ParkVisuallyHidden>}
   </section>;
 }

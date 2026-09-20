@@ -207,7 +207,7 @@ async function main(): Promise<void> {
     process.stdout.write('\n');
   }
   if (localBeta) {
-    process.stdout.write(`${ansi.green}DEMO DATA${ansi.reset}  Eight deterministic synthetic tickets are loaded for review.\n`);
+    process.stdout.write(`${ansi.green}DEMO DATA${ansi.reset}  20 synthetic Inbox conversations are loaded for operator A. Two tenant-B cases remain isolated.\n`);
     process.stdout.write(`${ansi.yellow}Guarded local beta uses two tenants and explicit invitations. Draft cleanup runs every minute.${ansi.reset}\n`);
     for (const key of betaApiKeys) process.stdout.write(`Synthetic local API key (${key.tenantId}): ${key.apiKey}\n`);
     betaApiKeys = [];
