@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -74,5 +74,29 @@ describe('Park UI foundation', () => {
     expect(select).toContain('createStyleContext(select)');
     expect(button).toContain('styled(ark.button, button)');
     expect(select).toContain("from '../phosphor-icons'");
+  });
+
+  it('keeps removed component adapters out of active application source and public exports', () => {
+    const root = resolve(packageRoot, '../..');
+    const sourceRoots = ['apps/dashboard/src', 'apps/portal/src', 'apps/widget/src', 'packages/ui/src'];
+    const legacyNames = ['Button', 'Input', 'Select', 'Textarea', 'Dialog', 'Tabs', 'Popover', 'ScrollArea', 'Splitter', 'EmptyState']
+      .map(name => `Tocyn${name}`);
+    const legacyName = new RegExp(`\\b(?:${legacyNames.join('|')})\\b`);
+    const offenders: string[] = [];
+    const inspect = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.name === '__tests__' || entry.name === 'generated') continue;
+        const path = resolve(directory, entry.name);
+        if (entry.isDirectory()) { inspect(path); continue; }
+        if (!/\.[cm]?[jt]sx?$/.test(entry.name) || /\.(?:test|spec)\.[jt]sx?$/.test(entry.name)) continue;
+        const source = readFileSync(path, 'utf8');
+        if (legacyName.test(source) || source.includes('data-' + 'park')
+          || source.includes('@luminatick/ui/' + 'primitives')) offenders.push(path.replace(`${root}/`, ''));
+      }
+    };
+    sourceRoots.forEach(directory => inspect(resolve(root, directory)));
+    expect(offenders).toEqual([]);
+    const exports = JSON.parse(read('package.json')) as { exports: Record<string, unknown> };
+    expect(exports.exports).not.toHaveProperty('./primitives');
   });
 });
