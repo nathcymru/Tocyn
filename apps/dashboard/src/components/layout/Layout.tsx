@@ -228,7 +228,7 @@ function LayoutContent() {
     }
   }, [desktopPersona, headerPersonaHost, sidebarPersonaHost, personaPortal]);
 
-  useEffect(() => { main.current?.focus(); }, [location.pathname]);
+  useEffect(() => { main.current?.focus({ preventScroll: true }); }, [location.pathname]);
   const loadActivity = React.useCallback(async () => {
     const generation = ++activityRequestGeneration.current;
     setActivityLoading(true); setActivityError(null); setActivityRetry(null);
@@ -461,7 +461,7 @@ function LayoutContent() {
             </main>
           </div>
         </div>
-        {createPortal(<UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} desktop={desktopPersona} labelled={preferences.navigation === 'labelled'} open={accountMenuOpen} onOpenChange={setAccountMenuOpen} />, personaPortal)}
+        {createPortal(<UserMenu onNavigate={() => { setTimeout(() => main.current?.focus({ preventScroll: true }), 50); }} desktop={desktopPersona} labelled={preferences.navigation === 'labelled'} open={accountMenuOpen} onOpenChange={setAccountMenuOpen} />, personaPortal)}
     </div>
   );
 }
