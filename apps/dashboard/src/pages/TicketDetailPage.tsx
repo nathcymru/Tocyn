@@ -233,7 +233,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }:
   ], [selectedSupportStateDefinition, supportState.data, supportStateDraft.definitionId, supportStates]);
   const assignedToOptions = React.useMemo(() => [{ value: '', label: 'Unassigned' }, ...(agents ?? []).map(agent => ({ value: agent.id, label: agent.full_name || agent.email }))], [agents]);
   const groupOptions = React.useMemo(() => [{ value: '', label: 'No Group' }, ...(groups ?? []).map(group => ({ value: group.id, label: group.name }))], [groups]);
-  const customerHistoryEvents = customerHistory.data?.events ?? [];
+  const ticketHistoryEvents = customerHistory.data?.pages.flatMap(page => page.events) ?? [];
   const selectedSupportStateNeedsDetails = Boolean(supportState.data?.definition_id) && !selectedSupportStateDefinition;
 
   const restoreSupportStateDraft = (current = supportState.data) => {
@@ -365,15 +365,31 @@ function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }:
   const customerHistoryLabel = (event: TicketHistoryEvent): string => {
     if (event.kind === 'ticket.intake') return 'Ticket intake';
     if (event.kind === 'ticket.assignment_changed') return 'Ticket assignment changed';
-    if (event.kind === 'ticket.state_changed') return 'Ticket state changed';
+    if (event.kind === 'ticket.state_changed') {
+      const before = event.facts.before;
+      const after = event.facts.after;
+      if (before && after && typeof before === 'object' && typeof after === 'object'
+        && Object.hasOwn(before, 'snoozedUntil') && Object.hasOwn(after, 'snoozedUntil')) {
+        const prior = (before as Record<string, unknown>).snoozedUntil;
+        const next = (after as Record<string, unknown>).snoozedUntil;
+        const valid = (value: unknown) => value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
+        if (valid(prior) && valid(next) && prior !== next) {
+          if (prior === null) return 'Snoozed ticket';
+          if (next === null) return 'Unsnoozed ticket';
+          return 'Changed snooze time';
+        }
+      }
+      return 'Ticket state changed';
+    }
     if (event.kind === 'message.reply') return 'Message reply';
     return `Conversation event: ${event.kind}`;
   };
 
   const customerHistoryActor = (event: TicketHistoryEvent): string => {
-    if (event.actor.kind === 'customer') return 'Customer';
-    if (event.actor.kind === 'api-key') return 'System';
-    return 'Support staff';
+    if (event.actor.kind === 'system' || event.actor.kind === 'api-key' || event.source === 'system') return 'System';
+    if (event.actor.kind === 'customer') return event.actor.id ? `Customer ${event.actor.id}` : 'Customer';
+    const agent = agents?.find(candidate => candidate.id === event.actor.id);
+    return agent?.full_name?.trim() || agent?.email?.trim() || event.actor.id || 'Support staff';
   };
 
   useEffect(() => {
@@ -1376,23 +1392,33 @@ function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }:
               <p className={css({ fontWeight: 'semibold', overflowWrap: 'anywhere' })}>{ticket.customer_email}</p>
               <p className={css({ color: 'text.muted', fontSize: 'xs' })}>Loaded from this tenant-scoped conversation.</p>
             </div>
+            <h3 className={css({ fontSize: 'sm', fontWeight: 'semibold' })}>Ticket history</h3>
             {customerHistory.isLoading ? (
-              <div role="status" aria-label="Loading customer history" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading customer history…</span><ParkSkeleton aria-hidden="true" height="4" width="80%" /><ParkSkeleton aria-hidden="true" height="4" width="60%" /></div>
-            ) : customerHistory.isError ? (
-              <ParkEmptyState headingLevel={3} title="Customer history unavailable" description={customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'} action={<ParkButton type="button" onClick={() => void customerHistory.refetch()}>Retry customer history</ParkButton>} />
-            ) : customerHistoryEvents.length === 0 ? (
-              <ParkEmptyState headingLevel={3} title="No linked customer history" description="No cross-channel identity match was made for this conversation." />
+              <div role="status" aria-label="Loading ticket history" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading ticket history…</span><ParkSkeleton aria-hidden="true" height="4" width="80%" /><ParkSkeleton aria-hidden="true" height="4" width="60%" /></div>
+            ) : customerHistory.isError && !customerHistory.data ? (
+              <ParkEmptyState headingLevel={3} title="Ticket history unavailable" description={customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'} action={<ParkButton type="button" onClick={() => void customerHistory.refetch()}>Retry ticket history</ParkButton>} />
+            ) : ticketHistoryEvents.length === 0 ? (
+              <ParkEmptyState headingLevel={3} title="No ticket history yet" description="Changes to this conversation will appear here." />
             ) : (
-              <ul className={css({ display: 'grid', gap: '2', p: 0, listStyle: 'none' })}>
-                {customerHistoryEvents.map((historyEvent) => (
-                  <li key={historyEvent.id} className={css({ borderTopWidth: '1px', borderColor: 'border.default', pt: '2' })}>
-                    <p className={css({ fontSize: 'sm', fontWeight: 'semibold' })}>{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
-                    <p className={css({ color: 'text.muted', fontSize: 'xs' })}>
-                      {historyEvent.visibility} {historyEvent.source}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul aria-label="Ticket history" className={css({ display: 'grid', gap: '2', p: 0, listStyle: 'none' })}>
+                  {ticketHistoryEvents.map((historyEvent) => {
+                    const recordedAt = utcTimestamp(historyEvent.recordedAt);
+                    const validRecordedAt = Number.isFinite(recordedAt.getTime());
+                    return <li key={historyEvent.id} className={css({ borderTopWidth: '1px', borderColor: 'border.default', pt: '2' })}>
+                      <p className={css({ fontSize: 'sm', fontWeight: 'semibold' })}>{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
+                      <p className={css({ color: 'text.muted', fontSize: 'xs' })}>
+                        <time dateTime={validRecordedAt ? recordedAt.toISOString() : undefined}>{validRecordedAt ? recordedAt.toLocaleString() : 'Time unavailable'}</time>
+                        {' · '}{historyEvent.visibility} {historyEvent.source}
+                      </p>
+                    </li>;
+                  })}
+                </ul>
+                {customerHistory.isFetchNextPageError && <ParkAlert.Root role="alert" status="error" variant="surface"><ParkAlert.Content><ParkAlert.Title>More ticket history could not be loaded</ParkAlert.Title><ParkAlert.Description>Earlier events remain available. Try loading the next page again.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+                {customerHistory.hasNextPage && <ParkButton type="button" variant="outline" disabled={customerHistory.isFetchingNextPage} onClick={() => void customerHistory.fetchNextPage({ cancelRefetch: false })}>
+                  {customerHistory.isFetchingNextPage ? 'Loading more history…' : customerHistory.isFetchNextPageError ? 'Retry more history' : 'Load more history'}
+                </ParkButton>}
+              </>
             )}
           </div></ParkCollapsible.Content>
         </ParkCollapsible.Root>
