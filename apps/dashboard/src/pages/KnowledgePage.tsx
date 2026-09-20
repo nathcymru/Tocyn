@@ -23,6 +23,7 @@ export const KnowledgePage: React.FC = () => {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [localBetaDisabled, setLocalBetaDisabled] = useState(false);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [hasLoadedData, setHasLoadedData] = useState(false);
   const [isAddingCategory, setIsAddingCategory] = useState<{ parentId: string | null } | null>(null);
@@ -52,6 +53,7 @@ export const KnowledgePage: React.FC = () => {
   const fetchData = async () => {
     setLoadState('loading');
     setError(null);
+    setLocalBetaDisabled(false);
     try {
       const [cats, articles] = await Promise.all([
         dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories'),
@@ -80,6 +82,7 @@ export const KnowledgePage: React.FC = () => {
       setLoadState('ready');
     } catch (err: any) {
       setError(err.message);
+      setLocalBetaDisabled(err?.code === 'feature_disabled');
       setLoadState('error');
     }
   };
@@ -249,16 +252,17 @@ export const KnowledgePage: React.FC = () => {
     <div className={[pageStyles.root, pageStyles.content].join(' ')}>
       <header className={pageStyles.header}>
         <h1 ref={heading} tabIndex={-1}>Knowledge Base</h1>
-        <ParkButton
+        {!localBetaDisabled && <ParkButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
           variant="solid"
         >
           <IconPlus size={16} aria-hidden="true" />
           New Article
-        </ParkButton>
+        </ParkButton>}
       </header>
 
-      {error && (hasLoadedData ? <ParkAlert.Root role="alert" status="warning" variant="surface">
+      {error && (localBetaDisabled ? <ParkEmptyState role="status" title="Knowledge is unavailable in this local review" description="The local beta does not enable knowledge browsing or editing." headingLevel={false}
+        action={<ParkButton type="button" onClick={() => navigate('/inbox/all')}>Return to Inbox</ParkButton>} /> : hasLoadedData ? <ParkAlert.Root role="alert" status="warning" variant="surface">
         <ParkAlert.Content>
           <ParkAlert.Title>{loadState === 'error' ? 'Knowledge could not be refreshed' : 'Knowledge change failed'}</ParkAlert.Title>
           <ParkAlert.Description>{loadState === 'error' ? 'Showing the last loaded categories and articles. ' : ''}{error}</ParkAlert.Description>
@@ -268,7 +272,7 @@ export const KnowledgePage: React.FC = () => {
         action={<ParkButton type="button" onClick={() => void fetchData()}>Retry knowledge</ParkButton>} />)}
       {hasLoadedData && loadState === 'loading' && <p role="status" className={css({ color: 'fg.muted', fontSize: 'sm' })}>Refreshing knowledge…</p>}
 
-      {(hasLoadedData || loadState !== 'error') && <div className={pageStyles.knowledgeWorkspace}>
+      {!localBetaDisabled && (hasLoadedData || loadState !== 'error') && <div className={pageStyles.knowledgeWorkspace}>
         {/* Sidebar */}
         <ParkCard.Root variant="outline" className={pageStyles.knowledgeSidebar}>
           <ParkCard.Header>

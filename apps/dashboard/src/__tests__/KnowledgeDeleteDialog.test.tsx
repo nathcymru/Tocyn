@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { KnowledgePage } from '../pages/KnowledgePage';
 const api=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),delete:vi.fn()}));
@@ -117,6 +117,22 @@ it('shows Park loading and a retryable failure before the article table is empty
  expect(screen.queryByRole('table')).not.toBeInTheDocument();
  expect(screen.getByText('No articles found').closest('.emptyState__root')).toBeInTheDocument();
  expect(screen.getByRole('button',{name:'Create article'})).toBeInTheDocument();
+});
+
+it('offers a useful next step when local beta disables knowledge', async () => {
+ api.get.mockRejectedValue(Object.assign(new Error('This feature is disabled in the local beta.'), { code: 'feature_disabled' }));
+ render(<MemoryRouter initialEntries={['/knowledge']}><Routes>
+   <Route path="/knowledge" element={<KnowledgePage />} />
+   <Route path="/inbox/all" element={<p>Inbox reached</p>} />
+ </Routes></MemoryRouter>);
+ const unavailable = (await screen.findByText('Knowledge is unavailable in this local review')).closest('.emptyState__root');
+ expect(unavailable).toBeInTheDocument();
+ expect(unavailable).toHaveTextContent('Knowledge is unavailable in this local review');
+ expect(screen.queryByRole('button', { name: 'Retry knowledge' })).not.toBeInTheDocument();
+ expect(screen.queryByRole('button', { name: 'New Article' })).not.toBeInTheDocument();
+ expect(screen.queryByRole('button', { name: 'Add Root Category' })).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button', { name: 'Return to Inbox' }));
+ expect(await screen.findByText('Inbox reached')).toBeInTheDocument();
 });
 
 it('keeps confirmed categories and articles visible when a refresh fails, then recovers', async () => {
