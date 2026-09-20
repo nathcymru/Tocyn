@@ -9,13 +9,13 @@ import * as OTPAuth from 'otpauth';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-async function until(condition: () => boolean | Promise<boolean>, message: string, timeout = 15000) {
+async function until(condition: () => boolean | Promise<boolean>, message: string | (() => string), timeout = 15000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (await condition()) return;
     await pause(50);
   }
-  assert.fail(message);
+  assert.fail(typeof message === 'string' ? message : message());
 }
 async function sparePort(): Promise<number> {
   const probe = createServer();
@@ -93,8 +93,9 @@ test('supported interactive npm beta launcher removes credentials/state after Ct
         runDirectory = join(tmpdir(), newRuns[0]);
         stateDirectory = join(runDirectory, 'state');
         return existsSync(stateDirectory) && output.includes('READY') && output.includes('Press Ctrl+C to stop the server and erase its run-owned state.');
-      },
-        'Interactive guarded fixture must become ready without disclosing terminal output', 30000);
+      }, () => `Interactive guarded fixture must become ready without disclosing terminal output. ${
+        output.match(/Local tenant fixture did not start: ([^\r\n]+)/)?.[1] ?? 'No sanitized startup error reported.'
+      }`, 45000);
       assert.ok(runDirectory && existsSync(runDirectory));
       assert.ok(existsSync(resolve(runDirectory, '.dev.vars')), 'The actual fixture creates private local credentials');
       const origin = `http://localhost:${port}`;
@@ -130,6 +131,18 @@ test('supported interactive npm beta launcher removes credentials/state after Ct
       assert.ok(body.triageOverdueCount >= 2);
       assert.ok(body.data.every(ticket => body.priorityClocks[ticket.id] && Number.isFinite(body.priorityClocks[ticket.id]?.remainingHours)));
       assert.equal(Object.hasOwn(body.priorityClocks, 'beta2-b-email'), false);
+      const attachment = await request('/api/attachments/beta2-attachment-pdf/download', {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      assert.equal(attachment.status, 200,
+        `The real run-owned R2 object must match the seeded attachment row: ${attachment.status === 200 ? '' : await attachment.clone().text()}`);
+      assert.equal(attachment.headers.get('content-type'), 'application/pdf');
+      assert.ok((await attachment.text()).startsWith('%PDF-1.4'));
+      const foreignAttachment = await request('/api/attachments/beta2-attachment-image/download', {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      assert.equal(foreignAttachment.status, 404, 'Tenant-A operator cannot download tenant-B seeded bytes');
+      await foreignAttachment.body?.cancel();
       output = '';
       terminal.stdin!.write('\x03');
       if (repeated) {

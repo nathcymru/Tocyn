@@ -274,6 +274,42 @@ function sqlLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
+function syntheticOrderSummaryPdf(): Uint8Array {
+  const pageText = 'BT /F1 12 Tf 36 160 Td (Synthetic order summary for UI review.) Tj ET';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${pageText.length} >>\nstream\n${pageText}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
+
+/** Synthetic bytes must accompany every review attachment metadata row. */
+export function beta2ReviewAttachmentObjects(): readonly Readonly<{
+  tenantId: Tenant; key: string; objectKey: string; contentType: string; bytes: Uint8Array;
+}>[] {
+  return [
+    { tenantId: 'fixture-tenant-a', key: 'beta2-internal-attachment/order-summary.pdf',
+      objectKey: 'fixture-tenant-a/beta2-internal-attachment/order-summary.pdf',
+      contentType: 'application/pdf', bytes: syntheticOrderSummaryPdf() },
+    { tenantId: 'fixture-tenant-b', key: 'beta2-b-email/invoice.png',
+      objectKey: 'fixture-tenant-b/beta2-b-email/invoice.png', contentType: 'image/png',
+      bytes: Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGO4/erffwAJKgPDLAaI0wAAAABJRU5ErkJggg==', 'base64')) },
+  ];
+}
+
 const beta2MinutesAgo = (now: number, minutes: number) => new Date(now - minutes * 60_000).toISOString();
 const beta2ReviewTickets = [
   { id: 'beta2-breach-billing', subject: 'Invoice correction needs a reply', status: 'open', priority: 'urgent', source: 'email', assigned: false, createdMinutesAgo: 720, articleMinutesAgo: 50, body: 'The invoice amount looks incorrect. Please check the line items and let me know the next step.' },
@@ -405,16 +441,13 @@ function appendBeta2SlaFixtureSql(rows: string[], now: number): void {
   ] as const;
   for (const [tenantId, ticketId, responseCompletedAt, resolutionCompletedAt] of clocks) {
     const started = now - beta2TicketAgeMinutes(ticketId) * 60_000;
-    // This one ticket predates the synthetic revision-1 target configuration.
-    // Its frozen revision-0 snapshot honestly has no SLA target.
-    const targetless = ticketId === 'beta2-pending-unassigned';
     rows.push(`INSERT INTO ticket_sla_clocks
       (tenant_id,ticket_id,response_started_at,response_due_at,response_completed_at,resolution_started_at,resolution_due_at,resolution_completed_at,
        policy_revision,policy_calendar_json,policy_response_target_ms,policy_resolution_target_ms,policy_response_reopen_policy,policy_resolution_reopen_policy)
       VALUES (${[
-        tenantId, ticketId, new Date(started).toISOString(), targetless ? null : new Date(started + responseTargetMs).toISOString(), responseCompletedAt,
-        new Date(started).toISOString(), targetless ? null : new Date(started + resolutionTargetMs).toISOString(), resolutionCompletedAt,
-        targetless ? 0 : 1, calendar, targetless ? null : responseTargetMs, targetless ? null : resolutionTargetMs, 'continue', 'continue',
+        tenantId, ticketId, new Date(started).toISOString(), new Date(started + responseTargetMs).toISOString(), responseCompletedAt,
+        new Date(started).toISOString(), new Date(started + resolutionTargetMs).toISOString(), resolutionCompletedAt,
+        1, calendar, responseTargetMs, resolutionTargetMs, 'continue', 'continue',
       ].map(literal).join(',')});`);
   }
 }
@@ -519,8 +552,9 @@ function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName,
   for (const [tenantId,id,ticketId,senderId,senderType,body,bodyFormat,isInternal,intakeSource,rawEmailId] of articles) {
     rows.push(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,snippet,body_format,is_internal,intake_source,raw_email_id,created_at) VALUES (${[tenantId,id,ticketId,senderId,senderType,body,body.substring(0, 250),bodyFormat,isInternal,intakeSource,rawEmailId,beta2MinutesAgo(now, beta2ArticleAgeMinutes(ticketId))].map(literal).join(',')});`);
   }
-  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-a','beta2-attachment-pdf','beta2-article-internal','order-summary.pdf',24576,'application/pdf','fixture-tenant-a/beta2-internal-attachment/order-summary.pdf','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
-  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-b','beta2-attachment-image','beta2-article-b-email','invoice.png',8192,'image/png','fixture-tenant-b/beta2-b-email/invoice.png','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
+  const [pdf, image] = beta2ReviewAttachmentObjects();
+  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-a','beta2-attachment-pdf','beta2-article-internal','order-summary.pdf',pdf.bytes.byteLength,pdf.contentType,pdf.key,'2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
+  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-b','beta2-attachment-image','beta2-article-b-email','invoice.png',image.bytes.byteLength,image.contentType,image.key,'2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
   rows.push(`UPDATE ticket_support_state SET snoozed_until='2099-01-01T12:00:00.000Z',resurface_reason='manual' WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned';`);
   appendBeta2ReviewFixtureSql(rows, now);
   appendBeta2SlaFixtureSql(rows, now);
@@ -602,16 +636,17 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
         beta2MinutesAgo(now, beta2ArticleAgeMinutes(ticketId))).run();
   }
 
+  const [pdf, image] = beta2ReviewAttachmentObjects();
   await db.prepare(`INSERT INTO attachments
     (tenant_id, id, article_id, file_name, file_size, content_type, r2_key, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind('fixture-tenant-a', 'beta2-attachment-pdf', 'beta2-article-internal', 'order-summary.pdf', 24576,
-      'application/pdf', 'fixture-tenant-a/beta2-internal-attachment/order-summary.pdf', '2026-09-10T09:20:00.000Z').run();
+    .bind('fixture-tenant-a', 'beta2-attachment-pdf', 'beta2-article-internal', 'order-summary.pdf', pdf.bytes.byteLength,
+      pdf.contentType, pdf.key, '2026-09-10T09:20:00.000Z').run();
   await db.prepare(`INSERT INTO attachments
     (tenant_id, id, article_id, file_name, file_size, content_type, r2_key, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind('fixture-tenant-b', 'beta2-attachment-image', 'beta2-article-b-email', 'invoice.png', 8192,
-      'image/png', 'fixture-tenant-b/beta2-b-email/invoice.png', '2026-09-10T09:20:00.000Z').run();
+    .bind('fixture-tenant-b', 'beta2-attachment-image', 'beta2-article-b-email', 'invoice.png', image.bytes.byteLength,
+      image.contentType, image.key, '2026-09-10T09:20:00.000Z').run();
 
   await db.prepare(`UPDATE ticket_support_state
     SET snoozed_until = ?, resurface_reason = ?
@@ -695,6 +730,9 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
     }] }));
     const db = await miniflare.getD1Database('DB');
     const rawBucket = await miniflare.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
+    for (const attachment of beta2ReviewAttachmentObjects()) {
+      await rawBucket.put(attachment.objectKey, attachment.bytes, { httpMetadata: { contentType: attachment.contentType } });
+    }
     const r2 = countedR2Bucket(rawBucket);
     let notificationAttempts = 0;
     let remainingNotificationFailures = 0;

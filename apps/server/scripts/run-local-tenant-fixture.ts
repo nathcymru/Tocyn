@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
-import { createLocalFixtureBootstrap } from './local-tenant-fixture';
+import { beta2ReviewAttachmentObjects, createLocalFixtureBootstrap } from './local-tenant-fixture';
 import { configureLocalBetaTicketAdmission, initializeLocalBetaTicketAdmission } from './local-beta-ticket-admission';
 
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -122,6 +122,20 @@ function localWrangler(args: string[]): void {
   if (result.status !== 0) throw new Error('A local Wrangler setup command failed; fixture state was removed without showing setup output');
 }
 
+function seedLocalAttachmentObjects(persistTo: string, bucketName: string): void {
+  assert.ok(temporary, 'Local fixture directory is required');
+  for (const [index, attachment] of beta2ReviewAttachmentObjects().entries()) {
+    const path = join(temporary, `seed-attachment-${index}`);
+    writeFileSync(path, attachment.bytes, { mode: 0o600 });
+    try {
+      localWrangler(['r2', 'object', 'put', `${bucketName}/${attachment.objectKey}`, '--local', '--persist-to', persistTo,
+        '--file', path, '--content-type', attachment.contentType, '--force']);
+    } finally {
+      rmSync(path, { force: true });
+    }
+  }
+}
+
 async function waitForHealth(): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (child?.exitCode !== null) throw new Error('Local Worker stopped before becoming ready');
@@ -161,6 +175,9 @@ async function main(): Promise<void> {
   writeFileSync(fixtureSql, bootstrap.sql, { mode: 0o600 });
   localWrangler(['d1', 'execute', 'tocyn-local', '--local', '--persist-to', state, '--file', fixtureSql]);
   rmSync(fixtureSql, { force: true });
+  const localBucket = config.r2_buckets?.find((binding: { binding: string }) => binding.binding === 'ATTACHMENTS_BUCKET');
+  assert.equal(typeof localBucket?.bucket_name, 'string', 'Local attachment bucket is required');
+  seedLocalAttachmentObjects(state, localBucket.bucket_name);
 
   let betaApiKeys: { tenantId: string; apiKey: string }[] = [];
   if (localBeta) {

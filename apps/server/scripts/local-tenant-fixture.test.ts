@@ -3,7 +3,7 @@ import test from 'node:test';
 import { absoluteWindowHours, calculatePriorityScore, effectiveUrgencyWindowHours } from '@luminatick/shared';
 import { projectPriorityClock, type PriorityClockRow } from '../src/repositories/priority-clock.repository';
 import { initializeLocalBetaFixture } from './local-beta-fixture';
-import { beta2ReviewPrioritySeeds, createLocalFixtureBootstrap, verifyTwoTenantFixture, withTwoTenantFixture } from './local-tenant-fixture';
+import { beta2ReviewAttachmentObjects, beta2ReviewPrioritySeeds, createLocalFixtureBootstrap, verifyTwoTenantFixture, withTwoTenantFixture } from './local-tenant-fixture';
 
 test('two disposable fixture runs have independent A/B principals and no report secrets', async () => {
   const first = await verifyTwoTenantFixture();
@@ -113,13 +113,14 @@ test('general Miniflare helper retains the eight-ticket base matrix without revi
     assert.equal(tenantAList.some(ticket => ticket.id === 'beta2-b-email'), false);
     assert.equal(tenantBList.some(ticket => ticket.id === 'beta2-email'), false);
 
-    const attachments = await fixture.db.prepare(`SELECT tenant_id, article_id, file_name, content_type, r2_key
+    const attachments = await fixture.db.prepare(`SELECT tenant_id, article_id, file_name, file_size, content_type, r2_key
       FROM attachments WHERE id LIKE 'beta2-%' ORDER BY id`).all<{
-      tenant_id: string; article_id: string; file_name: string; content_type: string; r2_key: string;
+      tenant_id: string; article_id: string; file_name: string; file_size: number; content_type: string; r2_key: string;
     }>();
+    const [pdf, image] = beta2ReviewAttachmentObjects();
     assert.deepEqual(attachments.results, [
-      { tenant_id: 'fixture-tenant-b', article_id: 'beta2-article-b-email', file_name: 'invoice.png', content_type: 'image/png', r2_key: 'fixture-tenant-b/beta2-b-email/invoice.png' },
-      { tenant_id: 'fixture-tenant-a', article_id: 'beta2-article-internal', file_name: 'order-summary.pdf', content_type: 'application/pdf', r2_key: 'fixture-tenant-a/beta2-internal-attachment/order-summary.pdf' },
+      { tenant_id: 'fixture-tenant-b', article_id: 'beta2-article-b-email', file_name: 'invoice.png', file_size: image.bytes.byteLength, content_type: 'image/png', r2_key: image.key },
+      { tenant_id: 'fixture-tenant-a', article_id: 'beta2-article-internal', file_name: 'order-summary.pdf', file_size: pdf.bytes.byteLength, content_type: 'application/pdf', r2_key: pdf.key },
     ]);
 
     const snooze = await fixture.db.prepare(`SELECT snoozed_until, resurface_reason FROM ticket_support_state
@@ -234,12 +235,20 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
       .all<{ tenant_id: string; ticket_id: string; response_started_at: string; response_due_at: string | null; response_completed_at: string | null; resolution_completed_at: string | null; policy_revision: number; policy_response_target_ms: number | null; policy_resolution_target_ms: number | null }>();
     assert.equal(clocks.results.filter(clock => clock.tenant_id === 'fixture-tenant-a').length, 20);
     assert.equal(clocks.results.filter(clock => clock.tenant_id === 'fixture-tenant-b').length, 2);
-    assert.ok(clocks.results.filter(clock => clock.response_due_at !== null).every(clock => Date.parse(clock.response_due_at!) - Date.parse(clock.response_started_at) === 21_600_000));
-    const legacyClock = clocks.results.find(clock => clock.ticket_id === 'beta2-pending-unassigned');
-    assert.deepEqual(legacyClock && [legacyClock.response_due_at, legacyClock.policy_revision, legacyClock.policy_response_target_ms, legacyClock.policy_resolution_target_ms],
-      [null, 0, null, null], 'The unavailable ticket retains a targetless revision-0 snapshot predating the synthetic revision-1 policy');
+    assert.ok(clocks.results.every(clock => clock.response_due_at
+      && Date.parse(clock.response_due_at) - Date.parse(clock.response_started_at) === 21_600_000
+      && clock.policy_revision === 1 && clock.policy_response_target_ms === 21_600_000
+      && clock.policy_resolution_target_ms === 86_400_000),
+    'Every fresh demo ticket has a complete contractual SLA snapshot');
     assert.ok(clocks.results.find(clock => clock.ticket_id === 'beta2-resolved')?.response_completed_at);
     assert.ok(clocks.results.find(clock => clock.ticket_id === 'beta2-resolved')?.resolution_completed_at);
+    for (const attachment of beta2ReviewAttachmentObjects()) {
+      const object = await fixture.r2.bucket.get(attachment.objectKey);
+      assert.ok(object, `Synthetic R2 object missing for ${attachment.objectKey}`);
+      assert.equal(object.size, attachment.bytes.byteLength);
+      assert.equal(object.httpMetadata?.contentType, attachment.contentType);
+      assert.deepEqual(new Uint8Array(await object.arrayBuffer()), attachment.bytes);
+    }
 
     const session = async (principal: 'operatorA' | 'operatorB') => {
       const login = await fixture.login(principal);
@@ -263,9 +272,9 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     });
     assert.equal(batch.status, 200);
     const projections = await batch.json<Record<string, { response: { state: string } }>>();
-    assert.equal(Object.keys(projections).length, 20, 'Every visible row has an SLA projection, including unavailable');
+    assert.equal(Object.keys(projections).length, 20, 'Every visible row has a contractual SLA projection');
     assert.deepEqual(['beta2-breach-billing', 'beta2-breach-delivery'].map(id => projections[id]?.response.state), ['breached', 'breached']);
-    assert.equal(projections['beta2-pending-unassigned']?.response.state, 'unavailable');
+    assert.equal(projections['beta2-pending-unassigned']?.response.state, 'on-track');
     const projection = async (token: string, id: string) => fixture.request(`/api/tickets/${id}/sla`, { token });
     const onTrack = await projection(operatorA, 'beta2-open-assigned');
     assert.equal(onTrack.status, 200);
@@ -276,9 +285,9 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     const completed = await projection(operatorA, 'beta2-resolved');
     assert.equal(completed.status, 200);
     assert.equal((await completed.json<{ response: { state: string; phase: string }; resolution: { phase: string } }>()).response.phase, 'completed');
-    const unavailable = await projection(operatorA, 'beta2-pending-unassigned');
-    assert.equal(unavailable.status, 200);
-    assert.equal((await unavailable.json<{ response: { state: string }; resolution: { state: string } }>()).response.state, 'unavailable');
+    const pending = await projection(operatorA, 'beta2-pending-unassigned');
+    assert.equal(pending.status, 200);
+    assert.equal((await pending.json<{ response: { state: string }; resolution: { state: string } }>()).response.state, 'on-track');
     for (const id of ['beta2-breach-billing', 'beta2-breach-delivery']) {
       const response = await projection(operatorA, id);
       assert.equal(response.status, 200);
