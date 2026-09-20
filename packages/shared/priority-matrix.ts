@@ -96,6 +96,26 @@ export function timeRemainingHours(
   return window - window * (elapsedPercentage / 100);
 }
 
+export type TimeTierWindowHours = 1 | 4 | 24 | 48;
+
+/**
+ * Classification for queue urgency only. It never changes a ticket's contract
+ * tier, criticality tier, or accepted response/resolution SLA deadline.
+ * The maintainer's 24h and 4h examples are inclusive at the threshold.
+ */
+export function effectiveUrgencyWindowHours(
+  absoluteWindow: TimeTierWindowHours,
+  timeRemaining: number,
+): TimeTierWindowHours {
+  if (![1, 4, 24, 48].includes(absoluteWindow) || !Number.isFinite(timeRemaining)) {
+    throw new RangeError('Urgency window and remaining time must be valid');
+  }
+  for (const threshold of [1, 4, 24] as const) {
+    if (threshold < absoluteWindow && timeRemaining <= threshold) return threshold;
+  }
+  return absoluteWindow;
+}
+
 export type PriorityView = 'default-focus' | 'criticality-matrix' | 'sla-commitment';
 
 /** Snapshot data only; authority, clock source, status and pagination remain pending decisions. */
@@ -140,7 +160,7 @@ function assertSortTicket(ticket: PrioritySortTicket): void {
   }
 }
 
-/** Sorts snapshots by the requested key chain, then by stable ticket ID. No drift is applied. */
+/** Sorts snapshots by the requested raw-tier key chain, then by stable ticket ID. */
 export function comparePriorityTickets(view: PriorityView, a: PrioritySortTicket, b: PrioritySortTicket): number {
   if (view !== 'default-focus' && view !== 'criticality-matrix' && view !== 'sla-commitment') {
     throw new RangeError('Unsupported priority view');

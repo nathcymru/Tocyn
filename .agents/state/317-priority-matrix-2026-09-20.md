@@ -5,3 +5,7 @@
 - Category and scope tables, explicit modifier-total arithmetic, strictest absolute window, signed remaining time, and the three requested raw-tier sort chains are implemented. The comparator uses stable ticket ID only after all requested keys tie. Invalid runtime values fail explicitly. Conditions that produce modifier totals, tier assignment, artificial drift, status handling, snapshot authority and integration remain pending product/architecture decisions.
 - Validation before this checkpoint: `npm exec -- vitest run apps/server/src/domain/__tests__/priority-matrix.test.ts` (9/9), `npm run typecheck --workspace=apps/server` (pass), and `git diff --check` (pass). The focused test runs in ordinary server Vitest discovery.
 - Next: settle ring label and supplemental-vs-replacement clock questions with the maintainer; define drift, tier authority, urgency stacking, pause/reopen and legacy fallback behavior; then implement tenant-safe storage/API, whole-queue sorting before pagination, review fixtures and browser evidence. Keep #315's visual migration PR separate and the unrelated #243 worktree untouched.
+
+## Threshold follow-up
+
+- Added a pure urgency-window classifier: a 48-hour ticket reaches the 24-hour classification at exactly 24 hours remaining and the 4-hour classification at exactly 4 hours remaining, as the maintainer's examples show. It does not rewrite contract/criticality fields or alter accepted SLA deadlines. How this classification participates in each named view's tier sort still requires a product decision.

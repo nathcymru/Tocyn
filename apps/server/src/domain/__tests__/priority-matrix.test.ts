@@ -6,6 +6,7 @@ import {
   comparePriorityTickets,
   CONTRACT_TIER_WINDOW_HOURS,
   CRITICALITY_TIER_WINDOW_HOURS,
+  effectiveUrgencyWindowHours,
   PRIORITY_CATEGORY_BASE,
   PRIORITY_SCOPE_MULTIPLIER,
   timeRemainingHours,
@@ -48,6 +49,19 @@ test('invalid tier values fail before any window or remaining-time calculation',
   assert.throws(() => absoluteWindowHours('alpha', 0 as never), RangeError);
   assert.throws(() => timeRemainingHours('unknown' as never, 4, 50), RangeError);
   assert.throws(() => timeRemainingHours('alpha', 2.5 as never, 50), RangeError);
+});
+
+test('urgency drift includes the 24h and 4h equality examples without mutating contract tiers', () => {
+  assert.equal(effectiveUrgencyWindowHours(48, 25), 48);
+  assert.equal(effectiveUrgencyWindowHours(48, 24), 24);
+  assert.equal(effectiveUrgencyWindowHours(48, 4), 4);
+  assert.equal(effectiveUrgencyWindowHours(48, 1), 1);
+  assert.equal(effectiveUrgencyWindowHours(48, -2), 1);
+  assert.equal(effectiveUrgencyWindowHours(24, 4), 4);
+  assert.equal(effectiveUrgencyWindowHours(4, 4), 4);
+  assert.equal(effectiveUrgencyWindowHours(1, 0.25), 1);
+  assert.throws(() => effectiveUrgencyWindowHours(12 as never, 4), RangeError);
+  assert.throws(() => effectiveUrgencyWindowHours(48, Number.NaN), RangeError);
 });
 
 const snapshot = (
