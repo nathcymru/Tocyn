@@ -1,6 +1,6 @@
 import { w, widgetBrandColor } from './widgetStyles';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
-import { ParkAlert, ParkButton, ParkScrollArea, ParkTabs } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkPopover, ParkScrollArea, ParkTabs } from '@luminatick/ui/park';
 import { Link } from '@luminatick/ui/components';
 import React, { useState, useEffect, useRef, useId } from 'react';
 import TicketForm from './components/TicketForm';
@@ -17,7 +17,6 @@ const App: React.FC = () => {
   const widgetId = useId();
   const launcher = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (isOpen) closeButton.current?.focus(); }, [isOpen]);
 
   useEffect(() => {
     const refresh = () => { getWidgetSession().then(setSession).catch(() => setSession(null)); };
@@ -34,9 +33,6 @@ const App: React.FC = () => {
       .catch(() => setConfig(null));
   }, []);
 
-  const closeWidget = () => { setIsOpen(false); launcher.current?.focus(); };
-  const toggleWidget = () => { if (isOpen) closeWidget(); else setIsOpen(true); };
-
   if (!config) return null;
 
   // The tenant configuration store serializes saved switches as "true"/"false".
@@ -52,14 +48,20 @@ const App: React.FC = () => {
 
   return (
     <div className={w.launcherWrap} style={{ '--widget-brand-color': widgetBrandColor(config.primaryColor) } as React.CSSProperties}>
-      <div hidden={!isOpen}>
-        <div id={`${widgetId}-panel`} role="region" aria-labelledby={`${widgetId}-title`} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); closeWidget(); } }} className={w.panel}>
-          <div className={w.panelHeader}>
-            <h2 id={`${widgetId}-title`} className={w.panelTitle}>{config.title}</h2>
-            <ParkButton ref={closeButton} aria-label="Close support" onClick={closeWidget} variant="plain" className={w.close}>
-              <IconXmark className={w.closeIcon} aria-hidden="true" />
-            </ParkButton>
-          </div>
+      <ParkPopover.Root open={isOpen} onOpenChange={({ open }) => setIsOpen(open)}
+        ids={{ content: `${widgetId}-panel`, title: `${widgetId}-title` }} positioning={{ placement: 'top-end', strategy: 'fixed', gutter: 16 }}
+        initialFocusEl={() => closeButton.current} finalFocusEl={() => launcher.current}
+        closeOnInteractOutside={false} lazyMount={false} unmountOnExit={false}>
+        <ParkPopover.Positioner>
+          <ParkPopover.Content aria-labelledby={`${widgetId}-title`} className={w.panel}>
+            <ParkPopover.Header className={w.panelHeader}>
+              <ParkPopover.Title asChild><h2 id={`${widgetId}-title`} className={w.panelTitle}>{config.title}</h2></ParkPopover.Title>
+              <ParkPopover.CloseTrigger asChild>
+                <ParkButton ref={closeButton} aria-label="Close support" variant="plain" className={w.close}>
+                  <IconXmark className={w.closeIcon} aria-hidden="true" />
+                </ParkButton>
+              </ParkPopover.CloseTrigger>
+            </ParkPopover.Header>
 
           <ParkTabs.Root className={w.tabRoot} activationMode="manual" value={selectedTab ?? null} onValueChange={({value}) => { if (value === 'chat' || value === 'ticket') setActiveTab(value); }} lazyMount={false} unmountOnExit={false}>
           <ParkTabs.List aria-label="Support options" className={w.tabs}>
@@ -90,21 +92,22 @@ const App: React.FC = () => {
           <div data-product-attribution className={w.attribution}>
             Powered by {PRODUCT_BRAND.name}
           </div>
-        </div>
-      </div>
-
-      <ParkButton
-        ref={launcher} aria-label={isOpen ? 'Close support' : 'Open support'} aria-expanded={isOpen} aria-controls={`${widgetId}-panel`}
-        onClick={toggleWidget}
-        variant="solid"
-        className={w.launcher}
-      >
-        {isOpen ? (
-          <IconChevronDown className={w.launcherIcon} aria-hidden="true" />
-        ) : (
-          <IconMessage className={w.launcherIcon} aria-hidden="true" />
-        )}
-      </ParkButton>
+          </ParkPopover.Content>
+        </ParkPopover.Positioner>
+        <ParkPopover.Trigger asChild>
+          <ParkButton
+            ref={launcher} aria-label={isOpen ? 'Close support' : 'Open support'}
+            variant="solid"
+            className={w.launcher}
+          >
+            {isOpen ? (
+              <IconChevronDown className={w.launcherIcon} aria-hidden="true" />
+            ) : (
+              <IconMessage className={w.launcherIcon} aria-hidden="true" />
+            )}
+          </ParkButton>
+        </ParkPopover.Trigger>
+      </ParkPopover.Root>
     </div>
   );
 };

@@ -20,8 +20,21 @@ it('keeps an unbroken ticket subject readable inside its Park-linked row', async
   const heading = await screen.findByText(subject);
   const link = heading.closest('a');
   expect(link).toHaveClass('link', 'link--variant_plain');
+  expect(link?.closest('.card__root')).toHaveClass('card__root--variant_outline');
   expect(link).toHaveAttribute('href', '/tickets/synthetic-ticket');
   expect(heading).toHaveClass('min-w_0', 'ov-wrap_anywhere');
   expect(heading.parentElement).toHaveClass('min-w_0', 'flex-wrap_wrap');
   expect(link?.querySelector('span.badge')).toHaveClass('badge--variant_subtle', 'tt_capitalize', 'bg_info.surface');
+});
+
+it('keeps the empty ticket action inside the same Park Card surface', async () => {
+  vi.mocked(portalApi.get).mockImplementation(async path => (path === '/config'
+    ? { TICKET_PREFIX: '#' }
+    : { data: [] }) as never);
+
+  render(<MemoryRouter><TicketListPage /></MemoryRouter>);
+  const empty = await screen.findByText("You haven't created any tickets yet.");
+  const card = empty.closest('.card__root');
+  expect(card).toHaveClass('card__root--variant_outline');
+  expect(card?.querySelector('button')).toHaveTextContent('New Ticket');
 });

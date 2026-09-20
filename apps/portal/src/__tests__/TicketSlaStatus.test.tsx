@@ -59,6 +59,7 @@ describe('customer SLA status', () => {
 
     const loading = screen.getByRole('status', { name: 'Loading service status' });
     expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.closest('section')).toHaveClass('card__root', 'card__root--variant_outline');
     expect(loading.querySelectorAll('.skeleton')).toHaveLength(2);
     expect(portalApi.getTicketSla).toHaveBeenCalledExactlyOnceWith('owned-ticket');
 
@@ -78,6 +79,7 @@ describe('customer SLA status', () => {
     render(<TicketSlaStatus ticketId="owned-ticket" />);
 
     expect(await screen.findByRole('heading', { name: 'Service status' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Service status' }).closest('section')).toHaveClass('card__root', 'card__root--variant_outline');
     expect(screen.getByText('Responsible handler: Avery Morgan')).toBeInTheDocument();
     expect(screen.getByText('Response target')).toBeInTheDocument();
     expect(screen.getByText('Running — on target')).toBeInTheDocument();

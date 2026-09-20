@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkAlert, ParkButton, ParkEmptyState, ParkField, ParkFileUpload, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkField, ParkFileUpload, ParkScrollArea, ParkTextarea } from '@luminatick/ui/park';
 import { Badge as ParkBadge, Link as ParkLink } from '@luminatick/ui/components';
 import { css } from '@luminatick/ui/styled-system/css';
 import { attachmentSize } from '../utils/attachment-size';
@@ -354,7 +354,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
       </ParkAlert.Root>}
       <p role="status" aria-label="Attachment download status" className={p.chatStatus}>{downloadStatus}</p>
       <TicketSlaStatus ticketId={ticket.id} />
-      <div className={[p.surface, p.chatSurface].join(' ')}>
+      <ParkCard.Root variant="outline" className={p.chatSurface}>
         {/* Messages List */}
         <ParkScrollArea.Root className={messageArea}>
           <ParkScrollArea.Viewport ref={messagesRegion} id="conversation-messages" role="region" aria-label="Conversation messages" tabIndex={0} className={messageViewport}>
@@ -498,7 +498,7 @@ function TicketDetail({ id }: { id: string | undefined }) {
             <ParkAlert.Content><ParkAlert.Description>This ticket is {ticket.status}. You cannot reply to it.</ParkAlert.Description></ParkAlert.Content>
           </ParkAlert.Root>
         ) : null}
-      </div>
+      </ParkCard.Root>
     </div>
   );
 }

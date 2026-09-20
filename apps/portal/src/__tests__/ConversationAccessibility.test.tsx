@@ -215,6 +215,7 @@ describe('portal conversation accessibility and recovery', () => {
     setupReads(); mountDetail();
     const feed = await screen.findByRole('region', { name: 'Conversation messages' });
     expect(feed).toHaveClass('scroll-area__viewport');
+    expect(feed.closest('.card__root')).toHaveClass('card__root--variant_outline');
     expect(feed.closest('.scroll-area__root')?.querySelector('.scroll-area__content')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to Tickets' })).toBeTruthy();
     expect(screen.getByLabelText('Reply').closest('.field__root')).toBeInTheDocument();

@@ -12464,10 +12464,6 @@
     z-index: var(--z-index-modal);
 }
 
-  .bx-sh_xl {
-    box-shadow: var(--shadows-xl);
-}
-
   .bx-sh_lg {
     box-shadow: var(--shadows-lg);
 }
