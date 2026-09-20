@@ -107,12 +107,15 @@ export interface ParkEmptyStateProps extends Omit<React.HTMLAttributes<HTMLEleme
   description?: React.ReactNode;
   action?: React.ReactNode;
   headingLevel?: 1 | 2 | 3 | 4 | 5 | 6 | false;
+  headingRef?: React.Ref<HTMLHeadingElement>;
 }
 const emptyStateStyles = emptyStateRecipe();
-export function ParkEmptyState({ title, description, action, headingLevel = 2, className, ...props }: ParkEmptyStateProps) {
-  const Heading = headingLevel === false ? 'p' : `h${headingLevel}` as keyof JSX.IntrinsicElements;
+export function ParkEmptyState({ title, description, action, headingLevel = 2, headingRef, className, ...props }: ParkEmptyStateProps) {
+  const Heading = `h${headingLevel}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
   return <section {...props} aria-label={typeof title === 'string' ? title : undefined} className={[emptyStateStyles.root, className].filter(Boolean).join(' ')}>
-    <Heading className={emptyStateStyles.title}>{title}</Heading>
+    {headingLevel === false
+      ? <p className={emptyStateStyles.title}>{title}</p>
+      : <Heading ref={headingRef} tabIndex={headingRef ? -1 : undefined} className={emptyStateStyles.title}>{title}</Heading>}
     {description !== undefined && <p className={emptyStateStyles.description}>{description}</p>}
     {action !== undefined && <div className={emptyStateStyles.action}>{action}</div>}
   </section>;

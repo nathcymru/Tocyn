@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
@@ -80,6 +80,9 @@ it('keeps the active inbox route and retry action after workspace autosave fails
   fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
   await waitFor(() => expect(writes.length).toBeGreaterThan(0));
   await screen.findByRole('button', { name: 'Retry saving view' });
+  const workspaceAlert = screen.getByRole('alert');
+  expect(workspaceAlert).toHaveClass('alert__root');
+  expect(within(workspaceAlert).getByRole('button', { name: 'Retry saving view' })).toBeEnabled();
   fireEvent.click(screen.getByRole('link', { name: /Saved workspace result/ }));
   await screen.findByText('Workspace preferences are not saved. Stay in this view, retry saving, then navigate again.');
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all');

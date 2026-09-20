@@ -1,7 +1,7 @@
 import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { IconButton as ParkIconButton } from '@luminatick/ui/components';
 import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
@@ -67,7 +67,7 @@ function UserMenu({ onNavigate }: SidebarProps) {
   <ParkMenu.Root positioning={{ placement: 'bottom-end' }}>
     <ParkMenu.Trigger asChild>
       <ParkIconButton type="button" variant="plain" aria-label="Account options" title={user?.full_name || 'User'} className={shellStyles.personaTrigger}>
-        <ParkAvatar shape="square" className={shellStyles.personaAvatar}>
+        <ParkAvatar className={shellStyles.personaAvatar}>
           <ParkAvatarFallback name={user?.full_name || 'Operator'} />
           <span className={shellStyles.personaStatus} aria-hidden="true" />
         </ParkAvatar>
@@ -308,15 +308,18 @@ function LayoutContent() {
             <ParkPopover.Positioner>
               <ParkPopover.Content aria-label="Activity" className={shellStyles.activityPopover}>
                 <ParkPopover.Header className={shellStyles.activityHeader}><ParkPopover.Title className={shellStyles.activityTitle}>Activity</ParkPopover.Title><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className={shellStyles.activityRefresh}>Refresh</ParkButton></ParkPopover.Header>
-                {activityUpdatesAvailable && <p role="status" className={shellStyles.activityMessage}>Updates available. Refresh to load current activity.</p>}
-                {activityError && <div role="alert" className={shellStyles.activityWarning}><p>{activityError}</p><ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className={shellStyles.activityRetry}>Retry loading activity</ParkButton></div>}
+                {activityUpdatesAvailable && <ParkAlert.Root role="status" status="info"><ParkAlert.Content><ParkAlert.Description>Updates available. Refresh to load current activity.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+                {activityError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+                  <ParkAlert.Description>{activityError}</ParkAlert.Description>
+                  <ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading}>Retry loading activity</ParkButton>
+                </ParkAlert.Content></ParkAlert.Root>}
                 {activityLoading && !activity && <section role="status" aria-label="Loading activity" aria-busy="true" className={shellStyles.activityLoading}>
                   <ParkSkeleton height="4" width="70%" />
                   <ParkSkeleton height="4" width="90%" />
                   <ParkSkeleton height="4" width="55%" />
                   <ParkVisuallyHidden>Loading durable activity…</ParkVisuallyHidden>
                 </section>}
-                {activity?.unread.status === 'unavailable' && <p role="status" className={shellStyles.activityWarning}>Unread count is temporarily unavailable. Your activity remains available below.</p>}
+                {activity?.unread.status === 'unavailable' && <ParkAlert.Root role="status" status="warning"><ParkAlert.Content><ParkAlert.Description>Unread count is temporarily unavailable. Your activity remains available below.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
                 {activity && visibleActivityItems.length === 0 && <ParkEmptyState title={activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'} headingLevel={false} className={shellStyles.activityEmpty} />}
                 {visibleActivityItems.length > 0 && <ParkScrollArea.Root className={shellStyles.activityScroll}>
                   <ParkScrollArea.Viewport>

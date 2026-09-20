@@ -1,6 +1,6 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
-import { ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { ChevronDown,ChevronLeft,ChevronRight,Filter,IconChartBar,Plus } from '../components/icons';
 import React,{useCallback,useLayoutEffect,useEffect,useMemo,useRef,useState} from 'react';
@@ -358,7 +358,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
         </div>
         {namingQuickView&&<div className={css({ mt: '3', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2' })}><ParkInput aria-label="Quick view name" placeholder="Name this quick view" maxLength={100} value={quickViewName} onChange={event=>setQuickViewName(event.target.value)} className={css({ flex: '1 1 12rem', minW: 0 })} /><ParkButton type="button" disabled={createFilter.isPending||!quickViewRepresentable} onClick={()=>void saveQuickView()}>Save quick view</ParkButton></div>}
         {namingQuickView&&!quickViewRepresentable&&<p role="status" className={css({ mt: '2', color: 'fg.muted', fontSize: 'sm' })}>Quick views can currently save All tickets with an optional exact customer email. Apply these filters to use the other choices now.</p>}
-        {quickViewError&&<p role="alert" className={css({ mt: '2', color: 'critical', fontSize: 'sm' })}>{quickViewError}</p>}
+        {quickViewError&&<ParkAlert.Root role="alert" status="error" className={css({ mt: '2' })}><ParkAlert.Content><ParkAlert.Description>{quickViewError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
       </section>}
       {statsOpen&&<section id="inbox-quick-statistics" role="region" aria-label="Quick statistics" className={css({ borderTop: '1px solid', borderColor: 'border.default', bg: 'bg.subtle', p: '4' })}>
         <dl className={css({ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '2' })}>
@@ -373,10 +373,14 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,onA
     </header>
     {createMounted&&<NewTicketDialog open={createOpen} onOpenChange={setCreateOpen} trigger={createTrigger} onCreated={()=>setStatus('Ticket created.')} />}
     {slaSort&&<SlaQueueNotice asOf={query.data?.asOf} error={query.error} busy={query.isFetching} restart={restartSla} />}
-    {query.error&&<div role="alert"><p>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</p>
-      <ParkButton ref={retryButton} type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()}>Retry conversations</ParkButton></div>}
-    {workspace.status==='error'||workspace.status==='conflict'?<div role="alert">{workspace.error}
-      <ParkButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave}>{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</ParkButton></div>:null}
+    {query.error&&<ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Description>{tickets.length?'Could not refresh conversations. The last confirmed list remains visible.':'Could not load conversations.'}</ParkAlert.Description>
+      <ParkButton ref={retryButton} type="button" disabled={query.isFetching} onClick={()=>slaSort?restartSla():void query.refetch()}>Retry conversations</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
+    {workspace.status==='error'||workspace.status==='conflict'?<ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Description>{workspace.error}</ParkAlert.Description>
+      <ParkButton type="button" onClick={workspace.status==='conflict'?workspace.restoreServerState:workspace.retrySave}>{workspace.status==='conflict'?'Restore saved view':'Retry saving view'}</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>:null}
     {drafts.status==='partial'&&<p role="status">Some draft indicators are still loading.</p>}
     {presentation==='table'&&<>
       <p className={css({ m: '0', px: '4', py: '2', color: 'text.muted', fontSize: 'xs' })}>Table view uses the compact conversation list on small screens.</p>

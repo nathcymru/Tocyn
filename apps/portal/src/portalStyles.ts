@@ -37,8 +37,6 @@ export const p = {
   main: page,
   routeLoading: page,
   routeError: css({ maxW: 'xl', mx: 'auto', p: '6', display: 'flex', flexDirection: 'column', gap: '3' }),
-  routeErrorTitle: title,
-  routeReload: css({ color: 'accent.primary', textDecoration: 'underline', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus' } }),
 
   authShell: css({ maxW: 'md', mx: 'auto', py: { base: '8', md: '16' } }),
   authHeading: css({ textAlign: 'center', mb: '6', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2' }),

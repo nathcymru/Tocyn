@@ -880,7 +880,9 @@ it('retains confirmed conversation content when a refresh fails and explicitly r
   let failed=false;transport(()=>failed?json({error:'Refresh unavailable'},503):json(ticket));
   showDetail();await screen.findByText('Customer question');
   failed=true;await act(()=>client.invalidateQueries({queryKey:['ticket','workflow-ticket']}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Showing the last confirmed details');
+  const refreshAlert = await screen.findByRole('alert');
+  expect(refreshAlert).toHaveTextContent('Showing the last confirmed details');
+  expect(refreshAlert).toHaveClass('alert__root');
   expect(screen.getByText('Customer question')).toBeInTheDocument();
   failed=false;fireEvent.click(screen.getByRole('button',{name:'Retry loading ticket'}));
   await waitFor(()=>expect(screen.queryByRole('alert')).not.toBeInTheDocument());

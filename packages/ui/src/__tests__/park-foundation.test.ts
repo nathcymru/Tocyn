@@ -36,6 +36,12 @@ describe('Park UI foundation', () => {
     expect(css).not.toMatch(/:focus-visible\s*\{[^}]*outline-width: 2px !important/);
   });
 
+  it('lets the installed Park Input provide the search field focus ring', () => {
+    const css = read('src/styles/panda.css');
+    expect(css).toMatch(/\.input--variant_outline:is\(:focus-visible, \[data-focus-visible\]\)\s*\{[^}]*outline-width: var\(--focus-ring-width, 1px\)/);
+    expect(css).not.toMatch(/\.globalSearch__input:is\(:focus-visible, \[data-focus-visible\]\)/);
+  });
+
   it('reserves indicator space in every Select size without overriding the logical end inset', () => {
     const css = read('src/styles/panda.css');
     const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)\\s*\\.${selector}\\s*\\{([^}]+)\\}`))?.[1] ?? '';

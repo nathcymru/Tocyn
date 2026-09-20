@@ -1,5 +1,5 @@
 import { p } from '../portalStyles';
-import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkProgress } from '@luminatick/ui/park';
 import { useCallback, useEffect, useState } from 'react';
 
 type CaptureMessage = {
@@ -17,17 +17,24 @@ const capturePath = '/__local/auth-capture';
 
 export function LocalAuthCapturePage() {
   const [messages, setMessages] = useState<CaptureMessage[]>([]);
-  const [status, setStatus] = useState('Loading captured messages…');
+  const [status, setStatus] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [failure, setFailure] = useState<'fetch' | 'reset' | null>(null);
 
   const refresh = useCallback(async () => {
+    setLoaded(false);
+    setFailure(null);
+    setStatus('');
     try {
       const response = await fetch(`${capturePath}/messages`, { cache: 'no-store' });
       if (!response.ok) throw new Error(`Capture request failed (${response.status})`);
       const values = await response.json() as CaptureMessage[];
       setMessages(values);
       setStatus(values.length ? `${values.length} captured message${values.length === 1 ? '' : 's'}` : 'No captured messages.');
+      setLoaded(true);
     } catch {
-      setStatus('Capture messages are unavailable. Start the local Worker on port 8787.');
+      setFailure('fetch');
+      setLoaded(true);
     }
   }, []);
 
@@ -37,12 +44,15 @@ export function LocalAuthCapturePage() {
   }, [refresh]);
 
   const reset = async () => {
+    setFailure(null);
+    setStatus('Clearing captured messages…');
     try {
       const response = await fetch(`${capturePath}/reset`, { method: 'POST', credentials: 'same-origin' });
       if (!response.ok) throw new Error(`Capture reset failed (${response.status})`);
       await refresh();
     } catch {
-      setStatus('Captured messages could not be cleared.');
+      setFailure('reset');
+      setStatus('');
     }
   };
 
@@ -53,10 +63,18 @@ export function LocalAuthCapturePage() {
       <ParkButton type="button" onClick={() => void refresh()}>Refresh messages</ParkButton>
       <ParkButton type="button" onClick={() => void reset()}>Clear captured messages</ParkButton>
     </div>
-    <p className={p.localCaptureStatus} role="status" aria-live="polite">{status}</p>
+    {status && <p className={p.localCaptureStatus} role="status" aria-live="polite">{status}</p>}
+    {failure && <ParkAlert.Root role="alert" status="error" variant="surface">
+      <ParkAlert.Content>
+        <ParkAlert.Description>{failure === 'fetch' ? 'Capture messages are unavailable. Start the local Worker on port 8787.' : 'Captured messages could not be cleared.'}</ParkAlert.Description>
+        <ParkButton type="button" onClick={() => void (failure === 'fetch' ? refresh() : reset())}>
+          {failure === 'fetch' ? 'Retry loading messages' : 'Retry clearing messages'}
+        </ParkButton>
+      </ParkAlert.Content>
+    </ParkAlert.Root>}
     <section className={p.localCaptureSection} aria-labelledby="captured-messages">
       <h2 id="captured-messages" className={p.localCaptureHeading}>Captured messages</h2>
-      {messages.length === 0 ? <ParkEmptyState title="No captured messages." description="Captured local authentication messages will appear here." headingLevel={false} className={p.localCaptureEmpty} /> : messages.map(message => <article key={message.id} className={p.localCaptureMessage}>
+      {!loaded ? <ParkProgress value={null} label="Loading captured messages…" /> : messages.length === 0 ? failure ? null : <ParkEmptyState title="No captured messages." description="Captured local authentication messages will appear here." headingLevel={false} className={p.localCaptureEmpty} /> : messages.map(message => <article key={message.id} className={p.localCaptureMessage}>
         <h3 className={p.localCaptureMessageTitle}>{message.subject}</h3>
         <p className={p.localCaptureMessageMeta}>To: {message.to}</p>
         {message.loginLink && <a className={p.localCaptureLink} href={message.loginLink}>Open captured login link</a>}

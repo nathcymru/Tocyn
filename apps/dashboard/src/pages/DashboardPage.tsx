@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ParkButton, ParkCard, ParkEmptyState, ParkPage, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkPage, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 import { useStats } from '../hooks/useStats';
 import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
@@ -70,10 +70,10 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className={[page.root, page.content].join(' ')}>
       {header}
-      {isError && <div role="alert" className={css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2', borderWidth: '1px', borderColor: 'warning.border', borderRadius: 'l2', bg: 'warning.surface', color: 'text.primary', p: '3' })}>
-        <span>Dashboard metrics could not be refreshed. Showing the last loaded values.</span>
+      {isError && <ParkAlert.Root role="alert" status="warning"><ParkAlert.Content>
+        <ParkAlert.Description>Dashboard metrics could not be refreshed. Showing the last loaded values.</ParkAlert.Description>
         <ParkButton type="button" variant="plain" disabled={isFetching} onClick={() => void refetch()}>Retry dashboard metrics</ParkButton>
-      </div>}
+      </ParkAlert.Content></ParkAlert.Root>}
 
       <div className={page.metricStrip}>
         {cards.map(card => (

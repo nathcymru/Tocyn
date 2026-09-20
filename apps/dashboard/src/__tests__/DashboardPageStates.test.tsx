@@ -32,7 +32,9 @@ it('retains last loaded metrics and an inline retry after a background refresh f
     data: { ticketsByStatus: [{ status: 'open', count: 3 }, { status: 'pending', count: 2 }],
       ticketsByPriority: [{ priority: 'high', count: 5 }], totalUsers: 4, totalGroups: 1 } };
   show();
-  expect(screen.getByRole('alert')).toHaveTextContent('Showing the last loaded values');
+  const staleMetrics = screen.getByRole('alert');
+  expect(staleMetrics).toHaveClass('alert__root');
+  expect(staleMetrics).toHaveTextContent('Showing the last loaded values');
   expect(screen.getByText('Total Tickets').closest('.card__root')).toHaveTextContent('5');
   expect(screen.getByText('Open Tickets').closest('.card__root')).toHaveTextContent('3');
   expect(screen.getByText('Tickets by Priority').closest('.card__root')).toHaveTextContent('high');

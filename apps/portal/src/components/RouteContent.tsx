@@ -1,7 +1,7 @@
 import { p } from '../portalStyles';
 import { Component, createRef, Suspense, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ParkSkeleton } from '@luminatick/ui/park';
+import { ParkButton, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
 
 const loadingShape = css({ display: 'grid', gap: '3', maxW: '3xl' });
@@ -25,11 +25,15 @@ class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, { failed: bool
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch() { this.heading.current?.focus(); }
   render() {
-    if (this.state.failed) return <section role="alert" className={p.routeError}>
-      <h1 ref={this.heading} tabIndex={-1} className={p.routeErrorTitle}>This page could not be loaded</h1>
-      <p>Your sign-in has not been changed. Reload the page to try again.</p>
-      <a href={this.props.reloadHref} className={p.routeReload}>Reload this page</a>
-    </section>;
+    if (this.state.failed) return <ParkEmptyState
+      role="alert"
+      headingLevel={1}
+      headingRef={this.heading}
+      title="This page could not be loaded"
+      description="Your sign-in has not been changed. Reload the page to try again."
+      action={<ParkButton asChild variant="outline"><a href={this.props.reloadHref}>Reload this page</a></ParkButton>}
+      className={p.routeError}
+    />;
     return this.props.children;
   }
 }

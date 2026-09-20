@@ -27,7 +27,10 @@ it('focuses a safe load-error message, offers a real reload and permits another 
   </Routes></MemoryRouter>);
   const heading=await screen.findByRole('heading',{name:'This page could not be loaded'});
   await waitFor(()=>expect(heading).toHaveFocus());
+  expect(heading).toHaveClass('emptyState__title');
+  expect(heading.closest('[role="alert"]')).toHaveClass('emptyState__root');
   expect(screen.getByRole('link',{name:'Reload this page'})).toHaveAttribute('href','/tickets?filter=open');
+  expect(screen.getByRole('link',{name:'Reload this page'})).toHaveClass('button--variant_outline');
   expect(screen.queryByText(/synthetic private module failure/)).not.toBeInTheDocument();
   expect(useAuthStore.getState()).toBe(before);
   fireEvent.click(screen.getByRole('link',{name:'Other page'}));

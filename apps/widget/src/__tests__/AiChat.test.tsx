@@ -27,7 +27,9 @@ it('names controls, prevents concurrent sends and retains the authenticated hist
   fireEvent.submit(form); fireEvent.submit(form);
   expect(request).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('textbox', { name: 'Your question' })).toBeDisabled();
-  expect(screen.getByRole('status', { name: 'Waiting for AI response' })).toBeInTheDocument();
+  const waiting = screen.getByRole('status', { name: 'Waiting for AI response' });
+  expect(waiting).toHaveTextContent('Waiting for AI response…');
+  expect(waiting.querySelectorAll('.skeleton')).toHaveLength(2);
   expect(form).toHaveAttribute('aria-busy', 'true');
   const [url, options] = request.mock.calls[0];
   expect(url).toBe('/local-widget/chat'); expect(options.credentials).toBe('omit');

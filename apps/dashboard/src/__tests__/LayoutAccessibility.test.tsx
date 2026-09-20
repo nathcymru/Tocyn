@@ -118,7 +118,7 @@ it('keeps header controls reachable in the generated 320 CSS px reflow contract'
 it('names account/connection disclosures and restores focus when their child actions close', async () => {
   const result=await renderReady();
   const account = screen.getByRole('button', { name: 'Account options' });
-  expect(account.querySelector('.avatar__root')).toBeInTheDocument();
+  expect(account.querySelector('.avatar__root')).toHaveClass('avatar__root--shape_full');
   expect(account.querySelector('.avatar__fallback')).toHaveTextContent('O');
   expect(account.querySelector('.shell__personaStatus')).toHaveAttribute('aria-hidden', 'true');
   await userEvent.click(account); expect(account).toHaveAttribute('aria-expanded', 'true');
@@ -275,6 +275,7 @@ it('announces a failed activity continuation and retries it without discarding l
   await userEvent.click(await screen.findByRole('button', { name: 'Load more activity' }));
 
   const error = await screen.findByRole('alert');
+  expect(error).toHaveClass('alert__root');
   expect(error).toHaveTextContent('More activity could not be loaded. Try again to continue.');
   expect(screen.getByText('customer reply')).toBeInTheDocument();
   const retry = screen.getByRole('button', { name: 'Retry loading activity' });
@@ -284,6 +285,21 @@ it('announces a failed activity continuation and retries it without discarding l
   expect(await screen.findByText('assignment')).toBeInTheDocument();
   expect(continuationAttempts).toBe(2);
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('shows an unavailable unread count with Park status while retaining activity', async () => {
+  vi.mocked(dashboardApi.get).mockImplementation(async (path: string) => {
+    if (path === '/activities?limit=20') return {
+      page: { items: [{ id: 'activity-one', ticketId: 'ticket-one', kind: 'customer_reply', facts: {}, revision: 1, createdAt: '2026-09-12T09:00:00.000Z', readAt: null, dismissedAt: null }], next: null },
+      unread: { status: 'unavailable', count: null, reason: 'projection_pending' },
+    };
+    return { revision: 0, mode: 'system', updatedAt: null };
+  });
+  await renderReady();
+  await userEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  const notice = await screen.findByText('Unread count is temporarily unavailable. Your activity remains available below.');
+  expect(notice.closest('.alert__root')).toHaveAttribute('role', 'status');
+  expect(screen.getByText('customer reply')).toBeInTheDocument();
 });
 
 it('keeps connection recovery visible without healthy latency diagnostics', async () => {

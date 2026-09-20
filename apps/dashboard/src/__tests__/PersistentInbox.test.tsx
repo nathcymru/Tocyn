@@ -268,6 +268,26 @@ it('saves only filter combinations the server can reproduce as a quick view',asy
   await waitFor(()=>expect(screen.getByTestId('location')).toHaveTextContent('/inbox/customer-quick-view'));
 });
 
+it('keeps quick-view input available with a Park recovery alert after a failed save',async()=>{
+  const fallback=fetch;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/settings/filters'&&options.method==='POST')return json({error:'Temporary failure'},503);
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  openFilters();
+  fireEvent.click(screen.getByRole('button',{name:'Add to quick view'}));
+  const name=screen.getByRole('textbox',{name:'Quick view name'});
+  fireEvent.change(name,{target:{value:'Follow up'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save quick view'}));
+  const alert=await screen.findByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert).toHaveTextContent('Could not save the quick view. Your filter choices are still here; try again.');
+  expect(name).toHaveValue('Follow up');
+  expect(screen.getByRole('button',{name:'Save quick view'})).toBeEnabled();
+});
+
 it('switches to an accessible factual table with row navigation and a mobile list fallback',async()=>{
   showInbox();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
@@ -353,7 +373,9 @@ it('shows recovery and no historical rows when the current tenant list read is d
     return json({});
   }));
   showInbox();
-  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load conversations.');
+  const failedLoad=await screen.findByRole('alert');
+  expect(failedLoad).toHaveClass('alert__root');
+  expect(failedLoad).toHaveTextContent('Could not load conversations.');
   expect(within(screen.getByRole('listbox',{name:'Conversation list'})).queryAllByRole('option')).toHaveLength(0);
   expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
 });
@@ -809,7 +831,9 @@ it('retains confirmed inbox rows and a retry action after a background refresh f
   const first=await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   fail=true;
   await act(async()=>{await client.invalidateQueries({queryKey:['tickets']});});
-  expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh conversations. The last confirmed list remains visible.');
+  const failedRefresh=await screen.findByRole('alert');
+  expect(failedRefresh).toHaveClass('alert__root');
+  expect(failedRefresh).toHaveTextContent('Could not refresh conversations. The last confirmed list remains visible.');
   expect(first).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
   expect(screen.queryByText('No conversations in this view')).not.toBeInTheDocument();

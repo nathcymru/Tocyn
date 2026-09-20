@@ -1,5 +1,5 @@
 import { w } from '../widgetStyles';
-import { ParkAlert, ParkButton, ParkInput, ParkScrollArea } from '@luminatick/ui/park';
+import { ParkAlert, ParkButton, ParkInput, ParkScrollArea, ParkSkeleton } from '@luminatick/ui/park';
 import { IconPaperPlane } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState, useRef, useEffect } from 'react';
@@ -117,11 +117,9 @@ const AiChat: React.FC<Props> = ({ config }) => {
         {isLoading && (
           <div role="status" aria-label="Waiting for AI response" className={w.aiWaiting}>
             <div className={w.aiWaitingBubble}>
-              <div aria-hidden="true" className={w.aiDots}>
-                <div className={w.aiDot}></div>
-                <div className={w.aiDot}></div>
-                <div className={w.aiDot}></div>
-              </div>
+              <span className={w.aiWaitingLabel}>Waiting for AI response…</span>
+              <ParkSkeleton aria-hidden="true" height="3" width="12rem" />
+              <ParkSkeleton aria-hidden="true" height="3" width="8rem" />
             </div>
           </div>
         )}

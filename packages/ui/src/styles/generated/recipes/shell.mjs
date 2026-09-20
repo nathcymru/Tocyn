@@ -154,18 +154,6 @@ const shellSlotNames = [
     "shell__activityDismiss"
   ],
   [
-    "activityMessage",
-    "shell__activityMessage"
-  ],
-  [
-    "activityWarning",
-    "shell__activityWarning"
-  ],
-  [
-    "activityRetry",
-    "shell__activityRetry"
-  ],
-  [
     "activityLoading",
     "shell__activityLoading"
   ],

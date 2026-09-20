@@ -22,14 +22,6 @@ const ticketDetailSlotNames = [
     "ticketDetail__unavailable"
   ],
   [
-    "alert",
-    "ticketDetail__alert"
-  ],
-  [
-    "notice",
-    "ticketDetail__notice"
-  ],
-  [
     "status",
     "ticketDetail__status"
   ],
@@ -308,14 +300,6 @@ const ticketDetailSlotNames = [
   [
     "composerPanel",
     "ticketDetail__composerPanel"
-  ],
-  [
-    "composerAlert",
-    "ticketDetail__composerAlert"
-  ],
-  [
-    "draftStatus",
-    "ticketDetail__draftStatus"
   ],
   [
     "draftActions",
