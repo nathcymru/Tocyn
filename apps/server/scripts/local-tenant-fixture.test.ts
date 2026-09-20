@@ -307,7 +307,7 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     const snoozeEvents = await fixture.db.prepare(`SELECT tenant_id,ticket_id,kind,actor_kind,actor_id,recorded_at,
       json_extract(facts,'$.before.snoozedUntil') AS before_until,
       json_extract(facts,'$.after.snoozedUntil') AS after_until
-      FROM support_state_events WHERE id='beta2-snooze-support-event'`).all<{
+      FROM support_state_events WHERE id='b2b2b2b2-0000-4000-8000-000000000203'`).all<{
         tenant_id:string;ticket_id:string;kind:string;actor_kind:string;actor_id:string;recorded_at:string;
         before_until:string|null;after_until:string;
       }>();
@@ -319,7 +319,7 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     assert.equal(event.recorded_at,snoozeReview?.changed_at);
     const history = await fixture.db.prepare(`SELECT tenant_id,ticket_id,kind,actor_kind,actor_id,actor_provenance,source,
       visibility,recorded_at,json_extract(facts,'$.after.snoozedUntil') AS after_until
-      FROM conversation_events WHERE id='beta2-snooze-conversation-event'`).all<{
+      FROM conversation_events WHERE id='b2b2b2b2-0000-4000-8000-000000000204'`).all<{
         tenant_id:string;ticket_id:string;kind:string;actor_kind:string;actor_id:string;
         actor_provenance:string;source:string;visibility:string;recorded_at:string;after_until:string;
       }>();

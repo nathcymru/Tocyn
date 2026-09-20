@@ -294,12 +294,12 @@ function appendBeta2SnoozeFixtureSql(rows: string[], now: number): void {
     'nextAction',s.next_action,'snoozedUntil',${until},'resurfaceReason',NULL))`;
   rows.push(`INSERT INTO support_state_events
     (tenant_id,id,ticket_id,definition_id,kind,recorded_at,actor_kind,actor_id,facts)
-    SELECT s.tenant_id,'beta2-snooze-support-event',s.ticket_id,s.definition_id,'ticket.transition',${at},
+    SELECT s.tenant_id,'b2b2b2b2-0000-4000-8000-000000000203',s.ticket_id,s.definition_id,'ticket.transition',${at},
       'staff','fixture-operator',${facts}
     FROM ticket_support_state s WHERE s.tenant_id='fixture-tenant-a' AND s.ticket_id='beta2-snoozed-assigned';`);
   rows.push(`INSERT INTO conversation_events
     (tenant_id,id,ticket_id,article_id,sequence,kind,recorded_at,actor_kind,actor_id,actor_provenance,source,visibility,facts)
-    SELECT s.tenant_id,'beta2-snooze-conversation-event',s.ticket_id,NULL,
+    SELECT s.tenant_id,'b2b2b2b2-0000-4000-8000-000000000204',s.ticket_id,NULL,
       (SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=s.tenant_id AND e.ticket_id=s.ticket_id),
       'ticket.state_changed',${at},'staff','fixture-operator','mfa-staff','dashboard','internal',${facts}
     FROM ticket_support_state s WHERE s.tenant_id='fixture-tenant-a' AND s.ticket_id='beta2-snoozed-assigned';`);
