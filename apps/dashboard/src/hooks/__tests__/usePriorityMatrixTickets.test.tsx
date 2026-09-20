@@ -66,6 +66,88 @@ describe('priority matrix snapshot hook', () => {
     expect(result.current.data).toBeUndefined();
   });
 
+  it('reads a fresh first page after remount before allowing its signed page-two cursor', async () => {
+    vi.mocked(dashboardApi.get).mockResolvedValueOnce(page(1, asOf, 'old-cursor'))
+      .mockResolvedValueOnce(page(1, asOf, 'new-cursor')).mockResolvedValueOnce(page(2));
+    const first = renderHook(() => usePriorityMatrixTickets({ sort: 'priority_focus', page: '1' }, true), { wrapper });
+    await waitFor(() => expect(first.result.current.data?.data[0]?.id).toBe('ticket-1'));
+    first.unmount();
+
+    const second = renderHook(({ pageNumber }) => usePriorityMatrixTickets({ sort: 'priority_focus', page: pageNumber }, true),
+      { wrapper, initialProps: { pageNumber: '1' } });
+    await waitFor(() => expect(vi.mocked(dashboardApi.get)).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(second.result.current.data?.data[0]?.id).toBe('ticket-1'));
+    second.rerender({ pageNumber: '2' });
+    await waitFor(() => expect(second.result.current.data?.data[0]?.id).toBe('ticket-2'));
+    expect(vi.mocked(dashboardApi.get).mock.calls[2][0]).toContain('cursor=new-cursor');
+  });
+
+  it('does not reuse an earlier sort ledger when returning to that sort', async () => {
+    vi.mocked(dashboardApi.get).mockResolvedValueOnce(page(1, asOf, 'old-focus'))
+      .mockResolvedValueOnce(page(1, asOf, 'criticality'))
+      .mockResolvedValueOnce(page(1, asOf, 'new-focus')).mockResolvedValueOnce(page(2));
+    const { result, rerender } = renderHook(({ sort, pageNumber }) => usePriorityMatrixTickets({ sort, page: pageNumber }, true),
+      { wrapper, initialProps: { sort: 'priority_focus', pageNumber: '1' } });
+    await waitFor(() => expect(result.current.data?.data[0]?.id).toBe('ticket-1'));
+    rerender({ sort: 'priority_criticality', pageNumber: '1' });
+    await waitFor(() => expect(vi.mocked(dashboardApi.get)).toHaveBeenCalledTimes(2));
+    rerender({ sort: 'priority_focus', pageNumber: '1' });
+    await waitFor(() => expect(vi.mocked(dashboardApi.get)).toHaveBeenCalledTimes(3));
+    rerender({ sort: 'priority_focus', pageNumber: '2' });
+    await waitFor(() => expect(result.current.data?.data[0]?.id).toBe('ticket-2'));
+    expect(vi.mocked(dashboardApi.get).mock.calls[3][0]).toContain('cursor=new-focus');
+  });
+
+  it('schedules the next refresh from the snapshot time even after paging', async () => {
+    const now = Date.now();
+    const sampledAt = new Date(now - 25_000).toISOString();
+    const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const intervals = vi.spyOn(window, 'setInterval');
+    try {
+      vi.mocked(dashboardApi.get).mockResolvedValueOnce(page(1, sampledAt)).mockResolvedValueOnce(page(2, sampledAt));
+      const { result, rerender } = renderHook(({ pageNumber }) => usePriorityMatrixTickets({ sort: 'priority_focus', page: pageNumber }, true, () => {}),
+        { wrapper, initialProps: { pageNumber: '1' } });
+      await waitFor(() => expect(result.current.data?.data[0]?.id).toBe('ticket-1'));
+      expect(intervals.mock.calls.at(-1)?.[1]).toBe(5_000);
+      rerender({ pageNumber: '2' });
+      await waitFor(() => expect(result.current.data?.data[0]?.id).toBe('ticket-2'));
+      expect(intervals.mock.calls.at(-1)?.[1]).toBe(5_000);
+    } finally {
+      intervals.mockRestore();
+      dateNow.mockRestore();
+    }
+  });
+
+  it('waits while hidden and makes one refresh when an expired snapshot becomes visible', async () => {
+    let visibility: DocumentVisibilityState = 'visible';
+    const originalVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+    const dateNow = vi.spyOn(Date, 'now');
+    try {
+      const sampledAt = new Date().toISOString();
+      vi.mocked(dashboardApi.get).mockResolvedValue(page(1, sampledAt));
+      const { result } = renderHook(() => usePriorityMatrixTickets({ sort: 'priority_focus', page: '1' }, true), { wrapper });
+      await waitFor(() => expect(result.current.data?.data[0]?.id).toBe('ticket-1'));
+      expect(dashboardApi.get).toHaveBeenCalledTimes(1);
+
+      dateNow.mockReturnValue(Date.parse(sampledAt) + 31_000);
+      visibility = 'hidden';
+      act(() => document.dispatchEvent(new Event('visibilitychange')));
+      expect(dashboardApi.get).toHaveBeenCalledTimes(1);
+      visibility = 'visible';
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await waitFor(() => expect(dashboardApi.get).toHaveBeenCalledTimes(2));
+      expect(dashboardApi.get).toHaveBeenCalledTimes(2);
+    } finally {
+      dateNow.mockRestore();
+      if (originalVisibility) Object.defineProperty(document, 'visibilityState', originalVisibility);
+      else Reflect.deleteProperty(document, 'visibilityState');
+    }
+  });
+
   it('never reconstructs a page-two cursor from a restored page or another sort', async () => {
     vi.mocked(dashboardApi.get).mockResolvedValue(page(1));
     const { result, rerender } = renderHook(({ sort, pageNumber }) => usePriorityMatrixTickets({ sort, page: pageNumber }, true),

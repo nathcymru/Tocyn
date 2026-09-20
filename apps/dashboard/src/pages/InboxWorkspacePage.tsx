@@ -247,21 +247,29 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
   const batchSla=useTicketSlaBatch(tickets.map(ticket=>ticket.id),!snapshotSort&&routeReady&&!query.isPlaceholderData&&!query.error&&Boolean(query.data));
   const ticketSla=snapshotSort?{...query,data:Object.fromEntries(Object.entries(query.data?.sla??{}).filter(([,value])=>value!==null))}:batchSla;
   const setGlobalAlert = useInboxGlobalAlert();
+  const alertScopeKey = priorityMatrixSort ? listScope : `${listScope}:${currentPage}`;
+  useLayoutEffect(() => {
+    // A different operator, view or page must not inherit an old alert. A
+    // refresh of the same verified scope may keep its existing alert mounted.
+    setGlobalAlert(null);
+    return () => setGlobalAlert(null);
+  }, [alertScopeKey, setGlobalAlert]);
   useEffect(() => {
     if (priorityMatrixSort) {
-      if (query.error || query.isPlaceholderData || !query.data) { setGlobalAlert(null); return; }
+      if (query.error) { setGlobalAlert(null); return; }
+      if (query.isPlaceholderData || !query.data) return;
       const count=(query.data as PriorityMatrixTicketQueryPage).triageOverdueCount;
       setGlobalAlert({kind:'priority-triage',count,scope:activeView==='all'?'this priority view':queueViews[activeView as QueueView]?.label??'this saved view'});
-      return () => setGlobalAlert(null);
+      return;
     }
-    if (ticketSla.isLoading || ticketSla.isError || query.isPlaceholderData) return;
+    if (query.error || ticketSla.isError) { setGlobalAlert(null); return; }
+    if (ticketSla.isLoading || query.isPlaceholderData) return;
     const count = tickets.filter(ticket => !ticket.assigned_to && (() => {
       const sla = ticketSla.data?.[ticket.id];
       return sla?.response.state === 'breached' || sla?.resolution.state === 'breached';
     })()).length;
     const scope = activeView === 'all' ? 'the current page of this inbox view' : `the current page of ${queueViews[activeView as QueueView]?.label ?? 'this saved view'}`;
     setGlobalAlert({ count, scope });
-    return () => setGlobalAlert(null);
   }, [activeView, priorityMatrixSort, query.data, query.error, query.isPlaceholderData, setGlobalAlert, ticketSla.data, ticketSla.isError, ticketSla.isLoading, tickets]);
   const restartSla=()=>{query.restartSla();workspace.update({listAnchor:'page:1'});setStatus('SLA ordering restarted. The selected conversation stays open.');};
   const restartPriority=()=>{query.restartPriorityMatrix();workspace.update({listAnchor:'page:1'});setStatus('Priority ordering restarted. The selected conversation stays open.');};

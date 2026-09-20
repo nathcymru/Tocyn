@@ -31,6 +31,7 @@ export type PriorityMatrixTicketQueryPage = TicketQueryPage & Readonly<{
 }>;
 
 const restartError = () => new ApiError('The priority view changed or expired. Restart priority ordering.', 409, 'priority_sort_restart');
+let nextLedgerId = 0;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -98,12 +99,15 @@ export function usePriorityMatrixTickets(params: Record<string, string>, enabled
   const periodicRestartRef = useRef(onPeriodicRestart);
   useLayoutEffect(() => { periodicRestartRef.current = onPeriodicRestart; }, [onPeriodicRestart]);
   const selection = JSON.stringify(Object.entries(params).filter(([key]) => !['page', 'sort', 'cursor'].includes(key)).sort(([a], [b]) => a.localeCompare(b)));
-  const ledger = useMemo(() => ({ active: false, cursors: new Map<number, string | undefined>([[1, undefined]]), asOf: '' }), [identity, selection, sort, revision]);
+  // A cursor is meaningful only for the ledger that received page one. Give a
+  // new ledger a new cache key, including after a route remount or sort return;
+  // otherwise React Query can restore page one without restoring its cursor.
+  const ledger = useMemo(() => ({ id: ++nextLedgerId, active: false, cursors: new Map<number, string | undefined>([[1, undefined]]), asOf: '' }), [identity, selection, sort, revision]);
   useLayoutEffect(() => { ledger.active = true; return () => { ledger.active = false; }; }, [ledger]);
   const page = Number(params.page ?? '1');
   const missingCursor = enabled && (!Number.isSafeInteger(page) || page < 1 || !ledger.cursors.has(page));
   const query = useQuery<PriorityMatrixTicketQueryPage>({
-    queryKey: ['tickets', 'priority-matrix', identity, sort, selection, revision, page, page > 1 ? ledger.asOf : 'first'],
+    queryKey: ['tickets', 'priority-matrix', identity, sort, selection, ledger.id, page, page > 1 ? ledger.asOf : 'first'],
     enabled: enabled && !missingCursor && Boolean(user?.tenant_id && user.id),
     retry: false,
     // The complete queue is ordered at one instant. A background refresh must
@@ -127,15 +131,22 @@ export function usePriorityMatrixTickets(params: Record<string, string>, enabled
   });
   useLayoutEffect(() => {
     if (!enabled || !user?.tenant_id || !user.id || !query.data?.asOf || query.error) return;
+    let requested = false;
     const restart = () => {
-      if (!ledger.active || assignmentIdentity() !== identity || document.visibilityState !== 'visible') return;
+      if (requested || !ledger.active || assignmentIdentity() !== identity || document.visibilityState !== 'visible') return;
       // A later page's signed cursor is tied to the old whole-queue snapshot.
       // Move the list to page one before changing the ledger; leave detail/draft alone.
       if (page > 1 && !periodicRestartRef.current) return;
+      requested = true;
       periodicRestartRef.current?.();
       setRevision(value => value + 1);
     };
-    const interval = window.setInterval(restart, 30_000);
+    // Paging does not extend the server snapshot's 30-second lifetime. Keep a
+    // small floor for skewed/stale timestamps so malformed upstream timing
+    // cannot create an unbounded request loop.
+    const remaining = 30_000 - (Date.now() - Date.parse(ledger.asOf));
+    const delay = Math.min(30_000, Math.max(1_000, remaining));
+    const interval = window.setInterval(restart, delay);
     const onVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - Date.parse(ledger.asOf) >= 30_000) restart();
     };

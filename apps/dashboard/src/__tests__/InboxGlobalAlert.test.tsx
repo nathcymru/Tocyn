@@ -7,7 +7,10 @@ afterEach(cleanup);
 function Trigger() {
   const setAlert = useInboxGlobalAlert();
   return <><button type="button" onClick={() => setAlert({ count: 2, scope: 'All tickets' })}>Show inbox alert</button>
-    <button type="button" onClick={() => setAlert({ count: 2, scope: 'All tickets', kind: 'priority-triage' })}>Show priority alert</button></>;
+    <button type="button" onClick={() => setAlert({ count: 2, scope: 'All tickets', kind: 'priority-triage' })}>Show priority alert</button>
+    <button type="button" onClick={() => setAlert({ count: 3, scope: 'All tickets', kind: 'priority-triage' })}>Change priority count</button>
+    <button type="button" onClick={() => setAlert({ count: 0, scope: 'All tickets', kind: 'priority-triage' })}>Clear priority alert</button>
+    <button type="button" onClick={() => setAlert(null)}>Report read failure</button></>;
 }
 
 it('uses Park Alert anatomy and keeps the assertive notice dismissible in document flow', () => {
@@ -28,4 +31,33 @@ it('labels expired fixed-hour triage clocks separately from contractual SLA brea
   render(<InboxGlobalAlertProvider><Trigger /></InboxGlobalAlertProvider>);
   fireEvent.click(screen.getByRole('button', { name: 'Show priority alert' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Action required: 2 fixed-hour priority countdowns have expired in All tickets.');
+});
+
+it('keeps an unchanged priority alert mounted and respects dismissal until the count changes', () => {
+  render(<InboxGlobalAlertProvider><Trigger /></InboxGlobalAlertProvider>);
+  const show = screen.getByRole('button', { name: 'Show priority alert' });
+  fireEvent.click(show);
+  const original = screen.getByRole('alert');
+  fireEvent.click(show);
+  expect(screen.getByRole('alert')).toBe(original);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss inbox alert' }));
+  fireEvent.click(show);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Change priority count' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('3 fixed-hour priority countdowns');
+  fireEvent.click(screen.getByRole('button', { name: 'Clear priority alert' }));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  fireEvent.click(show);
+  expect(screen.getByRole('alert')).toHaveTextContent('2 fixed-hour priority countdowns');
+});
+
+it('clears a previously confirmed calendar-SLA alert when its read fails', () => {
+  render(<InboxGlobalAlertProvider><Trigger /></InboxGlobalAlertProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Show inbox alert' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('2 overdue unassigned conversations');
+  fireEvent.click(screen.getByRole('button', { name: 'Report read failure' }));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Show inbox alert' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('2 overdue unassigned conversations');
 });
