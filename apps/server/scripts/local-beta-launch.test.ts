@@ -5,6 +5,7 @@ import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
+import * as OTPAuth from 'otpauth';
 
 const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -16,11 +17,22 @@ async function until(condition: () => boolean | Promise<boolean>, message: strin
   }
   assert.fail(message);
 }
-async function portFree(): Promise<boolean> {
+async function sparePort(): Promise<number> {
+  const probe = createServer();
+  return new Promise((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      if (!address || typeof address === 'string') { probe.close(); reject(new Error('Isolated fixture port unavailable')); return; }
+      probe.close(() => resolve(address.port));
+    });
+  });
+}
+async function portFree(port: number): Promise<boolean> {
   const probe = createServer();
   return new Promise(resolve => {
     probe.once('error', () => resolve(false));
-    probe.listen(8787, '127.0.0.1', () => probe.close(() => resolve(true)));
+    probe.listen(port, '127.0.0.1', () => probe.close(() => resolve(true)));
   });
 }
 
@@ -55,10 +67,12 @@ while True:
 // The PTY runs the supported npm command with all three child streams as terminals.
 // Output includes synthetic credentials: retain it only in memory and never include it in errors.
 test('supported interactive npm beta launcher removes credentials/state after Ctrl-C and repeated Ctrl-C', async t => {
-  assert.ok(await portFree(), 'This test requires exclusive local port 8787');
+  const port = await sparePort();
+  assert.notEqual(port, 8787, 'The launcher test must never use the existing fixture port');
+  assert.ok(await portFree(port), 'This test requires an isolated free local port');
   assert.ok(process.platform === 'darwin' || process.platform === 'linux', 'Local PTY proof requires macOS or Linux');
   for (const repeated of [false, true]) {
-    const env: NodeJS.ProcessEnv = { ...process.env, WRANGLER_SEND_METRICS: 'false' };
+    const env: NodeJS.ProcessEnv = { ...process.env, WRANGLER_SEND_METRICS: 'false', TOCYN_LOCAL_FIXTURE_TEST_PORT: String(port) };
     delete env.CI;
     let terminal: ChildProcess | undefined;
     let output = '';
@@ -83,8 +97,39 @@ test('supported interactive npm beta launcher removes credentials/state after Ct
         'Interactive guarded fixture must become ready without disclosing terminal output', 30000);
       assert.ok(runDirectory && existsSync(runDirectory));
       assert.ok(existsSync(resolve(runDirectory, '.dev.vars')), 'The actual fixture creates private local credentials');
-      const health = await fetch('http://localhost:8787/health', { signal: AbortSignal.timeout(1000) });
+      const origin = `http://localhost:${port}`;
+      const health = await fetch(`${origin}/health`, { signal: AbortSignal.timeout(1000) });
       assert.equal(health.status, 200); await health.body?.cancel();
+      const operator = output.match(/Email: fixture\.operator\.a@example\.test\r?\nPassword: ([^\r\n]+)\r?\nOperator TOTP enrollment URI: ([^\r\n]+)/);
+      assert.ok(operator, 'The run-owned launcher must print one synthetic operator credential');
+      const request = (path: string, init: RequestInit = {}) => fetch(`${origin}${path}`, {
+        ...init, redirect: 'error', signal: AbortSignal.timeout(15_000),
+      });
+      const login = await request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'fixture.operator.a@example.test', password: operator[1] }) });
+      assert.equal(login.status, 200, 'The synthetic operator must reach MFA challenge');
+      const challenge = await login.json() as { token: string };
+      const authenticator = OTPAuth.URI.parse(operator[2]) as OTPAuth.TOTP;
+      const verified = await request('/api/auth/mfa/verify', { method: 'POST',
+        headers: { Authorization: `Bearer ${challenge.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: authenticator.generate() }) });
+      assert.equal(verified.status, 200, 'Budgeted MFA verification must complete in the actual local Worker');
+      const session = await verified.json() as { token: string };
+      const priority = await request('/api/tickets?sort=priority_focus&limit=20', {
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      assert.equal(priority.status, 200, 'The admitted, authenticated priority queue must be available');
+      const body = await priority.json() as { data: Array<{ id: string; priority_category: string | null;
+        contract_sla_tier: string | null; criticality_tier: number | null }>;
+        meta: { total: number }; triageOverdueCount: number;
+        priorityClocks: Record<string, { remainingHours: number; paused: boolean } | null> };
+      assert.equal(body.meta.total, 20);
+      assert.equal(body.data.length, 20);
+      assert.ok(body.data.every(ticket => ticket.id.startsWith('beta2-') && ticket.priority_category
+        && ticket.contract_sla_tier && ticket.criticality_tier));
+      assert.ok(body.triageOverdueCount >= 2);
+      assert.ok(body.data.every(ticket => body.priorityClocks[ticket.id] && Number.isFinite(body.priorityClocks[ticket.id]?.remainingHours)));
+      assert.equal(Object.hasOwn(body.priorityClocks, 'beta2-b-email'), false);
       output = '';
       terminal.stdin!.write('\x03');
       if (repeated) {
@@ -92,7 +137,7 @@ test('supported interactive npm beta launcher removes credentials/state after Ct
         terminal.stdin!.write('\x03');
       }
       await until(() => !existsSync(runDirectory!), 'Ctrl-C must remove the exact run-owned state and credentials');
-      await until(portFree, 'Ctrl-C must release the local Worker port');
+      await until(() => portFree(port), 'Ctrl-C must release the isolated local Worker port');
       await until(() => terminal!.exitCode !== null || terminal!.signalCode !== null, 'The supported npm terminal must exit');
       assert.equal(existsSync(runDirectory), false);
     } finally {

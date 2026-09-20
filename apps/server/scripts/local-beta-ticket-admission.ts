@@ -8,12 +8,16 @@ const PREVIEW_WINDOW_MS = 8 * 60 * 60 * 1000;
 const GRANT_LIFETIME_MS = 60_000;
 
 /** Only the explicit, disposable local-beta launcher may change its generated config. */
-export function configureLocalBetaTicketAdmission(config: { vars: Record<string, string> }, enabled: boolean): void {
+export function configureLocalBetaTicketAdmission(config: { vars: Record<string, string>; compatibility_flags?: string[] }, enabled: boolean): void {
   if (!enabled) return;
   assert.equal(config.vars.ENVIRONMENT, 'local');
   assert.equal(config.vars.BUDGET_ADMISSION_POLICY, 'off');
+  assert.ok(Array.isArray(config.compatibility_flags), 'A local Worker compatibility flag list is required');
   config.vars.LOCAL_BETA_ENABLED = 'true';
   config.vars.BUDGET_ADMISSION_POLICY = 'ticket-mutations-v1';
+  // The checked-in 2024-04-01 date predates Durable Object RPC. Scope the
+  // required runtime opt-in to this disposable beta config only.
+  if (!config.compatibility_flags.includes('rpc')) config.compatibility_flags.push('rpc');
 }
 
 /** Seed complete synthetic owner authority into the already migrated, run-owned D1 file. */

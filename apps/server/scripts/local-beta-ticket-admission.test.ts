@@ -34,14 +34,17 @@ function d1ReadAdapter(db: Database.Database): D1Database {
 }
 
 test('only explicit local-beta config enables combined ticket admission', () => {
-  const ordinary = { vars: { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'off' } };
+  const ordinary = { vars: { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'off' }, compatibility_flags: ['nodejs_compat'] };
   configureLocalBetaTicketAdmission(ordinary, false);
   assert.deepEqual(ordinary.vars, { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'off' });
-  const beta = { vars: { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'off' } } as { vars: Record<string, string> };
+  assert.deepEqual(ordinary.compatibility_flags, ['nodejs_compat']);
+  const beta = { vars: { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'off' }, compatibility_flags: ['nodejs_compat'] } as
+    { vars: Record<string, string>; compatibility_flags: string[] };
   configureLocalBetaTicketAdmission(beta, true);
   assert.deepEqual(beta.vars, { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', LOCAL_BETA_ENABLED: 'true' });
-  assert.throws(() => configureLocalBetaTicketAdmission({ vars: { ENVIRONMENT: 'production', BUDGET_ADMISSION_POLICY: 'off' } }, true));
-  assert.throws(() => configureLocalBetaTicketAdmission({ vars: { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1' } }, true));
+  assert.deepEqual(beta.compatibility_flags, ['nodejs_compat', 'rpc']);
+  assert.throws(() => configureLocalBetaTicketAdmission({ vars: { ENVIRONMENT: 'production', BUDGET_ADMISSION_POLICY: 'off' }, compatibility_flags: ['nodejs_compat'] }, true));
+  assert.throws(() => configureLocalBetaTicketAdmission({ vars: { ENVIRONMENT: 'local', BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1' }, compatibility_flags: ['nodejs_compat'] }, true));
 });
 
 test('run-owned local-beta policy gets complete two-tenant authority for an eight-hour preview', async () => {
