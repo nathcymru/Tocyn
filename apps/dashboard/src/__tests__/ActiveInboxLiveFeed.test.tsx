@@ -92,6 +92,12 @@ it.each(['ticket.updated', 'article.created'] as const)('reloads the active inbo
   const reads = stubInboxApi(() => arrived);
   renderInbox();
   await screen.findByRole('heading', { name: 'No conversations in this view' });
+  // The empty-state heading can render before workspace restoration enables
+  // the list query. Measure event reads only after the initial API response.
+  await waitFor(() => expect(client.getQueryCache().getAll().some(query =>
+    query.queryKey[0] === 'tickets' && query.queryKey.length === 3
+      && query.state.data !== undefined && query.state.fetchStatus === 'idle',
+  )).toBe(true));
   const readsBeforeEvent = reads();
   arrived = true;
   act(() => Socket.latest.emit({ type, payload: type === 'article.created'
