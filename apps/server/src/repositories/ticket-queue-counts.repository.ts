@@ -16,12 +16,16 @@ export type TicketQueueCountOptions = Readonly<{
   commit?:TicketQueueCountCommit;
   snapshot?: TicketListScanSnapshot;
   draftNotExpiredAt?: string;
+  /** Trusted server instant. If omitted by an internal caller, use the server clock. */
+  asOfMs?: number;
 }>;
 
 /** Visible flags are materialized once; ownership classifications reuse the stored actionable flag. */
 export function ticketQueueCountsSql(scope: VerifiedTenantScope, options: TicketQueueCountOptions) {
   if (!['admin','agent'].includes(options.credential.role) || !scope.roles.includes(options.credential.role))
     throw new TicketListScanError('authority_changed');
+  const asOfMs=options.asOfMs??Date.now();
+  if(!Number.isSafeInteger(asOfMs)||asOfMs<0)throw new TicketListScanError('unavailable');
   const current=ticketListCurrentCredentialSql(scope.tenantId,scope.actorId,options.credential);
   const fence=options.snapshot?ticketListScanAssertionSql(scope.tenantId,options.snapshot):undefined;
   const authority={sql:fence?`${fence.sql.replace(/\s+LIMIT 1\s*$/,'')} AND ${current.sql} LIMIT 1`:`SELECT 1 AS admitted WHERE ${current.sql}`,
@@ -43,20 +47,39 @@ export function ticketQueueCountsSql(scope: VerifiedTenantScope, options: Ticket
   const snoozed=ticketQueuePredicate('snoozed');
   const drafts=ticketQueuePredicate('drafts','tickets',{actorId:scope.actorId,notExpiredAt:options.draftNotExpiredAt});
   const mentions=ticketMentionPredicate('tickets',scope.actorId);
+  // The fixed-hour triage clock is distinct from contractual calendar SLAs.
+  // Match projectPriorityClock's active elapsed calculation: accrued time plus
+  // nonnegative time since active_since, with equality still on time.
+  const activeSinceMs=`(CAST(strftime('%s',priority_clock.active_since) AS INTEGER)*1000+
+    CAST(substr(strftime('%f',priority_clock.active_since),4,3) AS INTEGER))`;
+  const windowMs=`MIN(CASE tickets.contract_sla_tier WHEN 'alpha' THEN 1 WHEN 'bravo' THEN 4
+    WHEN 'charlie' THEN 24 WHEN 'delta' THEN 48 END,
+    CASE tickets.criticality_tier WHEN 4 THEN 1 WHEN 3 THEN 4 WHEN 2 THEN 24 WHEN 1 THEN 48 END)*3600000`;
+  const overdue=`CASE WHEN tickets.status NOT IN ('resolved','closed')
+    AND priority_clock.stop_reason IS NULL AND priority_clock.active_since IS NOT NULL
+    AND tickets.contract_sla_tier IN ('alpha','bravo','charlie','delta')
+    AND tickets.criticality_tier IN (1,2,3,4)
+    AND ${activeSinceMs} IS NOT NULL
+    AND priority_clock.accrued_active_ms+MAX(0,?-${activeSinceMs})>${windowMs}
+    THEN 1 ELSE 0 END`;
   return {authority,sql:`WITH authority AS MATERIALIZED (${authority.sql}),
     visible AS MATERIALIZED (
-      SELECT tickets.id,tickets.tenant_id,tickets.assigned_to FROM tickets CROSS JOIN authority
+      SELECT tickets.id,tickets.tenant_id,tickets.assigned_to,tickets.status,
+        tickets.contract_sla_tier,tickets.criticality_tier FROM tickets CROSS JOIN authority
       WHERE tickets.tenant_id=?${group.sql}
     ), queue_flags AS MATERIALIZED (
       SELECT tickets.assigned_to,${actionable.sql} AS actionable,${snoozed.sql} AS snoozed,
-        ${drafts.sql} AS drafts,${mentions.sql} AS mentions FROM visible tickets
+        ${drafts.sql} AS drafts,${mentions.sql} AS mentions,${overdue} AS triage_overdue
+      FROM visible tickets LEFT JOIN ticket_priority_clocks priority_clock
+        ON priority_clock.tenant_id=tickets.tenant_id AND priority_clock.ticket_id=tickets.id
     )
     SELECT COUNT(*) AS all_count,COALESCE(SUM(actionable),0) AS actionable,
       COALESCE(SUM(actionable AND assigned_to=?),0) AS mine,
       COALESCE(SUM(actionable AND assigned_to IS NULL),0) AS unassigned,
       COALESCE(SUM(actionable AND mentions),0) AS mentions,
-      COALESCE(SUM(drafts),0) AS drafts,COALESCE(SUM(snoozed),0) AS snoozed FROM queue_flags`,
-    values:[...authority.values,scope.tenantId,...group.values,...drafts.values,...mentions.values,scope.actorId]};
+      COALESCE(SUM(drafts),0) AS drafts,COALESCE(SUM(snoozed),0) AS snoozed,
+      COALESCE(SUM(triage_overdue),0) AS triage_overdue_count FROM queue_flags`,
+    values:[...authority.values,scope.tenantId,...group.values,...drafts.values,...mentions.values,asOfMs,scope.actorId]};
 }
 
 export class TicketQueueCountsRepository {
@@ -78,6 +101,9 @@ export class TicketQueueCountsRepository {
       if(typeof value!=='number'||!Number.isSafeInteger(value)||value<0)throw new TicketListScanError('unavailable');
       counts[key]=value;
     }
-    return {scope:'standard_queues',counts};
+    const triageOverdueCount=row?.triage_overdue_count;
+    if(typeof triageOverdueCount!=='number'||!Number.isSafeInteger(triageOverdueCount)||triageOverdueCount<0)
+      throw new TicketListScanError('unavailable');
+    return {scope:'standard_queues',counts,triageOverdueCount};
   }
 }

@@ -17,7 +17,7 @@ import { OperatorWorkspaceProvider,useOperatorDraftIndicators,useOperatorWorkspa
 import { useSettings } from '../hooks/useSettings';
 import { useTicketSlaBatch, type TicketSla } from '../hooks/useTicketSla';
 import { useStandardQueueCounts, useTickets, useUpdateTicket } from '../hooks/useTickets';
-import { isPriorityMatrixSort, type PriorityClockProjection, type PriorityMatrixTicketQueryPage } from '../hooks/usePriorityMatrixTickets';
+import { isPriorityMatrixSort, type PriorityClockProjection } from '../hooks/usePriorityMatrixTickets';
 import type { TicketQueryPage } from '../hooks/useSlaPriorityTickets';
 import type { Ticket } from '@luminatick/shared';
 import { ticketReference } from '../utils/ticket-reference';
@@ -256,10 +256,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
   }, [alertScopeKey, setGlobalAlert]);
   useEffect(() => {
     if (priorityMatrixSort) {
-      if (query.error) { setGlobalAlert(null); return; }
-      if (query.isPlaceholderData || !query.data) return;
-      const count=(query.data as PriorityMatrixTicketQueryPage).triageOverdueCount;
-      setGlobalAlert({kind:'priority-triage',count,scope:activeView==='all'?'this priority view':queueViews[activeView as QueueView]?.label??'this saved view'});
+      // The shell owns the fixed-hour alert from the authenticated whole-inbox
+      // aggregate. This route only owns its page-local contractual SLA alert.
+      setGlobalAlert(null);
       return;
     }
     if (query.error || ticketSla.isError) { setGlobalAlert(null); return; }

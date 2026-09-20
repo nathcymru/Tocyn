@@ -143,11 +143,18 @@ export function useCreateTicket() {
 
 export type StandardQueueKey='all'|'actionable'|'mine'|'unassigned'|'mentions'|'drafts'|'snoozed';
 export function useStandardQueueCounts(){
-  return useQuery({queryKey:['tickets','standard-queue-counts'],
+  const user = useAuthStore(state => state.user);
+  const generation = useAuthStore(state => state.sessionGeneration);
+  const identity = JSON.stringify([generation,user?.tenant_id,user?.id,user?.role]);
+  return useQuery({queryKey:['tickets','standard-queue-counts',identity],enabled:Boolean(user?.id),
     queryFn:async()=>{
-      const result=await dashboardApi.get<{scope:string;counts:Record<StandardQueueKey,number>}>('/tickets/queue-counts');
+      if(assignmentIdentity()!==identity)throw new DOMException('Obsolete queue counts response','AbortError');
+      const result=await dashboardApi.get<{scope:string;counts:Record<StandardQueueKey,number>;triageOverdueCount:number}>('/tickets/queue-counts');
+      if(assignmentIdentity()!==identity)throw new DOMException('Obsolete queue counts response','AbortError');
       if(result.scope!=='standard_queues'||!result.counts||(['all','actionable','mine','unassigned','mentions','drafts','snoozed'] as const)
-        .some(key=>!Number.isSafeInteger(result.counts[key])||result.counts[key]<0))throw new Error('Queue counts unavailable');
-      return result.counts;
+        .some(key=>!Number.isSafeInteger(result.counts[key])||result.counts[key]<0)
+        ||!Number.isSafeInteger(result.triageOverdueCount)||result.triageOverdueCount<0||result.triageOverdueCount>result.counts.all)
+        throw new Error('Queue counts unavailable');
+      return {...result.counts,triageOverdueCount:result.triageOverdueCount};
     },refetchInterval:()=>document.visibilityState==='visible'?30000:false});
 }

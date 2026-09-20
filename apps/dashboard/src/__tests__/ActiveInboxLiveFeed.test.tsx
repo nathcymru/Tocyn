@@ -75,7 +75,7 @@ function stubInboxApi(arrived: () => boolean, oldRead?: () => Promise<Response> 
     if (url === '/api/tickets/queue-counts') return json({ scope: 'standard_queues', counts: {
       all: arrived() ? 1 : 0, actionable: arrived() ? 1 : 0, mine: 0, unassigned: arrived() ? 1 : 0,
       mentions: 0, drafts: 0, snoozed: 0,
-    } });
+    }, triageOverdueCount: 0 });
     if (url === '/api/ticket-sla/projections') return json({});
     if (url.startsWith('/api/tickets?')) {
       reads++;

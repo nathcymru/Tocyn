@@ -77,7 +77,10 @@ export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { se
   const materializedReads = input.aggregateCounts ? scaled(snapshot.ticketRows, 2) : 0;
   // Dashboard list pages project at most 100 selected clocks in one bounded
   // staff-fenced lookup. Reserve clock, ticket and actor/group index reads.
-  const priorityClockReads = input.includePriorityClocks ? scaled(Math.min(snapshot.ticketRows, 100), 6) : 0;
+  // Page projection reads selected clocks; the standard queue aggregate probes
+  // one indexed clock per visible ticket, regardless of the active UI filter.
+  const priorityClockReads = input.includePriorityClocks ? scaled(Math.min(snapshot.ticketRows, 100), 6)
+    : input.aggregateCounts ? scaled(snapshot.ticketRows, 6) : 0;
   // Lists probe state/definition in count and page. Aggregate flags probe them
   // once for actionable and once for snoozed; both require eight units per ticket.
   const supportStateReads = input.aggregateCounts || input.queue && ['actionable', 'snoozed', 'mine', 'unassigned', 'mentions'].includes(input.queue)

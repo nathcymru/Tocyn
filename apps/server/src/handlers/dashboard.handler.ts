@@ -1119,6 +1119,7 @@ dashboard.get('/tickets/queue-counts',async c=>{
     :{code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},admission.reason==='exhausted'?429:503);
   try {
     const result=await new TicketQueueCountsRepository(d.database,d.scope).counts({snapshot:admission.snapshot,draftNotExpiredAt,commit:admission.commit,
+      asOfMs:c.env.localNow?.()??Date.now(),
       credential:{role:payload.role as 'admin'|'agent',sessionVersion:payload.session_version??-1,expiresAt:payload.exp}});
     if(admission.commit)settleTicketQueueCounts(admission.commit,'committed',c.env.localNow?.()??Date.now());
     return c.json(result);

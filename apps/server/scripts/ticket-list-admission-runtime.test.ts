@@ -109,7 +109,7 @@ test('ticket list keeps exact search results while current group authority appli
     const customer = await widgetToken(fixture);
     const portal = await fixture.request('/api/v1/customer/tickets?limit=50', { token: customer });
     assert.equal(portal.status, 200, await portal.clone().text());
-    assert.equal((await portal.json<{ total: number }>()).total, 4, 'portal keeps all of the customer’s tickets');
+    assert.equal((await portal.json<{ total: number }>()).total, 10, 'portal keeps the six baseline customer tickets, fixture ticket and three new tickets');
     const beforeFailed=(await fixture.db.prepare('SELECT count(*) AS n FROM budget_grant_operations').first<{n:number}>())!.n;
     const originalList=SqlTicketRepository.prototype.list;settlements.length=0;
     apiTicketBudgetCache.settleOperation=(authority,outcome,now)=>{settlements.push({operationId:authority.operationId,outcome});originalSettle(authority,outcome,now);};
@@ -296,10 +296,10 @@ test('Mine and Unassigned HTTP queues require a current operator and bind Mine i
       const response=await fixture.request(`/api/tickets?queue=${queue}${extra}`,{token});
       assert.equal(response.status,200);return response.json<{data:Array<{id:string;inclusion_reason:string}>;meta:{total:number}}>();
     };
-    assert.equal((await read('unassigned',agent.token)).meta.total,1);
+    assert.equal((await read('unassigned',agent.token)).meta.total,2);
     assert.equal((await read('mine',agent.token)).meta.total,0);
     await fixture.db.prepare("UPDATE tickets SET assigned_to=? WHERE tenant_id=? AND id='fixture-ticket'").bind(agent.id,tenantId).run();
-    assert.equal((await read('unassigned',agent.token)).meta.total,0);
+    assert.equal((await read('unassigned',agent.token)).meta.total,1);
     const own=await read('mine',agent.token);
     assert.equal(own.meta.total,1);assert.equal(own.data[0].inclusion_reason,'mine');
     assert.equal((await read('mine',colleague.token)).meta.total,0);
@@ -316,7 +316,7 @@ test('Mine and Unassigned HTTP queues require a current operator and bind Mine i
       limits:{ticketLimit:2,mutationLimit:8,recoveryReserve:2,uploadLimit:2}});
     await fixture.enableCombinedTicketAdmission();
     assert.equal((await read('mine',agent.token)).meta.total,1);
-    assert.equal((await read('unassigned',agent.token)).meta.total,0);
+    assert.equal((await read('unassigned',agent.token)).meta.total,1);
     await fixture.db.prepare('UPDATE users SET session_version=session_version+1 WHERE tenant_id=? AND id=?').bind(tenantId,agent.id).run();
     for(const queue of ['mine','unassigned']) assert.notEqual((await fixture.request(`/api/tickets?queue=${queue}`,{token:agent.token})).status,200);
   });

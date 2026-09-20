@@ -5,7 +5,7 @@ import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter,Link,RouterProvider,useLocation } from 'react-router-dom';
 import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 import { InboxWorkspacePage } from '../pages/InboxWorkspacePage';
-import { InboxGlobalAlertProvider } from '../components/InboxGlobalAlert';
+import { GlobalPriorityAlertBridge, InboxGlobalAlertProvider } from '../components/InboxGlobalAlert';
 import { useAuthStore } from '../store/authStore';
 
 
@@ -42,7 +42,7 @@ let savedSelection:string|null=null;
 function Location(){const location=useLocation();return <output data-testid="location">{location.pathname}</output>;}
 function showInbox(entry='/inbox/all',globalSearch=false){
   const router=createMemoryRouter([{path:'/inbox/*',element:<>{globalSearch&&<GlobalSearch shortcutsEnabled />}<InboxWorkspacePage/><Location/></>}],{initialEntries:[entry]});
-  const result=render(<InboxGlobalAlertProvider><QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider></InboxGlobalAlertProvider>);
+  const result=render(<QueryClientProvider client={client}><InboxGlobalAlertProvider><GlobalPriorityAlertBridge /><RouterProvider router={router}/></InboxGlobalAlertProvider></QueryClientProvider>);
   return {...result,router};
 }
 async function chooseTicketClassification({urgent=false}:{urgent?:boolean}={}){
@@ -94,7 +94,7 @@ beforeEach(()=>{
     if(url==='/api/workspace/drafts?limit=50')return json({items:[{ticketId:'ticket-20',updatedAt:'2026-09-11T00:00:00Z'}],next:null});
     if(url==='/api/settings/filters')return json([{id:'priority-follow-up',name:'Priority follow-up'}]);
     if(url==='/api/settings')return json({TICKET_PREFIX:'#'});
-    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0}});
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0},triageOverdueCount:0});
     if(url.startsWith('/api/tickets?'))return json({data:tickets,meta:{page:1,limit:20,total:20,total_pages:1}});
     if(url==='/api/ticket-sla/projections')return json(Object.fromEntries(tickets.map(ticket=>[ticket.id,unavailableSla])));
     return json([]);
@@ -396,6 +396,7 @@ it('shows all three priority views with authoritative triage clocks and the sepa
   ];
   const requestedSorts:string[]=[];
   vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0},triageOverdueCount:7});
     if(String(url).startsWith('/api/tickets?')){
       const sort=new URL(String(url),'http://localhost').searchParams.get('sort');
       if(sort?.startsWith('priority_')){
@@ -415,7 +416,7 @@ it('shows all three priority views with authoritative triage clocks and the sepa
   const first=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   expect(within(first).getByRole('meter',{name:/Alpha contract, level 4 priority triage clock: Overdue by/})).toHaveTextContent('A4−30m');
   expect(within(first).queryByLabelText('Service level unavailable')).toBeNull();
-  expect(screen.getByRole('alert')).toHaveTextContent('7 fixed-hour priority countdowns have expired in this priority view');
+  expect(screen.getByRole('alert')).toHaveTextContent('7 fixed-hour priority countdowns have expired in your accessible inbox');
   expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(2);
   await choosePresentation('Table view');
   expect(within(screen.getByRole('table',{name:'Tickets in the current view'})).getAllByRole('meter')).toHaveLength(2);
@@ -428,6 +429,7 @@ it('shows all three priority views with authoritative triage clocks and the sepa
   await chooseView('All tickets');
   await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('All tickets'));
   expect(within(screen.getByRole('listbox')).queryByRole('meter')).toBeNull();
+  expect(screen.getByRole('alert')).toHaveTextContent('7 fixed-hour priority countdowns have expired in your accessible inbox');
 });
 
 it('shows the A4 triage ring and countdown in an ordinary legacy sort without replacing contractual SLA data',async()=>{
@@ -747,7 +749,7 @@ it('shows recovery and no historical rows when the current tenant list read is d
     if(url==='/api/workspace/drafts?limit=50')return json({items:[],next:null});
     if(url==='/api/settings/filters')return json([]);
     if(url==='/api/settings')return json({TICKET_PREFIX:'#'});
-    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0}});
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0},triageOverdueCount:0});
     if(url.startsWith('/api/tickets?'))return json({error:'Forbidden'},403);
     return json({});
   }));
@@ -926,7 +928,7 @@ it('opens authoritative Mine and Unassigned views without claiming refreshed own
 it('shows server standard totals separately from filtered results and retries unavailable counts without inventing zero',async()=>{
   const fallback=fetch;let available=false;
   vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
-    if(url==='/api/tickets/queue-counts')return available?json({scope:'standard_queues',counts:{all:42,actionable:12,mine:4,unassigned:8,mentions:2,drafts:3,snoozed:5}}):json({error:'Unavailable'},503);
+    if(url==='/api/tickets/queue-counts')return available?json({scope:'standard_queues',counts:{all:42,actionable:12,mine:4,unassigned:8,mentions:2,drafts:3,snoozed:5},triageOverdueCount:0}):json({error:'Unavailable'},503);
     if(url.startsWith('/api/tickets?')&&new URL(url,'http://localhost').searchParams.get('queue')==='mentions')return json({data:[{...tickets[0],inclusion_reason:'mentions'}],meta:{page:1,limit:20,total:1,total_pages:1}});
     return fallback(url,options);
   }));

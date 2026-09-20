@@ -28,7 +28,7 @@ const counts = {
   scope: 'standard_queues', counts: {
     all: 1, actionable: 1, mine: 0, unassigned: 1,
     mentions: 0, drafts: 0, snoozed: 0,
-  },
+  }, triageOverdueCount: 0,
 };
 let client: QueryClient;
 function Location() {

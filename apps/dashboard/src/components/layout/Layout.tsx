@@ -2,7 +2,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkDialog, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { IconButton as ParkIconButton, Link as ParkLink } from '@luminatick/ui/components';
-import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
+import { GlobalPriorityAlertBridge, InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
@@ -469,7 +469,7 @@ function LayoutContent() {
 export function Layout() {
   const { user, sessionGeneration } = useAuthStore();
   const identity = `${sessionGeneration}:${user?.tenant_id ?? ''}:${user?.id ?? ''}`;
-  return <OperatorThemeProvider key={identity}><InboxGlobalAlertProvider><LayoutContent /></InboxGlobalAlertProvider></OperatorThemeProvider>;
+  return <OperatorThemeProvider key={identity}><InboxGlobalAlertProvider><GlobalPriorityAlertBridge /><LayoutContent /></InboxGlobalAlertProvider></OperatorThemeProvider>;
 }
 
 const navigation = [
