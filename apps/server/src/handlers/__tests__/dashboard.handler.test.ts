@@ -94,6 +94,19 @@ describe("Dashboard Handler Integration Tests", () => {
       return {finish,broadcast,email};
     }
     const createRequest=()=>request('/tickets',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},body:JSON.stringify({subject:'Synthetic',customer_email:'fixture@example.test',body:'Synthetic'})},{BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+    it('validates complete operator classification before admission and passes it to the canonical mutation',async()=>{
+      setup();
+      const classification={category:'security-privacy',scope:'systemic',regulatoryOfficerOnSite:true,
+        vipBlocked:true,hardDeadline:false,contractTier:'alpha',criticalityTier:4};
+      const send=(value:unknown)=>request('/tickets',{method:'POST',headers:{Authorization:`Bearer ${validToken}`,'Content-Type':'application/json'},
+        body:JSON.stringify({subject:'Synthetic',customer_email:'fixture@example.test',body:'Synthetic',classification:value})},
+      {BUDGET_ADMISSION_POLICY:'ticket-mutations-v1',BUDGET_COORDINATOR_DO:mockNotificationsDO});
+      expect((await send({...classification,hardDeadline:undefined})).status).toBe(400);
+      expect(StaffTicketMutationService.prototype.prepareStaffMutation).not.toHaveBeenCalled();
+      expect((await send(classification)).status).toBe(201);
+      expect(StaffTicketMutationService.prototype.prepareStaffMutation).toHaveBeenCalledWith(
+        expect.objectContaining({operation:'dashboard.ticket.create',data:expect.objectContaining({classification})}),undefined);
+    });
     it('waits for broadcast and email before settling the constructed response',async()=>{
       const {finish,broadcast,email}=setup();
       let releaseBroadcast!:()=>void,releaseEmail!:()=>void;

@@ -11,6 +11,7 @@ import {
 } from '../types/canonical-conversation';
 import { projectCanonicalConversation as project } from './canonical-conversation.service';
 import type { TicketListCurrentCredential, TicketListScanSnapshot } from '../repositories/ticket-list-scan.repository';
+import { priorityClassificationColumns, type PriorityClassificationInput } from '../domain/priority-classification';
 
 export type InitialConversationInput = {
   subject: string;
@@ -27,6 +28,7 @@ export type InitialConversationInput = {
   customer_id?: string | null;
   source_email?: string | null;
   custom_fields?: Ticket['custom_fields'];
+  classification?: PriorityClassificationInput;
 };
 
 export class TenantTicketService {
@@ -64,6 +66,7 @@ export class TenantTicketService {
         customer_id: data.customer_id,
         source_email: data.source_email,
         custom_fields: data.custom_fields,
+        ...(data.classification ? priorityClassificationColumns(data.classification) : {}),
         intake_received_at: observedAt,
         intake_processed_at: observedAt,
       },

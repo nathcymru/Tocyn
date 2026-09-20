@@ -6,7 +6,8 @@ import * as OTPAuth from 'otpauth';
 import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
-import { RESOURCE_DIMENSIONS, STOCK_DIMENSIONS } from '@luminatick/shared';
+import { RESOURCE_DIMENSIONS, STOCK_DIMENSIONS, calculatePriorityScore,
+  type PriorityCategory, type PriorityScope, type ContractTier, type CriticalityTier } from '@luminatick/shared';
 import { createLocalRuntime } from '../src/local-app';
 import type { Env } from '../src/bindings';
 import { createSystemTenantScope } from '../src/auth/scope';
@@ -287,9 +288,45 @@ const beta2ReviewTickets = [
   { id: 'beta2-follow-up', subject: 'Replacement follow-up completed', status: 'resolved', priority: 'normal', source: 'web', assigned: true, createdMinutesAgo: 150, articleMinutesAgo: 70, body: 'The replacement arrived. Thank you for checking in.' },
   { id: 'beta2-closed-confirmed', subject: 'Completed address correction', status: 'closed', priority: 'low', source: 'email', assigned: true, createdMinutesAgo: 145, articleMinutesAgo: 65, body: 'The updated address is correct. This can be closed.' },
   { id: 'beta2-priority-low', subject: 'Product information request', status: 'open', priority: 'low', source: 'web', assigned: false, createdMinutesAgo: 140, articleMinutesAgo: 55, body: 'I would like to know which accessories are included.' },
-  { id: 'beta2-security-question', subject: 'Account security question', status: 'open', priority: 'high', source: 'email', assigned: true, createdMinutesAgo: 135, articleMinutesAgo: 45, body: 'I received a security notice and would like help understanding it.' },
-  { id: 'beta2-api-update', subject: 'API status update request', status: 'open', priority: 'normal', source: 'api', assigned: false, createdMinutesAgo: 130, articleMinutesAgo: 35, body: 'Could you confirm the status of my integration request?' },
+  { id: 'beta2-security-question', subject: 'Account security question', status: 'open', priority: 'high', source: 'email', assigned: true, createdMinutesAgo: 2640, articleMinutesAgo: 45, body: 'I received a security notice and would like help understanding it.' },
+  { id: 'beta2-api-update', subject: 'API status update request', status: 'open', priority: 'normal', source: 'api', assigned: false, createdMinutesAgo: 1800, articleMinutesAgo: 35, body: 'Could you confirm the status of my integration request?' },
 ] as const;
+type Beta2ReviewTicketId = typeof beta2ReviewTickets[number]['id']
+  | 'beta2-open-assigned' | 'beta2-pending-unassigned' | 'beta2-snoozed-assigned'
+  | 'beta2-resolved' | 'beta2-email' | 'beta2-internal-attachment';
+type ReviewUrgencyCondition = 'regulatoryOfficerOnSite' | 'vipBlocked' | 'hardDeadline';
+type ReviewPrioritySeed = Readonly<{ category: PriorityCategory; scope: PriorityScope;
+  contractTier: ContractTier; criticalityTier: CriticalityTier; urgency: readonly ReviewUrgencyCondition[] }>;
+
+/** Explicit 16 tier×level pairs plus four repeats for overdue, drift and email review. */
+export const beta2ReviewPrioritySeeds = {
+  'beta2-breach-billing': { category: 'transactions-billing', scope: 'localised', contractTier: 'alpha', criticalityTier: 4, urgency: ['regulatoryOfficerOnSite', 'hardDeadline'] },
+  'beta2-breach-delivery': { category: 'incidents-interruptions', scope: 'localised', contractTier: 'alpha', criticalityTier: 4, urgency: ['hardDeadline'] },
+  'beta2-billing-urgent': { category: 'transactions-billing', scope: 'localised', contractTier: 'alpha', criticalityTier: 3, urgency: ['vipBlocked', 'hardDeadline'] },
+  'beta2-account-access': { category: 'access-authentication', scope: 'systemic', contractTier: 'alpha', criticalityTier: 2, urgency: ['vipBlocked'] },
+  'beta2-refund-request': { category: 'transactions-billing', scope: 'isolated', contractTier: 'alpha', criticalityTier: 1, urgency: [] },
+  'beta2-portal-upload': { category: 'technical-problems', scope: 'localised', contractTier: 'bravo', criticalityTier: 4, urgency: [] },
+  'beta2-widget-question': { category: 'how-to-assistance', scope: 'isolated', contractTier: 'bravo', criticalityTier: 3, urgency: [] },
+  'beta2-waiting-customer': { category: 'service-requests', scope: 'isolated', contractTier: 'bravo', criticalityTier: 2, urgency: [] },
+  'beta2-waiting-provider': { category: 'status-follow-up', scope: 'localised', contractTier: 'bravo', criticalityTier: 1, urgency: [] },
+  'beta2-follow-up': { category: 'status-follow-up', scope: 'isolated', contractTier: 'charlie', criticalityTier: 4, urgency: [] },
+  'beta2-closed-confirmed': { category: 'feedback', scope: 'isolated', contractTier: 'charlie', criticalityTier: 3, urgency: [] },
+  'beta2-priority-low': { category: 'information-requests', scope: 'isolated', contractTier: 'charlie', criticalityTier: 2, urgency: [] },
+  'beta2-pending-unassigned': { category: 'service-requests', scope: 'isolated', contractTier: 'charlie', criticalityTier: 1, urgency: [] },
+  'beta2-open-assigned': { category: 'service-requests', scope: 'isolated', contractTier: 'delta', criticalityTier: 1, urgency: [] },
+  'beta2-internal-attachment': { category: 'service-requests', scope: 'localised', contractTier: 'delta', criticalityTier: 2, urgency: [] },
+  'beta2-snoozed-assigned': { category: 'status-follow-up', scope: 'isolated', contractTier: 'delta', criticalityTier: 3, urgency: [] },
+  'beta2-resolved': { category: 'other', scope: 'isolated', contractTier: 'delta', criticalityTier: 4, urgency: [] },
+  'beta2-email': { category: 'transactions-billing', scope: 'isolated', contractTier: 'bravo', criticalityTier: 3, urgency: [] },
+  'beta2-security-question': { category: 'security-privacy', scope: 'systemic', contractTier: 'delta', criticalityTier: 1, urgency: ['regulatoryOfficerOnSite'] },
+  'beta2-api-update': { category: 'technical-problems', scope: 'localised', contractTier: 'delta', criticalityTier: 1, urgency: [] },
+} as const satisfies Record<Beta2ReviewTicketId, ReviewPrioritySeed>;
+
+const beta2TenantBPrioritySeeds = {
+  'beta2-b-open-unassigned': { category: 'service-requests', scope: 'isolated', contractTier: 'charlie', criticalityTier: 2, urgency: [] },
+  'beta2-b-email': { category: 'transactions-billing', scope: 'isolated', contractTier: 'delta', criticalityTier: 1, urgency: [] },
+} as const satisfies Record<'beta2-b-open-unassigned' | 'beta2-b-email', ReviewPrioritySeed>;
+
 const beta2ReviewRequesterNames = [
   'alex.morgan', 'samira.patel', 'jordan.ellis', 'priya.shah',
   'taylor.reed', 'mika.chen', 'avery.hughes', 'noor.khan',
@@ -382,6 +419,25 @@ function appendBeta2SlaFixtureSql(rows: string[], now: number): void {
   }
 }
 
+/** The actual --local-beta SQL path and the disposable test path share this matrix. */
+function appendBeta2PriorityFixtureSql(rows: string[]): void {
+  const literal = (value: string | number) => sqlLiteral(String(value));
+  const add = (tenantId: string, ticketId: string, seed: ReviewPrioritySeed) => {
+    const regulatory = Number(seed.urgency.includes('regulatoryOfficerOnSite'));
+    const vip = Number(seed.urgency.includes('vipBlocked'));
+    const deadline = Number(seed.urgency.includes('hardDeadline'));
+    assert.equal(new Set(seed.urgency).size, seed.urgency.length, 'Urgency conditions must not repeat');
+    const score = calculatePriorityScore(seed.category, seed.scope, 5 * (regulatory + vip + deadline));
+    rows.push(`UPDATE tickets SET priority_category=${literal(seed.category)},priority_scope=${literal(seed.scope)},
+      priority_regulatory_officer_on_site=${regulatory},priority_vip_blocked=${vip},priority_hard_deadline=${deadline},
+      priority_score=${score},contract_sla_tier=${literal(seed.contractTier)},criticality_tier=${seed.criticalityTier}
+      WHERE tenant_id=${literal(tenantId)} AND id=${literal(ticketId)};`);
+  };
+  assert.equal(Object.keys(beta2ReviewPrioritySeeds).length, 20);
+  for (const [ticketId, seed] of Object.entries(beta2ReviewPrioritySeeds)) add('fixture-tenant-a', ticketId, seed);
+  for (const [ticketId, seed] of Object.entries(beta2TenantBPrioritySeeds)) add('fixture-tenant-b', ticketId, seed);
+}
+
 export type LocalFixtureBootstrap = Readonly<{
   sql: string;
   credentials: ReadonlyArray<Readonly<{ email: string; password: string; provisioningUri?: string; portalLoginUrl?: string }>>;
@@ -460,6 +516,7 @@ function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName,
   rows.push(`UPDATE ticket_support_state SET snoozed_until='2099-01-01T12:00:00.000Z',resurface_reason='manual' WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned';`);
   appendBeta2ReviewFixtureSql(rows, now);
   appendBeta2SlaFixtureSql(rows, now);
+  appendBeta2PriorityFixtureSql(rows);
 }
 
 async function seedPrincipals(db: D1Database, env: Env, principals: Record<PrincipalName, PrivatePrincipal>): Promise<void> {
@@ -559,6 +616,7 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
     const reviewStatements: string[] = [];
     appendBeta2ReviewFixtureSql(reviewStatements, now);
     appendBeta2SlaFixtureSql(reviewStatements, now);
+    appendBeta2PriorityFixtureSql(reviewStatements);
     await db.batch(reviewStatements.map(statement => db.prepare(statement)));
   }
 }

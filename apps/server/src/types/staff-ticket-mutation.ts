@@ -4,6 +4,7 @@ import type { SessionBudgetCredential, SessionBudgetRequirements } from '../repo
 import type { BudgetCommitAuthority } from '../budgets/isolate-admission.service';
 import type { ArticleBodyFormat } from '@luminatick/shared';
 import type { AuditedTicketUpdate } from './conversation-audit';
+import type { PriorityClassificationInput } from '../domain/priority-classification';
 
 export type StaffMutationOperation = 'dashboard.ticket.create' | 'dashboard.ticket.reply' | 'dashboard.ticket.update';
 export type AcknowledgedDraftReference = Readonly<{ generation: string; revision: number; baseConversationRevision: number }>;
@@ -12,6 +13,7 @@ export type StaffArticleFormat = ArticleBodyFormat;
 export type StaffMutationInput =
   | { operation: 'dashboard.ticket.create'; data: { subject: string; customer_email: string; body: string;
     bodyFormat?: StaffArticleFormat; status?: Ticket['status']; priority?: Ticket['priority'];
+    classification?: PriorityClassificationInput;
     group_id?: string | null; assigned_to?: string | null; custom_fields?: Ticket['custom_fields'] } }
   | { operation: 'dashboard.ticket.reply'; ticketId: string; data: { body: string; bodyFormat?: StaffArticleFormat;
     is_internal?: boolean; attachments?: RequestedMutationAttachment[]; mentionedUserIds?: readonly string[]; draft?: AcknowledgedDraftReference } }

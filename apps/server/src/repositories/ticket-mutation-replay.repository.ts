@@ -246,12 +246,16 @@ export class TicketMutationReplayRepository {
       const t = candidate.ticket;
       if(t.assigned_to)statements.push(capacityAssignmentStatement(this.db,this.scope.tenantId,t.assigned_to,null));
       statements.push(this.db.prepare(`INSERT INTO tickets
-        (tenant_id,id,subject,status,priority,customer_id,customer_email,assigned_to,group_id,source,source_email,custom_fields,intake_received_at,intake_processed_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        (tenant_id,id,subject,status,priority,customer_id,customer_email,assigned_to,group_id,source,source_email,custom_fields,intake_received_at,intake_processed_at,
+         priority_category,priority_scope,priority_regulatory_officer_on_site,priority_vip_blocked,priority_hard_deadline,priority_score,contract_sla_tier,criticality_tier)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
         this.scope.tenantId, candidate.ticketId, t.subject, t.status, t.priority, t.customer_id ?? null,
         t.customer_email, t.assigned_to ?? null, t.group_id ?? null, t.source, t.source_email ?? null,
         t.custom_fields === undefined ? null : typeof t.custom_fields === 'string' ? t.custom_fields : JSON.stringify(t.custom_fields),
         t.intake_received_at, t.intake_processed_at,
+        t.priority_category ?? null, t.priority_scope ?? null, t.priority_regulatory_officer_on_site ?? null,
+        t.priority_vip_blocked ?? null, t.priority_hard_deadline ?? null, t.priority_score ?? null,
+        t.contract_sla_tier ?? null, t.criticality_tier ?? null,
       ));
     }
     if (candidate.article) {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { verifyTwoTenantFixture, withTwoTenantFixture } from './local-tenant-fixture';
+import { absoluteWindowHours, calculatePriorityScore, effectiveUrgencyWindowHours } from '@luminatick/shared';
+import { beta2ReviewPrioritySeeds, createLocalFixtureBootstrap, verifyTwoTenantFixture, withTwoTenantFixture } from './local-tenant-fixture';
 
 test('two disposable fixture runs have independent A/B principals and no report secrets', async () => {
   const first = await verifyTwoTenantFixture();
@@ -46,6 +47,14 @@ test('fixture exposes its callback-local R2 binding and named session revocation
     const denied = await fixture.request('/api/auth/me', { token });
     assert.equal(denied.status, 401);
   });
+});
+
+test('real local-beta bootstrap includes the classified review matrix', async () => {
+  const bootstrap = await createLocalFixtureBootstrap({ MFA_ENCRYPTION_KEY: 'a'.repeat(64) });
+  assert.equal([...bootstrap.sql.matchAll(/UPDATE tickets SET priority_category=/g)].length, 22,
+    'The real review seed must classify all 20 tenant-A and two isolated tenant-B cases');
+  assert.match(bootstrap.sql, /WHERE tenant_id='fixture-tenant-a' AND id='beta2-breach-billing'/);
+  assert.match(bootstrap.sql, /WHERE tenant_id='fixture-tenant-b' AND id='beta2-b-email'/);
 });
 
 test('general Miniflare helper retains the eight-ticket base matrix without review-only SLA facts', async () => {
@@ -128,6 +137,43 @@ test('opt-in local beta review has 20 tenant-A conversations, real SLA variety a
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.priority))].sort(), ['high', 'low', 'normal', 'urgent']);
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.status))].sort(), ['closed', 'open', 'pending', 'resolved']);
     assert.deepEqual([...new Set(reviewTickets.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a').map(ticket => ticket.source))].sort(), ['api', 'email', 'portal', 'web', 'widget']);
+    const classified = await fixture.db.prepare(`SELECT tenant_id,id,created_at,priority_category,priority_scope,
+      priority_regulatory_officer_on_site,priority_vip_blocked,priority_hard_deadline,priority_score,contract_sla_tier,criticality_tier
+      FROM tickets WHERE id LIKE 'beta2-%' ORDER BY tenant_id,id`).all<{
+      tenant_id:string;id:string;created_at:string;priority_category:string;priority_scope:string;
+      priority_regulatory_officer_on_site:number;priority_vip_blocked:number;priority_hard_deadline:number;
+      priority_score:number;contract_sla_tier:'alpha'|'bravo'|'charlie'|'delta';criticality_tier:1|2|3|4;
+    }>();
+    const tenantAClassified = classified.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-a');
+    assert.equal(tenantAClassified.length, 20);
+    assert.equal(classified.results.filter(ticket => ticket.tenant_id === 'fixture-tenant-b').length, 2);
+    assert.deepEqual(new Set(tenantAClassified.map(ticket => `${ticket.contract_sla_tier}:${ticket.criticality_tier}`)).size, 16,
+      'The review matrix exercises all 16 contract×criticality combinations');
+    assert.deepEqual(new Set(tenantAClassified.map(ticket => ticket.priority_category)).size, 11,
+      'Every approved category has a review example');
+    for (const ticket of classified.results) {
+      const flags = [ticket.priority_regulatory_officer_on_site,ticket.priority_vip_blocked,ticket.priority_hard_deadline];
+      assert.ok(flags.every(flag => flag === 0 || flag === 1), `Complete urgency flags required for ${ticket.id}`);
+      assert.equal(ticket.priority_score, calculatePriorityScore(ticket.priority_category as Parameters<typeof calculatePriorityScore>[0],
+        ticket.priority_scope as Parameters<typeof calculatePriorityScore>[1],5*flags.reduce((sum,flag)=>sum+flag,0)),ticket.id);
+    }
+    assert.equal(tenantAClassified.find(ticket => ticket.id === 'beta2-billing-urgent')?.priority_vip_blocked,1);
+    assert.equal(tenantAClassified.find(ticket => ticket.id === 'beta2-billing-urgent')?.priority_hard_deadline,1);
+    const remainingHours = (ticketId:string) => {
+      const ticket = tenantAClassified.find(candidate => candidate.id === ticketId);
+      assert.ok(ticket,`Missing ${ticketId}`);
+      return absoluteWindowHours(ticket.contract_sla_tier,ticket.criticality_tier)
+        - (Date.now()-Date.parse(ticket.created_at))/3_600_000;
+    };
+    for (const id of ['beta2-breach-billing','beta2-breach-delivery']) {
+      const ticket = tenantAClassified.find(candidate => candidate.id === id);
+      assert.equal(ticket?.contract_sla_tier,'alpha');
+      assert.equal(ticket?.criticality_tier,4);
+      assert.ok(remainingHours(id)<0,`${id} must exceed its one-hour A4 window`);
+    }
+    assert.equal(effectiveUrgencyWindowHours(48,remainingHours('beta2-api-update')),24);
+    assert.equal(effectiveUrgencyWindowHours(48,remainingHours('beta2-security-question')),4);
+    assert.equal(Object.keys(beta2ReviewPrioritySeeds).length,20);
     const articleCounts = await fixture.db.prepare(`SELECT ticket_id,count(*) AS count FROM articles WHERE tenant_id='fixture-tenant-a' AND ticket_id LIKE 'beta2-%' GROUP BY ticket_id`).all<{ticket_id:string;count:number}>();
     assert.equal(articleCounts.results.length, 20);
     assert.ok(articleCounts.results.every(row => row.count >= 1));

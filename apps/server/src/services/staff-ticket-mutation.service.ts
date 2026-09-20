@@ -17,6 +17,7 @@ import type { OperatorActivityService } from './operator-activity.service';
 import { TicketMutationError, canonicalMutationJson } from './ticket-mutation-replay.service';
 import { canonicalBroadcastGrantAfterCommit, type CanonicalBroadcastGrant } from '../budgets/realtime-admission.service';
 import { canonicalTicketEmailGrantAfterCommit, type TicketEmailCanonicalGrant } from './email/ticket-email-admission.service';
+import { priorityClassificationColumns, priorityClassificationSchema } from '../domain/priority-classification';
 
 const unavailable = () => new TicketMutationError(503,'staff_mutation_unavailable','Ticket mutation unavailable; retry with the same key');
 const denied = () => new TicketMutationError(403,'staff_mutation_denied','Ticket mutation is not authorized');
@@ -106,9 +107,11 @@ export class StaffTicketMutationService {
       if (typeof data.subject !== 'string' || !data.subject.trim() || typeof data.customer_email !== 'string' || !data.customer_email.trim()) throw invalid();
       if (data.status && !['open','pending','resolved','closed'].includes(data.status)) throw invalid();
       if (data.priority && !['low','normal','high','urgent'].includes(data.priority)) throw invalid();
+      if (data.classification !== undefined && !priorityClassificationSchema.safeParse(data.classification).success) throw invalid();
       return { operation: input.operation, data: { subject: data.subject, customer_email: data.customer_email.toLowerCase(), body: data.body,
         bodyFormat, status: data.status ?? 'open', priority: data.priority ?? 'normal', group_id: data.group_id ?? null,
-        assigned_to: data.assigned_to ?? null, ...(data.custom_fields == null ? {} : { custom_fields: data.custom_fields }) } };
+        assigned_to: data.assigned_to ?? null, ...(data.custom_fields == null ? {} : { custom_fields: data.custom_fields }),
+        ...(data.classification === undefined ? {} : { classification: priorityClassificationSchema.parse(data.classification) }) } };
     }
     if (input.operation !== 'dashboard.ticket.reply' || typeof input.ticketId !== 'string' || !input.ticketId) throw invalid();
     const attachments = input.data.attachments ?? [];
@@ -293,7 +296,8 @@ export class StaffTicketMutationService {
       const customer = await this.receipts.customer(input.data.customer_email);
       candidate.ticket = { subject:input.data.subject,customer_email:input.data.customer_email,customer_id:customer?.id ?? null,
         source:'dashboard',status:input.data.status ?? 'open',priority:input.data.priority ?? 'normal',group_id:input.data.group_id,
-        assigned_to:input.data.assigned_to,custom_fields:input.data.custom_fields,intake_received_at:now,intake_processed_at:now };
+        assigned_to:input.data.assigned_to,custom_fields:input.data.custom_fields,intake_received_at:now,intake_processed_at:now,
+        ...(input.data.classification ? priorityClassificationColumns(input.data.classification) : {}) };
       candidate.article = { body:input.data.body,body_format:input.data.bodyFormat,sender_type:'customer',sender_id:customer?.id,is_internal:false,intake_source:'dashboard',received_at:now,processed_at:now };
     } else {
       candidate.article = { body:input.data.body,body_format:input.data.bodyFormat,sender_type:'agent',sender_id:this.credential.actorId,is_internal:input.data.is_internal ?? false,

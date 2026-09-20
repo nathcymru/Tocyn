@@ -45,6 +45,7 @@ import type { PreparedStaffMutation, StaffMutationOutcome } from '../types/staff
 import { OperatorActivityService } from '../services/operator-activity.service';
 import type { ActivityPresentationCredential } from '../types/operator-activity';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import { priorityClassificationSchema } from '../domain/priority-classification';
 import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, apiTicketBudgetCache, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, SUPPORT_SLA_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { SupportSlaMutationService } from '../services/support-sla-mutation.service';
 import type { SupportSlaBudgetOperation } from '../middleware/budget-admission.middleware';
@@ -87,6 +88,7 @@ const createTicketSchema = z.object({
   group_id: z.string().uuid().optional().nullable(),
   assigned_to: z.string().uuid().optional().nullable(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  classification: priorityClassificationSchema.optional(),
 });
 
 const staffCreateTicketSchema = createTicketSchema.extend({
@@ -94,6 +96,7 @@ const staffCreateTicketSchema = createTicketSchema.extend({
   body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).byteLength <= 16000),
   customer_email: z.string().email().max(254),
   body_format: z.enum(ARTICLE_BODY_FORMATS).default(DEFAULT_ARTICLE_BODY_FORMAT),
+  classification: priorityClassificationSchema.optional(),
 }).strict();
 const staffReplySchema = z.object({
   body: z.string().min(1).max(16000).refine(value => new TextEncoder().encode(value).byteLength <= 16000),
@@ -1018,6 +1021,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       const prepared = await mutation.prepareStaffMutation({ operation: 'dashboard.ticket.create', data: {
         subject: parsed.data.subject, customer_email: parsed.data.customer_email, body: parsed.data.body,
         bodyFormat: parsed.data.body_format, priority: parsed.data.priority, status: parsed.data.status,
+        classification: parsed.data.classification,
         group_id: parsed.data.group_id, assigned_to: parsed.data.assigned_to, custom_fields: parsed.data.custom_fields,
       } }, readIdempotencyKey(c));
       if (prepared.replay) {
@@ -1063,7 +1067,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
     }, 400);
   }
 
-  const { subject, customer_email, body: articleBody, priority, status, group_id, assigned_to, custom_fields } = result.data;
+  const { subject, customer_email, body: articleBody, priority, status, group_id, assigned_to, custom_fields, classification } = result.data;
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(d);
   const agent = c.get("jwtPayload") as JWTPayload;
@@ -1078,7 +1082,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       priority,
       status,
       source: "dashboard",
-      customer_id: customer?.id, group_id, assigned_to, custom_fields,
+      customer_id: customer?.id, group_id, assigned_to, custom_fields, classification,
       body: articleBody,
       sender_id: customer?.id,
       sender_type: "customer",
