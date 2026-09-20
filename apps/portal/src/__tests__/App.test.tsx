@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { resolveTocynTheme } from '@luminatick/shared/ui-theme';
 import App from '../App';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
-vi.mock('../api/client', () => ({ portalApi: { get: vi.fn(), post: vi.fn() } }));
+vi.mock('../api/client', async (importOriginal) => ({ ...await importOriginal<typeof import('../api/client')>(), portalApi: { get: vi.fn(), post: vi.fn() } }));
 
 describe('portal authentication bootstrap', () => {
   beforeEach(() => {
@@ -17,7 +17,7 @@ describe('portal authentication bootstrap', () => {
     useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: true, authGeneration: 0 });
   });
   afterEach(() => {
-    cleanup(); vi.unstubAllGlobals();
+    cleanup(); vi.useRealTimers(); vi.unstubAllGlobals();
     document.documentElement.removeAttribute('data-tocyn-theme-mode');
     document.documentElement.classList.remove('dark');
     window.history.replaceState(null, '', '/');
@@ -31,6 +31,27 @@ describe('portal authentication bootstrap', () => {
     expect(loading).toHaveAttribute('aria-busy', 'true');
     expect(loading.querySelectorAll('.skeleton')).toHaveLength(3);
     expect(screen.queryByText('Loading tickets…')).not.toBeInTheDocument();
+  });
+
+  it('offers retry after a hung identity request and ignores its late response', async () => {
+    let resolveFirst: ((value: { user: { id: string; name: string; email: string } }) => void) | undefined;
+    let resolveRetry: ((value: { user: { id: string; name: string; email: string } }) => void) | undefined;
+    vi.mocked(portalApi.get).mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveRetry = resolve; }));
+    window.history.replaceState(null, '', '/tickets');
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    expect(screen.getByRole('alert', { name: 'Portal could not be loaded' })).toBeInTheDocument();
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, isLoading: true, authGeneration: 0 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading portal' }));
+    expect(screen.getByRole('status', { name: 'Loading portal…' })).toBeInTheDocument();
+    await act(async () => { resolveFirst?.({ user: { id: 'stale', name: 'Stale', email: 'stale@example.test' } }); });
+    expect(useAuthStore.getState().user).toBeNull();
+    await act(async () => { resolveRetry?.({ user: { id: 'current', name: 'Current', email: 'current@example.test' } }); });
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: true, user: { id: 'current' } });
   });
 
   it('puts the selected dark mode on html so Park outline tokens match the auth shell', async () => {
