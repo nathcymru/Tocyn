@@ -365,10 +365,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
     workspace.update({...(sort?{sort}:{}),listAnchor:'page:1'});
     navigate(`/inbox/${id}`);
   };
-  const selectedViewLabel=activeView==='actionable'?'Needs Attention':activeView==='all'
-    ? workspace.sort==='priority_focus'?'Default Focus':workspace.sort==='priority_criticality'?'Criticality Matrix'
-      :workspace.sort==='priority_commitment'?'SLA Commitment':workspace.sort==='priority_desc'?'Highest Impact'
-      :workspace.sort==='sla_priority'?'Contract SLAs':'All tickets'
+  const selectedViewLabel=activeView==='actionable'?queueViews.actionable.label:activeView==='all'
+    ? workspace.sort==='priority_focus'?'Needs Attention':workspace.sort==='priority_criticality'?'Highest Impact'
+      :workspace.sort==='priority_commitment'?'Contract SLAs':'All tickets'
     : queue?queueViews[queue].label:filters?.find(filter=>filter.id===activeView)?.name??'Saved view';
   const pageOpen=tickets.filter(ticket=>ticket.status==='open'||ticket.status==='pending').length;
   const pageOverdue=tickets.filter(ticket=>{
@@ -376,9 +375,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
   }).length;
   const pageClosed=tickets.filter(ticket=>ticket.status==='resolved'||ticket.status==='closed').length;
   const priorityCounts=(['urgent','high','normal','low'] as const).map(priority=>({priority,count:tickets.filter(ticket=>ticket.priority===priority).length}));
-  const CurrentViewIcon=selectedViewLabel==='Highest Impact'||selectedViewLabel==='Criticality Matrix'?IconCircleExclamation
-    :selectedViewLabel==='Contract SLAs'||selectedViewLabel==='SLA Commitment'?IconShieldHalved
-    :selectedViewLabel==='Needs Attention'||selectedViewLabel==='Default Focus'?IconClock
+  const CurrentViewIcon=selectedViewLabel==='Highest Impact'?IconCircleExclamation
+    :selectedViewLabel==='Contract SLAs'?IconShieldHalved
+    :selectedViewLabel==='Needs Attention'||selectedViewLabel==='Needs Action'?IconClock
     :selectedViewLabel==='All tickets'?IconTicket:IconFilter;
   const hasConfirmedPage=Boolean(displayPage)&&!query.isLoading&&!query.isPlaceholderData;
   const hasCompleteSla=hasConfirmedPage&&!ticketSla.isLoading&&!ticketSla.isError&&tickets.every(ticket=>Boolean(ticketSla.data?.[ticket.id]));
@@ -394,16 +393,12 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
       <h1 ref={heading} tabIndex={-1} className={pageStyles.inboxHiddenHeading}>Support Inbox</h1>
       <div data-part="inbox-primary-toolbar" className={css({ display: 'flex', minH: '14', alignItems: 'center', justifyContent: 'space-between', gap: '2', px: '4' })}>
         <ParkMenu.Root positioning={{ placement: 'bottom-start' }}><ParkMenu.Trigger asChild><ParkButton type="button" variant="plain" aria-label="Inbox views" className={css({ gap: '1', fontWeight: 'semibold', minW: 0, maxW: 'full', flex: '1 1 auto', justifyContent: 'flex-start', px: '1' })}><CurrentViewIcon aria-hidden="true" className={css({ display: { base: 'none', '2xl': 'block' } })} /><span className={css({ minW: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{selectedViewLabel}</span><ChevronDown aria-hidden="true" className={css({ flexShrink: 0 })} /></ParkButton></ParkMenu.Trigger><ParkMenu.Positioner><ParkMenu.Content aria-label="Inbox views" className={css({ zIndex: 20, minW: '56', maxH: '80', overflowY: 'auto' })}>
-          <ParkMenu.Item value="priority-focus" onClick={()=>changeView('all','priority_focus',true)}><IconClock aria-hidden="true" />Default Focus</ParkMenu.Item>
-          <ParkMenu.Item value="priority-criticality" onClick={()=>changeView('all','priority_criticality',true)}><IconCircleExclamation aria-hidden="true" />Criticality Matrix</ParkMenu.Item>
-          <ParkMenu.Item value="priority-commitment" onClick={()=>changeView('all','priority_commitment',true)}><IconShieldHalved aria-hidden="true" />SLA Commitment</ParkMenu.Item>
-          <ParkMenu.Separator />
-          <ParkMenu.Item value="attention" onClick={()=>changeView('actionable','updated_desc',true)}><IconClock aria-hidden="true" />Needs Attention</ParkMenu.Item>
-          <ParkMenu.Item value="impact" onClick={()=>changeView('all','priority_desc',true)}><IconCircleExclamation aria-hidden="true" />Highest Impact</ParkMenu.Item>
-          <ParkMenu.Item value="sla" onClick={()=>changeView('all','sla_priority',true)}><IconShieldHalved aria-hidden="true" />Contract SLAs</ParkMenu.Item>
+          <ParkMenu.Item value="priority-focus" onClick={()=>changeView('all','priority_focus',true)}><IconClock aria-hidden="true" />Needs Attention</ParkMenu.Item>
+          <ParkMenu.Item value="priority-criticality" onClick={()=>changeView('all','priority_criticality',true)}><IconCircleExclamation aria-hidden="true" />Highest Impact</ParkMenu.Item>
+          <ParkMenu.Item value="priority-commitment" onClick={()=>changeView('all','priority_commitment',true)}><IconShieldHalved aria-hidden="true" />Contract SLAs</ParkMenu.Item>
           <ParkMenu.Separator />
           <ParkMenu.Item value="all" onClick={()=>changeView('all','updated_desc')}>All tickets</ParkMenu.Item>
-          {queueOrder.filter(id=>id!=='actionable').map(id=><ParkMenu.Item key={id} value={id} onClick={()=>changeView(id)}>{queueViews[id].label}{queueCounts.data?.[id]!==undefined&&<span aria-hidden="true" className={css({ ml: 'auto', color: 'fg.muted', fontSize: 'xs' })}>{queueCounts.data[id]}</span>}</ParkMenu.Item>)}
+          {queueOrder.map(id=><ParkMenu.Item key={id} value={id} onClick={()=>id==='actionable'?changeView(id,'updated_desc',true):changeView(id)}>{queueViews[id].label}{queueCounts.data?.[id]!==undefined&&<span aria-hidden="true" className={css({ ml: 'auto', color: 'fg.muted', fontSize: 'xs' })}>{queueCounts.data[id]}</span>}</ParkMenu.Item>)}
           {filters?.length ? <><ParkMenu.Separator />{filters.map(filter=><ParkMenu.Item key={filter.id} value={`saved-${filter.id}`} onClick={()=>changeView(filter.id)}>{filter.name}</ParkMenu.Item>)}</> : null}
           <ParkMenu.Separator />
           <ParkMenu.Item value="list-presentation" onClick={()=>setPresentation('list')}>List view</ParkMenu.Item>
@@ -412,7 +407,7 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
         <div className={css({ display: 'flex', flexShrink: 0, gap: '1' })}>
           <ParkButton ref={statsTrigger} type="button" variant="plain" aria-label="Quick statistics" aria-expanded={statsOpen} aria-controls="inbox-quick-statistics" className={css({ w: '10', minW: '10', px: '0', flexShrink: 0 })} onClick={()=>{setStatsOpen(open=>!open);setFilterOpen(false);}} onKeyDown={event=>{if(event.key==='Escape'&&statsOpen){event.stopPropagation();setStatsOpen(false);}}}><IconChartBar aria-hidden="true" /></ParkButton>
           <ParkButton ref={filterTrigger} type="button" variant="plain" aria-label="Filter tickets" aria-expanded={filterOpen} aria-controls="inbox-natural-filter" className={css({ w: '10', minW: '10', px: '0', flexShrink: 0 })} onClick={openFilter} onKeyDown={event=>{if(event.key==='Escape'&&filterOpen){event.stopPropagation();setFilterOpen(false);setNamingQuickView(false);}}}><Filter aria-hidden="true" /></ParkButton>
-          <ParkButton ref={createTrigger} type="button" variant="plain" aria-label="New Ticket" title="New Ticket" className={css({ minW: '10', px: { base: '0', xl: '2' }, gap: '1', flexShrink: 0, whiteSpace: 'nowrap' })} onClick={()=>{setCreateMounted(true);setCreateOpen(true);}}><Plus aria-hidden="true" /><span data-part="new-ticket-label" className={css({ display: { base: 'none', xl: 'inline' } })}>New Ticket</span></ParkButton>
+          <ParkButton ref={createTrigger} type="button" variant="plain" aria-label="New Ticket" title="New Ticket" className={css({ minW: '10', px: { base: '0', '2xl': '2' }, gap: '1', flexShrink: 0, whiteSpace: 'nowrap' })} onClick={()=>{setCreateMounted(true);setCreateOpen(true);}}><Plus aria-hidden="true" /><span data-part="new-ticket-label" className={css({ display: { base: 'none', '2xl': 'inline' } })}>New Ticket</span></ParkButton>
         </div>
       </div>
       {filterOpen && <section id="inbox-natural-filter" role="region" aria-label="Ticket filters" onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();filterTrigger.current?.focus();setFilterOpen(false);setNamingQuickView(false);}}} className={css({ borderTop: '1px solid', borderColor: 'border.default', bg: 'bg.subtle', p: '4' })}>

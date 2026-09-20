@@ -13461,20 +13461,20 @@
 }
 
   @media screen and (min-width: 80rem) {
-    .xl\:px_2 {
-      padding-inline: var(--spacing-2);
-}
-    .xl\:d_inline {
-      display: inline;
-}
     .xl\:grid-tc_repeat\(3\,minmax\(0\,1fr\)\) {
       grid-template-columns: repeat(3,minmax(0,1fr));
 }
 }
 
   @media screen and (min-width: 96rem) {
+    .\32xl\:px_2 {
+      padding-inline: var(--spacing-2);
+}
     .\32xl\:d_block {
       display: block;
+}
+    .\32xl\:d_inline {
+      display: inline;
 }
 }
 

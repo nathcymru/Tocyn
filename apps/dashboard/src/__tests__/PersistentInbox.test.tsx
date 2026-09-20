@@ -259,9 +259,9 @@ it('uses the authoritative actionable and snoozed queue views without losing the
   expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Snoozed');
   await waitFor(()=>expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed'));
 
-  await chooseView('Needs Attention');
+  await chooseView('Needs Action');
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
-  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Action');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBeInTheDocument();
 });
 
@@ -375,12 +375,18 @@ it('keeps applied date, customer and text filters when changing the three refere
   });
   await waitFor(()=>expect(matchingQuery(null,'updated_desc')).toBe(true));
 
-  await chooseView('Highest Impact');
-  await waitFor(()=>expect(matchingQuery(null,'priority_desc')).toBe(true));
-  await chooseView('Contract SLAs');
-  await waitFor(()=>expect(matchingQuery(null,'sla_priority')).toBe(true));
   await chooseView('Needs Attention');
+  await waitFor(()=>expect(matchingQuery(null,'priority_focus')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention');
+  await chooseView('Highest Impact');
+  await waitFor(()=>expect(matchingQuery(null,'priority_criticality')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Highest Impact');
+  await chooseView('Contract SLAs');
+  await waitFor(()=>expect(matchingQuery(null,'priority_commitment')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Contract SLAs');
+  await chooseView('Needs Action');
   await waitFor(()=>expect(matchingQuery('actionable','updated_desc')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Action');
   await openFilters();
   expect(screen.getByRole('button',{name:'Created: day'})).toBeInTheDocument();
   expect(screen.getByRole('textbox',{name:'Filter by exact customer email'})).toHaveValue('customer-1@example.invalid');
@@ -411,8 +417,8 @@ it('shows all three priority views with authoritative triage clocks and the sepa
   });
   showInbox('/inbox/all');
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
-  await chooseView('Default Focus');
-  await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Default Focus'));
+  await chooseView('Needs Attention');
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention'));
   const first=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
   expect(within(first).getByRole('meter',{name:/Alpha contract, level 4 priority triage clock: Overdue by/})).toHaveTextContent('A4−30m');
   expect(within(first).queryByLabelText('Service level unavailable')).toBeNull();
@@ -421,10 +427,12 @@ it('shows all three priority views with authoritative triage clocks and the sepa
   await choosePresentation('Table view');
   expect(within(screen.getByRole('table',{name:'Tickets in the current view'})).getAllByRole('meter')).toHaveLength(2);
 
-  await chooseView('Criticality Matrix');
+  await chooseView('Highest Impact');
   await waitFor(()=>expect(requestedSorts).toContain('priority_criticality'));
-  await chooseView('SLA Commitment');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Highest Impact');
+  await chooseView('Contract SLAs');
   await waitFor(()=>expect(requestedSorts).toContain('priority_commitment'));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Contract SLAs');
   expect(requestedSorts).toContain('priority_focus');
   await chooseView('All tickets');
   await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('All tickets'));
@@ -464,7 +472,7 @@ it('restarts an expired priority snapshot without displaying stale ordinary rows
   });
   showInbox('/inbox/all');
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
-  await chooseView('Default Focus');
+  await chooseView('Needs Attention');
   const restart=await screen.findByRole('button',{name:'Restart priority ordering'});
   expect(within(screen.getByRole('listbox')).queryAllByRole('option')).toHaveLength(0);
   fireEvent.click(restart);
@@ -488,7 +496,7 @@ it('restarts the priority snapshot at page one after classification changes and 
   });
   showInbox('/inbox/all/ticket-1');
   await screen.findByRole('heading',{name:'Conversation ticket-1'});
-  await chooseView('Default Focus');
+  await chooseView('Needs Attention');
   await waitFor(()=>expect(priorityReads).toBe(1));
   fireEvent.click(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/}));
   await screen.findByRole('heading',{name:'Conversation ticket-1'});
