@@ -579,7 +579,7 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
         <InboxClocks ticket={ticket} priorityClock={priorityClock} sla={sla} slaLoading={slaLoading} />
       </div>
       <Link ref={linkRef} tabIndex={-1} aria-label={`Open ${reference}: ${ticket.subject}`} to={`/inbox/${activeView}/${ticket.id}`} onClick={event => { if (didSwipe.current) { event.preventDefault(); didSwipe.current = false; return; } onOpen(); }} className={css({ display: 'block', minW: 0, color: 'inherit', textDecoration: 'none' })}>
-        <div data-part="ticket-default" aria-hidden={expanded} className={css({ display: 'grid', gridTemplateRows: expanded ? '0fr' : '1fr', opacity: expanded ? 0 : 1, transition: 'grid-template-rows 180ms ease, opacity 180ms ease', '@media (prefers-reduced-motion: reduce)': { transition: 'none' } })}>
+        <div data-part="ticket-default" aria-hidden={expanded} className={css({ display: 'grid', gridTemplateRows: expanded ? '0fr' : '1fr', opacity: expanded ? 0 : 1, transition: 'grid-template-rows 180ms ease, opacity 180ms ease' })}>
           <div className={css({ minH: 0, overflow: 'hidden' })}>
             <div className={css({ display: 'flex', alignItems: 'baseline', gap: '2', minW: 0 })}><span className={css({ flexShrink: 0, color: 'fg.muted', fontFamily: 'tabular', fontSize: 'xs', fontWeight: 'semibold' })}>{reference}</span><h3 className={css({ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'sm', fontWeight: 'semibold' })}>{ticket.subject}</h3></div>
             <div className={css({ mt: '1', display: 'flex', alignItems: 'center', minW: 0, gap: '1', color: 'fg.muted', fontSize: 'xs' })}><span className={css({ flex: '1', minW: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{ticket.customer_email}</span><span aria-hidden="true">·</span><span className={css({ flexShrink: 0 })}>{ticket.assigned_to?'Assigned':'Unassigned'}</span><time dateTime={ticket.updated_at} aria-label={`Updated ${utcTimestamp(ticket.updated_at).toLocaleDateString()}`} className={css({ '@media screen and (max-width: 63.999rem)': { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } })}>· {utcTimestamp(ticket.updated_at).toLocaleDateString()}</time></div>
@@ -588,7 +588,7 @@ function InboxConversationCard({ ticket, reference, index, activeView, selected,
               : <span key={`empty-${slot}`} data-part="ticket-pill-slot" aria-hidden="true" className={css({ minH: '5' })} />)}</div>
           </div>
         </div>
-        <div data-part="ticket-preview-panel" aria-hidden={!expanded} className={css({ display: 'grid', gridTemplateRows: expanded ? '1fr' : '0fr', opacity: expanded ? 1 : 0, transition: 'grid-template-rows 180ms ease, opacity 180ms ease', '@media (prefers-reduced-motion: reduce)': { transition: 'none' } })}>
+        <div data-part="ticket-preview-panel" aria-hidden={!expanded} className={css({ display: 'grid', gridTemplateRows: expanded ? '1fr' : '0fr', opacity: expanded ? 1 : 0, transition: 'grid-template-rows 180ms ease, opacity 180ms ease' })}>
           <div className={css({ minH: 0, overflow: 'hidden' })}>
             <p data-part="ticket-preview" data-expanded={expanded ? 'true' : 'false'} className={css({ color: 'fg.muted', fontSize: 'sm', lineHeight: '1.5', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' })}>{ticket.snippet || 'No conversation preview is available.'}</p>
           </div>
@@ -619,7 +619,7 @@ function InboxSlaRing({ sla, loading, priority }: { sla: TicketSla | undefined; 
   const circumference = 2 * Math.PI * 15;
   const label = loading ? 'Loading service level' : !target || target.state === 'unavailable' ? 'Service level unavailable' : `${breached ? 'Breached' : 'On-track'} service level`;
   return <span aria-label={label} data-sla-breached={breached ? 'true' : 'false'} data-sla-pulsing={activeBreach ? 'true' : 'false'}
-    className={clsx(css({ position: 'relative', display: 'inline-grid', h: '12', w: '12', placeItems: 'center', borderRadius: 'full', fontSize: '2xs', fontWeight: 'bold', color: breached ? 'critical' : 'text.primary' }), activeBreach && css({ animation: 'overduePulse 1.5s infinite', '@media (prefers-reduced-motion: reduce)': { animation: 'none' } }))}>
+    className={clsx(css({ position: 'relative', display: 'inline-grid', h: '12', w: '12', placeItems: 'center', borderRadius: 'full', fontSize: '2xs', fontWeight: 'bold', color: breached ? 'critical' : 'text.primary' }), activeBreach && css({ animation: 'overduePulse 1.5s infinite' }))}>
     <svg aria-hidden="true" viewBox="0 0 36 36" className={css({ position: 'absolute', inset: 0, h: 'full', w: 'full', transform: 'rotate(-90deg)' })}>
       <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" opacity="0.18" />
       <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${circumference}`} strokeDashoffset={`${circumference * (1 - (breached ? 1 : elapsed))}`} />

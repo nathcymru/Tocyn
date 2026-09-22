@@ -13424,9 +13424,6 @@
     .\[\@media_\(prefers-reduced-motion\:_reduce\)\]\:anim_none {
       animation: none;
 }
-    .\[\@media_\(prefers-reduced-motion\:_reduce\)\]\:trs_none {
-      transition: none;
-}
     html[data-tocyn-motion="full"] .\[\@media_\(prefers-reduced-motion\:_reduce\)\]\:\[html\[data-tocyn-motion\=\"full\"\]_\&\]\:anim_overduePulse_1\.5s_infinite {
       animation: overduePulse 1.5s infinite;
 }
