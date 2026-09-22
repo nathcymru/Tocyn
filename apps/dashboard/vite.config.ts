@@ -2,8 +2,9 @@ import { productBranding } from '../../tools/branding/vite';
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { resolveApiProxyTargetForMode } from './vite-proxy-target.js'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react(), productBranding('Operator')],
   build: {
     // Multi-pass production minification retains supported syntax and language grammars.
@@ -35,7 +36,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8787',
+        target: resolveApiProxyTargetForMode(mode, process.cwd(), process.env),
         changeOrigin: true,
         ws: true,
       },
@@ -47,4 +48,4 @@ export default defineConfig({
     globals: true,
     maxWorkers: 2,
   },
-})
+}))

@@ -1,4 +1,4 @@
-import { startIsolatedSnoozeReview } from './local-snooze-review-launcher';
+import { snoozeReviewDashboardPort, startIsolatedSnoozeReview } from './local-snooze-review-launcher';
 
 const green = '\u001b[32m';
 const cyan = '\u001b[36m';
@@ -19,7 +19,12 @@ async function main(): Promise<void> {
 
   process.stdout.write(`\n${divider}\n${green}LOCAL SNOOZE REVIEW READY${reset}\n${divider}\n\n`);
   process.stdout.write(`${cyan}API URL: ${review.origin}${reset}\n`);
-  process.stdout.write(`${yellow}The current dashboard dev server may still point at port 8787.${reset}\n\n`);
+  process.stdout.write(`${cyan}Review dashboard URL: http://127.0.0.1:${snoozeReviewDashboardPort}${reset}\n\n`);
+  process.stdout.write(`${divider}\nSTART THE REVIEW DASHBOARD\n${divider}\n\n`);
+  process.stdout.write(`${yellow}In another terminal, from the Tocyn project, run:${reset}\n`);
+  process.stdout.write(`env -u VITE_API_URL TOCYN_SNOOZE_REVIEW_API_PORT=${port} npm run dev --workspace=apps/dashboard -- --port ${snoozeReviewDashboardPort} --strictPort\n\n`);
+  process.stdout.write(`The review dashboard's /api proxy will use ${cyan}${review.origin}${reset}.\n`);
+  process.stdout.write(`${yellow}Open the review dashboard URL above; port 5173 may show a different fixture.${reset}\n\n`);
   process.stdout.write(`${divider}\nSYNTHETIC OPERATOR\n${divider}\n\n`);
   process.stdout.write(`Email: ${operator.email}\nPassword: ${operator.password}\nMFA enrollment: ${operator.provisioningUri}\n\n`);
   process.stdout.write(`${divider}\nWHAT TO DO NEXT\n${divider}\n\n`);

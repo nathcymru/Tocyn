@@ -41,6 +41,7 @@ async function operatorToken(origin: string, credential: { email: string; passwo
 
 test('launcher rejects the existing review port and unbounded authority windows before setup', async () => {
   await assert.rejects(startIsolatedSnoozeReview({ port: 8787, intervalWindowMs: 60_000 }));
+  await assert.rejects(startIsolatedSnoozeReview({ port: 5176, intervalWindowMs: 60_000 }));
   await assert.rejects(startIsolatedSnoozeReview({ port: 8790, intervalWindowMs: 86_400_001 }));
 });
 
@@ -98,11 +99,14 @@ test('isolated one-owner review launcher serves authenticated app and wakes priv
     const health = await fetch(`${review.origin}/health`);
     assert.equal(health.status, 200);
     await health.body?.cancel();
+    const eventsBeforeDeniedRoute = (await review.db.prepare(
+      "SELECT COUNT(*) AS n FROM support_state_events WHERE tenant_id='fixture-tenant-a'",
+    ).first<{ n: number }>())?.n ?? 0;
     const privateRoute = await fetch(`${review.origin}/runDue`);
     assert.ok([404, 503].includes(privateRoute.status), 'private due RPC has no successful HTTP route');
     await privateRoute.body?.cancel();
     assert.equal((await review.db.prepare("SELECT COUNT(*) AS n FROM support_state_events WHERE tenant_id='fixture-tenant-a'")
-      .first<{ n: number }>())?.n, 0, 'the denied HTTP request cannot run due work');
+      .first<{ n: number }>())?.n, eventsBeforeDeniedRoute, 'the denied HTTP request cannot run due work');
 
     const operatorA = review.credentials.find(credential => credential.email === 'fixture.operator.a@example.test');
     const operatorB = review.credentials.find(credential => credential.email === 'fixture.operator.b@example.test');
@@ -134,6 +138,29 @@ test('isolated one-owner review launcher serves authenticated app and wakes priv
     assert.equal(dueB.customer_email, 'tocyn-auth-test-b@example.invalid');
     assert.match(dueB.articles[0].body, /account update/);
     assert.doesNotMatch(dueB.articles[0].body, /delivery update/);
+    const queue = async (token: string, name: 'snoozed' | 'actionable') => {
+      const response = await fetch(`${review.origin}/api/tickets?queue=${name}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      assert.equal(response.status, 200, `${name} queue should be available to its operator`);
+      const body = await response.json() as { data: Array<{ id: string; inclusion_reason: string }>; meta: { total: number } };
+      return { total: body.meta.total, items: body.data.map(ticket => [ticket.id, ticket.inclusion_reason] as const) };
+    };
+    const counts = async (token: string) => {
+      const response = await fetch(`${review.origin}/api/tickets/queue-counts`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      assert.equal(response.status, 200, 'standard queue counts should be available to its operator');
+      const body = await response.json() as { scope: string; counts: Record<string, number> };
+      assert.equal(body.scope, 'standard_queues');
+      return { all: body.counts.all, actionable: body.counts.actionable, snoozed: body.counts.snoozed };
+    };
+    const beforeQueuesA = { snoozed: await queue(tokenA, 'snoozed'), actionable: await queue(tokenA, 'actionable'), counts: await counts(tokenA) };
+    const beforeQueuesB = { snoozed: await queue(tokenB, 'snoozed'), actionable: await queue(tokenB, 'actionable'), counts: await counts(tokenB) };
+    assert.ok(beforeQueuesA.snoozed.items.some(([id, reason]) => id === 'due-review' && reason === 'snoozed'));
+    assert.ok(!beforeQueuesA.actionable.items.some(([id]) => id === 'due-review'));
+    assert.ok(beforeQueuesB.snoozed.items.some(([id, reason]) => id === 'due-review' && reason === 'snoozed'));
+    assert.ok(!beforeQueuesB.actionable.items.some(([id]) => id === 'due-review'));
     // Change only this disposable run's deadline after its first due cycle.
     await review.db.prepare("UPDATE ticket_support_state SET snoozed_until=? WHERE tenant_id='fixture-tenant-a' AND ticket_id='due-review'")
       .bind(new Date(Date.now() + 300).toISOString()).run();
@@ -148,10 +175,51 @@ test('isolated one-owner review launcher serves authenticated app and wakes priv
     assert.equal(events, 1, 'host timer must invoke private due RPC without a test tick');
     assert.deepEqual(await review.db.prepare("SELECT snoozed_until,resurface_reason FROM ticket_support_state WHERE tenant_id='fixture-tenant-a' AND ticket_id='due-review'").first(),
       { snoozed_until: null, resurface_reason: 'due' });
+    const afterSnoozedA = await queue(tokenA, 'snoozed');
+    const afterActionableA = await queue(tokenA, 'actionable');
+    const afterCountsA = await counts(tokenA);
+    assert.ok(!afterSnoozedA.items.some(([id]) => id === 'due-review'));
+    assert.ok(afterActionableA.items.some(([id, reason]) => id === 'due-review' && reason === 'actionable'));
+    assert.deepEqual(afterCountsA, { all: beforeQueuesA.counts.all,
+      actionable: beforeQueuesA.counts.actionable + 1, snoozed: beforeQueuesA.counts.snoozed - 1 });
+    assert.deepEqual(await queue(tokenB, 'snoozed'), beforeQueuesB.snoozed);
+    assert.deepEqual(await queue(tokenB, 'actionable'), beforeQueuesB.actionable);
+    assert.deepEqual(await counts(tokenB), beforeQueuesB.counts);
     assert.equal((await review.db.prepare("SELECT COUNT(*) AS n FROM support_state_events WHERE tenant_id='fixture-tenant-b' AND ticket_id='due-review' AND kind='ticket.transition'")
       .first<{ n: number }>())?.n, 0, 'same ticket ID in tenant B remains isolated');
     assert.ok((await review.db.prepare("SELECT snoozed_until FROM ticket_support_state WHERE tenant_id='fixture-tenant-b' AND ticket_id='due-review'")
       .first<{ snoozed_until: string | null }>())?.snoozed_until);
+  } finally {
+    await review.dispose();
+  }
+});
+
+test('isolated restart recovers the due marker and persisted tenant-scoped D1 state', async () => {
+  const port = await sparePort();
+  const scheduler = { set(_callback: () => void, requestedMs: number) {
+    assert.equal(requestedMs, 60_000);
+    return 1;
+  }, clear(_handle: unknown) {} };
+  const review = await startIsolatedSnoozeReview({ port, intervalWindowMs: 60_000, scheduler });
+  try {
+    assert.deepEqual(review.dueSnapshot().map(row => row.status), ['ready', 'ready']);
+    await review.db.prepare("UPDATE ticket_support_state SET snoozed_until=? WHERE tenant_id='fixture-tenant-a' AND ticket_id='due-review'")
+      .bind(new Date(Date.now() - 1_000).toISOString()).run();
+    await review.restart();
+    assert.equal((await fetch(`${review.origin}/health`)).status, 200);
+    assert.deepEqual(review.dueSnapshot().map(row => row.status), ['ready', 'ready'],
+      'restart must read and recover its persisted due marker');
+    assert.deepEqual(await review.db.prepare("SELECT snoozed_until,resurface_reason FROM ticket_support_state WHERE tenant_id='fixture-tenant-a' AND ticket_id='due-review'").first(),
+      { snoozed_until: null, resurface_reason: 'due' });
+    assert.equal((await review.db.prepare("SELECT COUNT(*) AS n FROM support_state_events WHERE tenant_id='fixture-tenant-a' AND ticket_id='due-review' AND kind='ticket.transition'")
+      .first<{ n: number }>())?.n, 1);
+    assert.ok((await review.db.prepare("SELECT snoozed_until FROM ticket_support_state WHERE tenant_id='fixture-tenant-b' AND ticket_id='due-review'")
+      .first<{ snoozed_until: string | null }>())?.snoozed_until);
+    assert.equal((await review.db.prepare("SELECT COUNT(*) AS n FROM support_state_events WHERE tenant_id='fixture-tenant-b' AND ticket_id='due-review' AND kind='ticket.transition'")
+      .first<{ n: number }>())?.n, 0);
+    await review.restart();
+    assert.equal((await review.db.prepare("SELECT COUNT(*) AS n FROM support_state_events WHERE tenant_id='fixture-tenant-a' AND ticket_id='due-review' AND kind='ticket.transition'")
+      .first<{ n: number }>())?.n, 1, 'a second recovery must not resurface the same ticket twice');
   } finally {
     await review.dispose();
   }
