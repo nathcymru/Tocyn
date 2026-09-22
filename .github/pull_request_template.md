@@ -22,6 +22,8 @@ Describe resulting behaviour and any migration/compatibility requirements.
 
 List checks actually run and results. Identify pre-existing failures, checks not run and limitations.
 
+Keep the pull request in draft while a substantive implementation milestone is still being assembled. Mark it **Ready for review** only after the coherent milestone and its focused local checks are complete. That transition runs the required lint, typecheck, build and test checks against the exact pull-request head; every later push while ready runs them again. GitHub-managed CodeQL remains controlled by the repository's default setup and is still required before merge. Convert the pull request back to draft before beginning another substantive implementation batch.
+
 ## Security and privacy
 
 Does this affect authentication, tenant boundaries, data processing, privacy metadata, secrets, dependencies or deployment? Explain impact or state none.
