@@ -12,10 +12,10 @@ import { GlobalPriorityAlertBridge, InboxGlobalAlertProvider } from '../componen
 import { useAuthStore } from '../store/authStore';
 
 
-const presentation=vi.hoisted(()=>({enabled:true,listeners:new Set<()=>void>()}));
+const presentation=vi.hoisted(()=>({enabled:true,columns:['reference','subject','status','priority','customer','updated'],listeners:new Set<()=>void>()}));
 vi.mock('../components/theme/OperatorThemeProvider',async()=>{
   const {useSyncExternalStore}=await import('react');
-  return {useOptionalOperatorPreferencesContext:()=>({advanceAfterResolve:useSyncExternalStore(listener=>{presentation.listeners.add(listener);return()=>presentation.listeners.delete(listener);},()=>presentation.enabled)})};
+  return {useOptionalOperatorPreferencesContext:()=>({advanceAfterResolve:useSyncExternalStore(listener=>{presentation.listeners.add(listener);return()=>presentation.listeners.delete(listener);},()=>presentation.enabled),tableColumns:presentation.columns})};
 });
 const detailNavigation=vi.hoisted(()=>({pending:false,flush:vi.fn<()=>Promise<boolean>>() }));
 vi.mock('../pages/TicketDetailPage',async()=>{
@@ -86,7 +86,7 @@ beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false,refetchInterval:false},mutations:{retry:false}}});
   useAuthStore.setState({token:null,user:null,mfaRequired:false,sessionGeneration:0});
   useAuthStore.getState().setAuth('tenant-session',operator);
-  savedSelection=null;savedRatio=32;presentation.enabled=true;
+  savedSelection=null;savedRatio=32;presentation.enabled=true;presentation.columns=['reference','subject','status','priority','customer','updated'];
   detailNavigation.pending=false;
   detailNavigation.flush.mockReset().mockResolvedValue(true);
   vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
@@ -880,6 +880,17 @@ it('switches to an accessible factual table with row navigation and a mobile lis
   subjectLink.focus();expect(subjectLink).toHaveFocus();
   expect(screen.getByText('Table view uses the compact conversation list on small screens.')).toBeInTheDocument();
   expect(screen.queryByRole('button',{name:/Actions for/})).not.toBeInTheDocument();
+});
+
+it('renders the saved table order and keeps reference navigable when subject is hidden',async()=>{
+  presentation.columns=['reference','updated'];
+  showInbox();
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await choosePresentation('Table view');
+  const table=screen.getByRole('table',{name:'Tickets in the current view'});
+  expect(within(table).getAllByRole('columnheader').map(header=>header.textContent)).toEqual(['Reference','Updated']);
+  expect(within(table).getByRole('link',{name:'#1'})).toHaveAttribute('href','/inbox/all/ticket-1');
+  expect(within(table).queryByText('Fixture conversation 1')).not.toBeInTheDocument();
 });
 
 it('does not persist a view switch before an unsaved conversation draft permits navigation',async()=>{

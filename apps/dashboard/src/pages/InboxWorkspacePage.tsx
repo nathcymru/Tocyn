@@ -1,4 +1,5 @@
 import { useOptionalOperatorPreferencesContext } from '../components/theme/OperatorThemeProvider';
+import { OPERATOR_TABLE_COLUMNS, type OperatorTableColumn } from '../hooks/useOperatorPreferences';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkMenu, ParkPage, ParkSkeleton, ParkSplitter, ParkTable, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { Collapsible as ParkCollapsible, Link as ParkLink } from '@luminatick/ui/components';
@@ -310,7 +311,9 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
     classificationRefreshRef.current = refresh;
     return () => { if (classificationRefreshRef.current === refresh) classificationRefreshRef.current = null; };
   }, [classificationRefreshRef, identity, priorityMatrixSort, query.restartPriorityMatrix, query.restartSla, routeReady, selectedTicketId, slaSort, workspace]);
-  const advanceEnabled = useOptionalOperatorPreferencesContext()?.advanceAfterResolve ?? false;
+  const operatorPreferences = useOptionalOperatorPreferencesContext();
+  const advanceEnabled = operatorPreferences?.advanceAfterResolve ?? false;
+  const tableColumns = operatorPreferences?.tableColumns ?? OPERATOR_TABLE_COLUMNS;
   const advanceScope = JSON.stringify([identity, activeView, filterId, workspace.listQuery, workspace.sort, workspace.filters, filters, selectedTicketId, advanceEnabled]);
   const committedAdvanceScope = useRef(advanceScope);
   const manualPageGeneration = useRef(0);
@@ -482,16 +485,12 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
       <p className={css({ m: '0', px: '4', py: '2', color: 'text.muted', fontSize: 'xs' })}>Table view uses the compact conversation list on small screens.</p>
       <div className={css({ display: { base: 'none', md: 'block' }, minH: '0', flex: '1', overflow: 'auto', bg: 'bg.subtle' })}>
         <ParkTable.Root aria-label="Tickets in the current view" className={pageStyles.inboxTable}>
-          <ParkTable.Head><ParkTable.Row><ParkTable.Header scope="col">Reference</ParkTable.Header><ParkTable.Header scope="col">Conversation</ParkTable.Header><ParkTable.Header scope="col">Customer</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header><ParkTable.Header scope="col">Clocks</ParkTable.Header></ParkTable.Row></ParkTable.Head>
+          <ParkTable.Head><ParkTable.Row>{tableColumns.map(column=><ParkTable.Header key={column} scope="col">{column[0].toUpperCase()+column.slice(1)}</ParkTable.Header>)}</ParkTable.Row></ParkTable.Head>
           <ParkTable.Body>
-            {query.isLoading&&<ParkTable.Row><ParkTable.Cell colSpan={5}><div role="status" aria-label="Loading conversations"><ParkSkeleton height="10" width="100%" /></div></ParkTable.Cell></ParkTable.Row>}
-            {emptyPage&&<ParkTable.Row><ParkTable.Cell colSpan={5}><ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></ParkTable.Cell></ParkTable.Row>}
+            {query.isLoading&&<ParkTable.Row><ParkTable.Cell colSpan={tableColumns.length}><div role="status" aria-label="Loading conversations"><ParkSkeleton height="10" width="100%" /></div></ParkTable.Cell></ParkTable.Row>}
+            {emptyPage&&<ParkTable.Row><ParkTable.Cell colSpan={tableColumns.length}><ParkEmptyState title={emptyMessage} description={queue?queueViews[queue].description:'Choose another queue or saved view.'} /></ParkTable.Cell></ParkTable.Row>}
             {!emptyPage&&!query.isLoading&&tickets.map(ticket=><ParkTable.Row key={ticket.id} data-selected={ticket.id===selectedTicketId?'true':undefined} className={pageStyles.inboxTableRow}>
-              <ParkTable.Cell>{ticketReference(ticket,prefix)}</ParkTable.Cell>
-              <ParkTable.Cell><ParkLink asChild><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={()=>{if(!workspace.hasUnsavedChanges)workspace.update({selectedTicketId:ticket.id});}} className={css({ minW: 0, minH: '6', maxW: 'full', overflowWrap: 'anywhere', whiteSpace: 'normal', textAlign: 'start' })}>{ticket.subject}</Link></ParkLink></ParkTable.Cell>
-              <ParkTable.Cell>{ticket.customer_email}</ParkTable.Cell>
-              <ParkTable.Cell>{ticket.status}</ParkTable.Cell>
-              <ParkTable.Cell><InboxClocks ticket={ticket} priorityClock={priorityClocks?.[ticket.id]} sla={ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id]??undefined} slaLoading={ticketSla.isLoading} /></ParkTable.Cell>
+              {tableColumns.map(column=><ParkTable.Cell key={column}>{renderTableCell(column,ticket,prefix,activeView,workspace.hasUnsavedChanges,()=>workspace.update({selectedTicketId:ticket.id}),priorityClocks?.[ticket.id],ticketSla.isError||query.isPlaceholderData?undefined:ticketSla.data?.[ticket.id]??undefined,ticketSla.isLoading)}</ParkTable.Cell>)}
             </ParkTable.Row>)}
           </ParkTable.Body>
         </ParkTable.Root>
@@ -521,6 +520,18 @@ function ConversationList({activeView,selectedTicketId,routeReady,advanceRef,cla
       <ParkButton type="button" aria-label="Previous conversation page" aria-disabled={query.isFetching||currentPage<=1} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&currentPage>1){paging.current=true;workspace.update({listAnchor:pageAnchor(currentPage-1)});}}}><ChevronLeft /></ParkButton>
       <ParkButton type="button" aria-label="Next conversation page" aria-disabled={query.isFetching||currentPage>=meta.total_pages} onClick={()=>{manualPageGeneration.current++;setAdvanceRequest(null);onAdvanceNotice('');if(!query.isFetching&&currentPage<meta.total_pages){paging.current=true;workspace.update({listAnchor:pageAnchor(currentPage+1)});}}}><ChevronRight /></ParkButton></div></footer>}
   </div>;
+}
+
+function renderTableCell(column: OperatorTableColumn, ticket: Ticket, prefix: string, activeView: string, hasUnsavedChanges: boolean, selectTicket: () => void, priorityClock: PriorityClockProjection | null | undefined, sla: TicketSla | undefined, slaLoading: boolean): React.ReactNode {
+  const ticketLink = (label: string) => <ParkLink asChild><Link to={`/inbox/${activeView}/${ticket.id}`} onClick={() => { if (!hasUnsavedChanges) selectTicket(); }} className={css({ minW: 0, minH: '6', maxW: 'full', overflowWrap: 'anywhere', whiteSpace: 'normal', textAlign: 'start' })}>{label}</Link></ParkLink>;
+  switch (column) {
+    case 'reference': return ticketLink(ticketReference(ticket, prefix));
+    case 'subject': return ticketLink(ticket.subject);
+    case 'status': return <span className={css({ textTransform: 'capitalize' })}>{ticket.status}</span>;
+    case 'priority': return <InboxClocks ticket={ticket} priorityClock={priorityClock} sla={sla} slaLoading={slaLoading} />;
+    case 'customer': return ticket.customer_email;
+    case 'updated': return <time dateTime={ticket.updated_at}>{utcTimestamp(ticket.updated_at).toLocaleDateString()}</time>;
+  }
 }
 
 function InboxConversationCard({ ticket, reference, index, activeView, selected, focused, expanded, sla, slaLoading, priorityClock, hasDraft, queueId, queueLabel, rowRefs, onFocus, onMoveFocus, onExpanded, onOpen, onResolve, onUrgent }: {

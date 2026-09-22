@@ -2,8 +2,9 @@ import * as React from 'react';
 import { createTocynThemeScope } from '@luminatick/ui';
 import { ParkAlert, ParkButton, ParkCheckbox, ParkProgress, ParkRadioGroup, ParkSkeleton } from '@luminatick/ui/park';
 import { css } from '@luminatick/ui/styled-system/css';
+import { CaretDown, CaretUp } from '@phosphor-icons/react';
 import { useOperatorTheme, type OperatorThemeMode } from '../../hooks/useOperatorTheme';
-import { useOperatorPreferences, type OperatorDensity, type OperatorFontScale, type OperatorMotion } from '../../hooks/useOperatorPreferences';
+import { useOperatorPreferences, OPERATOR_TABLE_COLUMNS, type OperatorDensity, type OperatorFontScale, type OperatorMotion, type OperatorTableColumn } from '../../hooks/useOperatorPreferences';
 import { DashboardSelect } from '../DashboardSelect';
 
 type ThemeContextValue = ReturnType<typeof useOperatorTheme>;
@@ -86,6 +87,56 @@ export function OperatorThemeControl() {
   </section>;
 }
 
+export function TableColumnsControl({ preferences }: { preferences: Pick<ReturnType<typeof useOperatorPreferences>, 'tableColumns' | 'update'> }) {
+  const rowRefs = React.useRef(new Map<OperatorTableColumn, HTMLDivElement>());
+  const pendingFocus = React.useRef<{ column: OperatorTableColumn; delta: -1 | 1 } | null>(null);
+  const [announcement, setAnnouncement] = React.useState('');
+  React.useLayoutEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    const buttons = Array.from(rowRefs.current.get(pending.column)?.querySelectorAll('button') ?? []);
+    const preferred = buttons[pending.delta === -1 ? 0 : 1];
+    (preferred && !preferred.disabled ? preferred : buttons.find(button => !button.disabled))?.focus();
+  }, [preferences.tableColumns]);
+
+  const ordered = [...preferences.tableColumns, ...OPERATOR_TABLE_COLUMNS.filter(column => !preferences.tableColumns.includes(column))];
+  const move = (index: number, delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= preferences.tableColumns.length) return;
+    const column = preferences.tableColumns[index];
+    const next = [...preferences.tableColumns];
+    [next[index], next[target]] = [next[target], next[index]];
+    pendingFocus.current = { column, delta };
+    preferences.update({ tableColumns: next });
+    setAnnouncement(`${column} moved to column ${target + 1} of ${next.length}.`);
+  };
+
+  return <fieldset className={css({ display: 'grid', gap: '2', m: 0, p: '3', borderWidth: '1px', borderColor: 'border.default', rounded: 'md' })}>
+    <legend className={css({ px: '1', fontWeight: 'semibold' })}>Table columns</legend>
+    <p className={css({ m: 0, color: 'text.muted', fontSize: 'sm' })}>Choose and order the columns shown in Table view. Reference is always visible.</p>
+    {ordered.map(column => {
+      const index = preferences.tableColumns.indexOf(column);
+      const visible = index >= 0;
+      return <div key={column} ref={element => { if (element) rowRefs.current.set(column, element); else rowRefs.current.delete(column); }} role="group" aria-label={`${column} table column`} className={css({ display: 'flex', alignItems: 'center', gap: '2', minH: '10' })}>
+        <ParkCheckbox.Root checked={visible} disabled={column === 'reference'} onCheckedChange={({ checked }) => {
+          if (column === 'reference') return;
+          preferences.update({ tableColumns: checked === true ? [...preferences.tableColumns, column] : preferences.tableColumns.filter(item => item !== column) });
+        }} className={css({ flex: '1', minW: 0 })}>
+          <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+          <ParkCheckbox.Label className={css({ textTransform: 'capitalize' })}>{column}</ParkCheckbox.Label>
+          <ParkCheckbox.HiddenInput />
+        </ParkCheckbox.Root>
+        {visible && <>
+          <ParkButton type="button" variant="plain" aria-label={`Move ${column} table column up`} disabled={index === 0} onClick={() => move(index, -1)} onKeyDown={event => { if (event.key === 'ArrowUp') { event.preventDefault(); move(index, -1); } }} className={css({ w: '10', minW: '10', px: 0 })}><CaretUp weight="duotone" aria-hidden="true" /></ParkButton>
+          <ParkButton type="button" variant="plain" aria-label={`Move ${column} table column down`} disabled={index === preferences.tableColumns.length - 1} onClick={() => move(index, 1)} onKeyDown={event => { if (event.key === 'ArrowDown') { event.preventDefault(); move(index, 1); } }} className={css({ w: '10', minW: '10', px: 0 })}><CaretDown weight="duotone" aria-hidden="true" /></ParkButton>
+        </>}
+      </div>;
+    })}
+    <p role="status" aria-live="polite" className={css({ m: 0, color: 'text.muted', fontSize: 'sm' })}>{announcement}</p>
+  </fieldset>;
+}
+
 export function OperatorPreferencesControl() {
   const preferences = useOperatorPreferencesContext();
   const busy = preferences.status === 'loading' || preferences.status === 'saving' || preferences.schemaUnavailable || preferences.status === 'conflict';
@@ -103,6 +154,7 @@ export function OperatorPreferencesControl() {
       <ParkCheckbox.Root checked={preferences.shortcutsEnabled} disabled={busy} onCheckedChange={({ checked }) => preferences.update({ shortcutsEnabled: checked === true })}><ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control><ParkCheckbox.Label>Enable search shortcut</ParkCheckbox.Label><ParkCheckbox.HiddenInput /></ParkCheckbox.Root>
       <DashboardSelect label="Activity interruption level" aria-label="Activity interruption level" disabled={busy} value={preferences.interruptionLevel} onValueChange={value => preferences.update({ interruptionLevel: value as 'standard' | 'quiet' })} options={[{ value: 'standard', label: 'Standard' }, { value: 'quiet', label: 'Quiet — refresh activity manually' }]} />
       <ParkCheckbox.Root checked={preferences.advanceAfterResolve} disabled={busy} onCheckedChange={({ checked }) => preferences.update({ advanceAfterResolve: checked === true })}><ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control><ParkCheckbox.Label>Advance after resolving a conversation</ParkCheckbox.Label><ParkCheckbox.HiddenInput /></ParkCheckbox.Root>
+      <TableColumnsControl preferences={preferences} />
     </fieldset>
     <div className={css({ display: 'flex', minW: '0', w: 'full', gap: '2', flexWrap: 'wrap', '& > button': { minW: '0', maxW: 'full', h: 'auto', minH: '10', py: '2', whiteSpace: 'normal' } })}><ParkButton type="button" disabled={busy || preferences.status !== 'unsaved'} onClick={() => void preferences.save()}>Save workspace preferences</ParkButton>{(preferences.status === 'error' || preferences.status === 'conflict') && <ParkButton type="button" onClick={preferences.retry}>Retry workspace preferences</ParkButton>}{preferences.status === 'conflict' && <ParkButton type="button" onClick={preferences.restore}>Restore server preferences</ParkButton>}</div>
     {preferences.status === 'loading' || preferences.status === 'saving'
