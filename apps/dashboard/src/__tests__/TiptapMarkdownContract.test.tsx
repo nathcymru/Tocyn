@@ -71,6 +71,15 @@ it('retains text from unsupported GFM tables rather than silently discarding it'
   expect(roundTrip(result.markdown).document.content?.[0]?.type).toBe('literalTable');
 });
 
+it('keeps an unsupported table between supported blocks on repeated saves', () => {
+  const source = '# Before\n\n| A | B |\n| --- | --- |\n| one | two |\n\n**After**';
+  const first = roundTrip(source);
+  expect(first.document.content?.map(node => node.type)).toEqual(['heading', 'literalTable', 'paragraph']);
+  expect(first.markdown).toContain('| one | two |');
+  expect(first.markdown).toContain('**After**');
+  expect(roundTrip(first.markdown).document).toEqual(first.document);
+});
+
 it('keeps supported marks and link title on a second round trip', () => {
   const source = '**bold** *italic* ~~strike~~ `code` [reference](https://example.invalid/help "Help title")';
   const first = roundTrip(source);
