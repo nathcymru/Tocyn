@@ -14,19 +14,43 @@ import { useAuthStore } from '../../store/authStore';
 
 const user = { id: 'operator', tenant_id: 'tenant-a', email: 'operator@example.invalid', full_name: 'Operator', role: 'admin', mfa_enabled: true };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const preference = (revision = 0) => ({ version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  revision, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null });
+const preference = (revision = 0) => ({ version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, tableColumns: ['reference','subject','status','priority','customer','updated'], revision, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', updatedAt: null });
 let value!: ReturnType<typeof useOperatorPreferences>;
 function Harness() { value = useOperatorPreferences(); return <output data-testid="preferences">{JSON.stringify({ status: value.status, revision: value.revision, density: value.density, fontScale: value.fontScale, focusMode: value.focusMode, motion: value.motion, error: value.error })}</output>; }
 function current() { return JSON.parse(screen.getByTestId('preferences').textContent || '{}'); }
 beforeEach(() => { useAuthStore.setState({ token: null, user: null, sessionGeneration: 0 }); useAuthStore.getState().setAuth('session-a', user); });
 afterEach(() => { cleanup(); useAuthStore.getState().logout(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+it('normalizes legacy responses without columns on both restore and save', async () => {
+  const { tableColumns: defaults, ...legacy } = preference();
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(legacy))
+    .mockResolvedValueOnce(json({ ...legacy, revision: 1, density: 'compact' })));
+  render(<Harness />);
+  await waitFor(() => expect(current().status).toBe('restored'));
+  expect(value.tableColumns).toEqual(defaults);
+  act(() => value.update({ density: 'compact' }));
+  await act(async () => { await value.save(); });
+  expect(current().status).toBe('saved');
+  expect(value.tableColumns).toEqual(defaults);
+});
+
+it.each([['status'], ['reference', 'reference'], ['reference', 'unknown']])('rejects invalid present columns %j without saving defaults', async (...columns) => {
+  const fetch = vi.fn().mockResolvedValue(json({ ...preference(), tableColumns: columns }));
+  vi.stubGlobal('fetch', fetch);
+  render(<Harness />);
+  await waitFor(() => expect(current().status).toBe('error'));
+  act(() => value.update({ density: 'compact' }));
+  await act(async () => { await value.save(); });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(value.schemaUnavailable).toBe(true);
+});
+
 it('restores only the validated server record and persists an edited choice with its CAS revision', async () => {
   const fetch = vi.fn().mockResolvedValueOnce(json(preference())).mockResolvedValueOnce(json({ ...preference(1), density: 'compact', updatedAt: 'saved' })); vi.stubGlobal('fetch', fetch);
   render(<Harness />); await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 0 }));
   act(() => value.update({ density: 'compact' })); await act(async () => { await value.save(); });
   expect(current()).toMatchObject({ status: 'saved', revision: 1, density: 'compact' });
-  expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false,  expectedRevision: 0, density: 'compact', fontScale: 'normal', focusMode: false, motion: 'system' });
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ version: 2, navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, tableColumns: ['reference','subject','status','priority','customer','updated'], expectedRevision: 0, density: 'compact', fontScale: 'normal', focusMode: false, motion: 'system' });
 });
 
 it('persists the explicit reduced-motion choice and exposes it to the workspace without remounting', async () => {
@@ -103,13 +127,14 @@ it('restores a saved preference after remounting instead of relying on in-memory
   }));
   const view = render(<Harness />);
   await waitFor(() => expect(current().status).toBe('restored'));
-  act(() => value.update({ motion: 'reduced', fontScale: 'larger', focusMode: true }));
+  act(() => value.update({ motion: 'reduced', fontScale: 'larger', focusMode: true, tableColumns: ['updated', 'reference'] }));
   await act(async () => { await value.save(); });
   view.unmount();
   expect(document.documentElement.dataset.tocynMotion).toBeUndefined();
   expect(document.documentElement.dataset.tocynFontScale).toBeUndefined();
   render(<Harness />);
   await waitFor(() => expect(current()).toMatchObject({ status: 'restored', revision: 1, motion: 'reduced', fontScale: 'larger', focusMode: true }));
+  expect(value.tableColumns).toEqual(['updated', 'reference']);
 });
 
 it('resets the old user text scale while the next identity restores its preferences', async () => {
