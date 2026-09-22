@@ -13,13 +13,13 @@
     "prebuild": "npm run panda:generate --workspace=@luminatick/ui"
   },
   "dependencies": {
-    "react": "^18.2.0",
+    "react": "^19.3.0",
     "react-dom": "^18.2.0",
     "@luminatick/ui": "*"
   },
   "devDependencies": {
     "@types/node": "^24.13.4",
-    "@types/react": "^18.2.0",
+    "@types/react": "^19.3.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^5.0.0",
