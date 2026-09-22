@@ -6,7 +6,9 @@ import * as OTPAuth from 'otpauth';
 import * as jose from 'jose';
 import { Headers as MiniflareHeaders, Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { build } from 'esbuild';
-import { RESOURCE_DIMENSIONS, STOCK_DIMENSIONS } from '@luminatick/shared';
+import { RESOURCE_DIMENSIONS, STOCK_DIMENSIONS, calculatePriorityScore,
+  type PriorityCategory, type PriorityScope, type ContractTier, type CriticalityTier } from '@luminatick/shared';
+import { initializeSyntheticLocalBudgetAuthority } from './local-budget-d1-bootstrap';
 import { createLocalRuntime } from '../src/local-app';
 import type { Env } from '../src/bindings';
 import { createSystemTenantScope } from '../src/auth/scope';
@@ -197,8 +199,7 @@ function localEnv(db: D1Database, bucket: R2Bucket): Env {
 }
 
 /** A complete, high-capacity synthetic owner authority for two local fixture tenants.
- * It is intentionally created only by enableCombinedTicketAdmission, after the
- * fixture's local-beta policy and invitations have been installed. */
+ * It is created only after the fixture's local-beta policy and invitations exist. */
 async function enableTicketAdmission(env: Env, db: D1Database, policy: 'api-ticket-mutations-v1' | 'ticket-mutations-v1'): Promise<void> {
   assert.equal(env.LOCAL_BETA_ENABLED, 'true', 'Combined admission evidence requires the guarded local-beta fixture');
   if (env.BUDGET_ADMISSION_POLICY === 'api-ticket-mutations-v1') {
@@ -207,50 +208,11 @@ async function enableTicketAdmission(env: Env, db: D1Database, policy: 'api-tick
     return;
   }
   assert.equal(env.BUDGET_ADMISSION_POLICY, 'off', 'Admission authority may be seeded once per disposable fixture');
-  const deploymentId = 'fixture-combined-beta-deployment';
-  const policyId = 'fixture-combined-beta-policy';
-  const authorityRevision = 1;
-  const policyRevision = 1;
-  // Keep the disposable authority complete. New admitted paths must not be
-  // rejected merely because this local fixture omitted a catalogue dimension.
-  // Individual negative tests install their own deliberately constrained policy.
-  const dimensions = RESOURCE_DIMENSIONS;
-  const limitFor = (dimension: typeof dimensions[number]) => dimension === 'logEvents' ? 200_000_000 : 10_000_000;
-  const ownerPolicy = {
-    schemaVersion: 1,
-    policyId,
-    revision: policyRevision,
-    deploymentId,
-    mode: 'conservative',
-    catalogueVersion: 'fixture-combined-beta-catalogue',
-    maxGrantLifetimeMs: 60_000,
-    budgets: dimensions.map(dimension => ({
-      dimension,
-      allocationId: `fixture-combined-${dimension}`,
-      window: STOCK_DIMENSIONS.includes(dimension)
-        ? { kind: 'stock', id: `fixture-combined-${dimension}-stock` }
-        : { kind: 'interval', id: 'fixture-combined-window', startsAt: Date.now() - 1_000, endsAt: Date.now() + 60_000 },
-      limit: limitFor(dimension),
-      recoveryPercent: 20,
-      provenance: 'owner-allocation',
-    })),
-  };
-  const restrictions = (tenantId: Tenant) => JSON.stringify({
-    schemaVersion: 1, tenantId, ownerPolicyId: policyId, ownerPolicyRevision: policyRevision,
-    revision: 1, mode: 'conservative', limits: Object.fromEntries(dimensions.map(dimension => [dimension, limitFor(dimension)])), disabledFeatures: [],
+  const run = await db.prepare('SELECT run_id FROM local_beta_policy WHERE singleton=1').first<{ run_id: string }>();
+  assert.ok(run, 'Guarded local-beta policy must exist before synthetic budget authority');
+  await initializeSyntheticLocalBudgetAuthority(db, {
+    runId: run.run_id, tenantIds: ['fixture-tenant-a', 'fixture-tenant-b'], now: Date.now(), intervalWindowMs: 60_000,
   });
-  await db.batch([
-    db.prepare(`INSERT INTO budget_deployment_authority (deployment_id,authority_revision,state,updated_at)
-      VALUES (?,?,'active',?)`).bind(deploymentId, authorityRevision, Date.now()),
-    db.prepare(`INSERT INTO budget_owner_policies
-      (deployment_id,policy_id,policy_revision,authority_revision,coordinator_id,max_reservations,authority_max_age_ms,policy_json)
-      VALUES (?,?,?,?,?,?,?,?)`).bind(deploymentId, policyId, policyRevision, authorityRevision,
-      'fixture-combined-beta-coordinator', 64, 60_000, JSON.stringify(ownerPolicy)),
-    ...(['fixture-tenant-a', 'fixture-tenant-b'] as const).map((tenantId, index) => db.prepare(`INSERT INTO budget_tenant_allocations
-      (deployment_id,tenant_id,policy_id,policy_revision,authority_revision,reservation_namespace,restriction_json,state)
-      VALUES (?,?,?,?,?,?,?,'active')`).bind(deploymentId, tenantId, policyId, policyRevision, authorityRevision,
-      `fixture-combined-namespace-${index}`, restrictions(tenantId))),
-  ]);
   env.BUDGET_ADMISSION_POLICY = policy;
 }
 
@@ -273,29 +235,147 @@ function sqlLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
+function syntheticOrderSummaryPdf(): Uint8Array {
+  const lines = [
+    'Order summary',
+    'Reference: TC-2048-17',
+    'Recipient: Owen Hughes',
+    'Item: Replacement desk lamp',
+    'Quantity: 1',
+    'Delivery: Unit 4, Harbour Industrial Estate',
+    'Status: Confirm delivery address before dispatch',
+    'Amount due: GBP 0.00',
+  ];
+  const pageText = `BT /F1 12 Tf 36 320 Td\n${lines.map((line, index) =>
+    `${index === 0 ? '' : '0 -25 Td '}(${line}) Tj`).join('\n')}\nET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 520 360] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${pageText.length} >>\nstream\n${pageText}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
+
+/** Synthetic bytes must accompany every review attachment metadata row. */
+export function beta2ReviewAttachmentObjects(): readonly Readonly<{
+  tenantId: Tenant; key: string; objectKey: string; contentType: string; bytes: Uint8Array;
+}>[] {
+  return [
+    { tenantId: 'fixture-tenant-a', key: 'beta2-internal-attachment/order-summary.pdf',
+      objectKey: 'fixture-tenant-a/beta2-internal-attachment/order-summary.pdf',
+      contentType: 'application/pdf', bytes: syntheticOrderSummaryPdf() },
+    { tenantId: 'fixture-tenant-b', key: 'beta2-b-email/invoice.png',
+      objectKey: 'fixture-tenant-b/beta2-b-email/invoice.png', contentType: 'image/png',
+      bytes: Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGO4/erffwAJKgPDLAaI0wAAAABJRU5ErkJggg==', 'base64')) },
+  ];
+}
+
 const beta2MinutesAgo = (now: number, minutes: number) => new Date(now - minutes * 60_000).toISOString();
+const beta2ReviewSnoozeUntil = (now: number) => beta2MinutesAgo(now, -24 * 60);
+/** One synthetic staff action, using the same audit shape as a real support-state transition. */
+function appendBeta2SnoozeFixtureSql(rows: string[], now: number): void {
+  const at = sqlLiteral(beta2MinutesAgo(now, 45));
+  const until = sqlLiteral(beta2ReviewSnoozeUntil(now));
+  const facts = `json_object('before',json_object('definitionId',s.definition_id,'waitingReason',s.waiting_reason,
+    'nextAction',s.next_action,'snoozedUntil',s.snoozed_until,'resurfaceReason',s.resurface_reason),
+    'after',json_object('definitionId',s.definition_id,'lifecycle','open','waitingReason',s.waiting_reason,
+    'nextAction',s.next_action,'snoozedUntil',${until},'resurfaceReason',NULL))`;
+  rows.push(`INSERT INTO support_state_events
+    (tenant_id,id,ticket_id,definition_id,kind,recorded_at,actor_kind,actor_id,facts)
+    SELECT s.tenant_id,'b2b2b2b2-0000-4000-8000-000000000203',s.ticket_id,s.definition_id,'ticket.transition',${at},
+      'staff','fixture-operator',${facts}
+    FROM ticket_support_state s WHERE s.tenant_id='fixture-tenant-a' AND s.ticket_id='beta2-snoozed-assigned';`);
+  rows.push(`INSERT INTO conversation_events
+    (tenant_id,id,ticket_id,article_id,sequence,kind,recorded_at,actor_kind,actor_id,actor_provenance,source,visibility,facts)
+    SELECT s.tenant_id,'b2b2b2b2-0000-4000-8000-000000000204',s.ticket_id,NULL,
+      (SELECT COALESCE(MAX(e.sequence),0)+1 FROM conversation_events e WHERE e.tenant_id=s.tenant_id AND e.ticket_id=s.ticket_id),
+      'ticket.state_changed',${at},'staff','fixture-operator','mfa-staff','dashboard','internal',${facts}
+    FROM ticket_support_state s WHERE s.tenant_id='fixture-tenant-a' AND s.ticket_id='beta2-snoozed-assigned';`);
+  rows.push(`UPDATE ticket_support_state SET snoozed_until=${until},resurface_reason=NULL,
+    changed_at=${at},revision=revision+1
+    WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned';`);
+}
 const beta2ReviewTickets = [
-  { id: 'beta2-breach-billing', subject: 'Invoice correction needs a reply', status: 'open', priority: 'urgent', source: 'email', assigned: false, createdMinutesAgo: 720, articleMinutesAgo: 50, body: 'The invoice amount looks incorrect. Please check the line items and let me know the next step.' },
-  { id: 'beta2-breach-delivery', subject: 'Delivery update is overdue', status: 'open', priority: 'high', source: 'web', assigned: false, createdMinutesAgo: 660, articleMinutesAgo: 42, body: 'I have not received an update on the delayed parcel. Can someone confirm its status?' },
-  { id: 'beta2-billing-urgent', subject: 'Duplicate charge on a synthetic order', status: 'open', priority: 'urgent', source: 'email', assigned: true, createdMinutesAgo: 210, articleMinutesAgo: 125, body: 'I can see the same charge twice. Please help me understand the adjustment.' },
-  { id: 'beta2-account-access', subject: 'Cannot open my account settings', status: 'open', priority: 'high', source: 'web', assigned: true, createdMinutesAgo: 190, articleMinutesAgo: 115, body: 'The account settings page asks me to sign in again after I have already signed in.' },
+  { id: 'beta2-breach-billing', subject: 'Regional invoices block today’s statutory filing', status: 'open', priority: 'urgent', source: 'email', assigned: false, createdMinutesAgo: 720, articleMinutesAgo: 50, body: 'Our three regional offices received invoices with the same incorrect tax line. The regulatory officer is on site, and our statutory filing is due this afternoon. Please confirm who can correct the batch.' },
+  { id: 'beta2-breach-delivery', subject: 'Three clinic deliveries missed the handover window', status: 'open', priority: 'high', source: 'web', assigned: false, createdMinutesAgo: 660, articleMinutesAgo: 42, body: 'The scheduled parcels for three clinics have not arrived. We need the delivery status before today’s handover deadline so each team can arrange cover.' },
+  { id: 'beta2-billing-urgent', subject: 'Finance lead blocked by duplicate team charges', status: 'open', priority: 'urgent', source: 'email', assigned: true, createdMinutesAgo: 210, articleMinutesAgo: 125, body: 'Our finance lead cannot submit the team’s expense report because several orders were charged twice. They have VIP access, and the board submission closes today. Please review the duplicated charges.' },
+  { id: 'beta2-account-access', subject: 'All operators caught in an account sign-in loop', status: 'open', priority: 'high', source: 'web', assigned: true, createdMinutesAgo: 190, articleMinutesAgo: 115, body: 'Every operator on our site is sent back to sign-in when opening account settings. Our VIP operations lead is blocked from changing access for the team.' },
   { id: 'beta2-refund-request', subject: 'Refund status for a returned item', status: 'pending', priority: 'normal', source: 'email', assigned: false, createdMinutesAgo: 185, articleMinutesAgo: 105, body: 'I returned the item last week. Could you confirm when the refund will appear?' },
-  { id: 'beta2-portal-upload', subject: 'Document upload did not finish', status: 'open', priority: 'normal', source: 'web', assigned: true, createdMinutesAgo: 175, articleMinutesAgo: 95, body: 'My document upload stopped before completion. I can try again if needed.' },
+  { id: 'beta2-portal-upload', subject: 'Team document uploads stop before completion', status: 'open', priority: 'normal', source: 'web', assigned: true, createdMinutesAgo: 175, articleMinutesAgo: 95, body: 'Several colleagues in our department cannot finish document uploads. The progress bar stops near the end for each of us.' },
   { id: 'beta2-widget-question', subject: 'Question from the support widget', status: 'open', priority: 'low', source: 'widget', assigned: false, createdMinutesAgo: 165, articleMinutesAgo: 85, body: 'Where can I find the order reference in my confirmation message?' },
   { id: 'beta2-waiting-customer', subject: 'Waiting for a customer photo', status: 'pending', priority: 'normal', source: 'email', assigned: true, createdMinutesAgo: 160, articleMinutesAgo: 80, body: 'I can send a photo of the packaging once I am home.' },
-  { id: 'beta2-waiting-provider', subject: 'Carrier confirmation requested', status: 'pending', priority: 'high', source: 'api', assigned: true, createdMinutesAgo: 155, articleMinutesAgo: 75, body: 'Please confirm whether the carrier has received the replacement parcel.' },
+  { id: 'beta2-waiting-provider', subject: 'Carrier confirmation for the replacement batch', status: 'pending', priority: 'high', source: 'api', assigned: true, createdMinutesAgo: 155, articleMinutesAgo: 75, body: 'Please confirm whether the carrier has collected the replacement batch for our department.' },
   { id: 'beta2-follow-up', subject: 'Replacement follow-up completed', status: 'resolved', priority: 'normal', source: 'web', assigned: true, createdMinutesAgo: 150, articleMinutesAgo: 70, body: 'The replacement arrived. Thank you for checking in.' },
   { id: 'beta2-closed-confirmed', subject: 'Completed address correction', status: 'closed', priority: 'low', source: 'email', assigned: true, createdMinutesAgo: 145, articleMinutesAgo: 65, body: 'The updated address is correct. This can be closed.' },
   { id: 'beta2-priority-low', subject: 'Product information request', status: 'open', priority: 'low', source: 'web', assigned: false, createdMinutesAgo: 140, articleMinutesAgo: 55, body: 'I would like to know which accessories are included.' },
-  { id: 'beta2-security-question', subject: 'Account security question', status: 'open', priority: 'high', source: 'email', assigned: true, createdMinutesAgo: 135, articleMinutesAgo: 45, body: 'I received a security notice and would like help understanding it.' },
-  { id: 'beta2-api-update', subject: 'API status update request', status: 'open', priority: 'normal', source: 'api', assigned: false, createdMinutesAgo: 130, articleMinutesAgo: 35, body: 'Could you confirm the status of my integration request?' },
+  { id: 'beta2-security-question', subject: 'Site-wide security notices need regulator review', status: 'open', priority: 'high', source: 'email', assigned: true, createdMinutesAgo: 2640, articleMinutesAgo: 45, body: 'Every account on our site received a security notice. A regulatory officer is on site and needs a clear incident summary before the review ends.' },
+  { id: 'beta2-api-update', subject: 'Integration status for the operations team', status: 'open', priority: 'normal', source: 'api', assigned: false, createdMinutesAgo: 1800, articleMinutesAgo: 35, body: 'Our operations team needs to know when the API integration will be available to the department. Could you share the current status?' },
 ] as const;
+type Beta2ReviewTicketId = typeof beta2ReviewTickets[number]['id']
+  | 'beta2-open-assigned' | 'beta2-pending-unassigned' | 'beta2-snoozed-assigned'
+  | 'beta2-resolved' | 'beta2-email' | 'beta2-internal-attachment';
+type ReviewUrgencyCondition = 'regulatoryOfficerOnSite' | 'vipBlocked' | 'hardDeadline';
+type ReviewPrioritySeed = Readonly<{ category: PriorityCategory; scope: PriorityScope;
+  contractTier: ContractTier; criticalityTier: CriticalityTier; urgency: readonly ReviewUrgencyCondition[] }>;
+
+/** Explicit 16 tier×level pairs plus four repeats for overdue, drift and email review. */
+export const beta2ReviewPrioritySeeds = {
+  'beta2-breach-billing': { category: 'transactions-billing', scope: 'localised', contractTier: 'alpha', criticalityTier: 4, urgency: ['regulatoryOfficerOnSite', 'hardDeadline'] },
+  'beta2-breach-delivery': { category: 'incidents-interruptions', scope: 'localised', contractTier: 'alpha', criticalityTier: 4, urgency: ['hardDeadline'] },
+  'beta2-billing-urgent': { category: 'transactions-billing', scope: 'localised', contractTier: 'alpha', criticalityTier: 3, urgency: ['vipBlocked', 'hardDeadline'] },
+  'beta2-account-access': { category: 'access-authentication', scope: 'systemic', contractTier: 'alpha', criticalityTier: 2, urgency: ['vipBlocked'] },
+  'beta2-refund-request': { category: 'transactions-billing', scope: 'isolated', contractTier: 'alpha', criticalityTier: 1, urgency: [] },
+  'beta2-portal-upload': { category: 'technical-problems', scope: 'localised', contractTier: 'bravo', criticalityTier: 4, urgency: [] },
+  'beta2-widget-question': { category: 'how-to-assistance', scope: 'isolated', contractTier: 'bravo', criticalityTier: 3, urgency: [] },
+  'beta2-waiting-customer': { category: 'service-requests', scope: 'isolated', contractTier: 'bravo', criticalityTier: 2, urgency: [] },
+  'beta2-waiting-provider': { category: 'status-follow-up', scope: 'localised', contractTier: 'bravo', criticalityTier: 1, urgency: [] },
+  'beta2-follow-up': { category: 'status-follow-up', scope: 'isolated', contractTier: 'charlie', criticalityTier: 4, urgency: [] },
+  'beta2-closed-confirmed': { category: 'feedback', scope: 'isolated', contractTier: 'charlie', criticalityTier: 3, urgency: [] },
+  'beta2-priority-low': { category: 'information-requests', scope: 'isolated', contractTier: 'charlie', criticalityTier: 2, urgency: [] },
+  'beta2-pending-unassigned': { category: 'service-requests', scope: 'isolated', contractTier: 'charlie', criticalityTier: 1, urgency: [] },
+  'beta2-open-assigned': { category: 'service-requests', scope: 'isolated', contractTier: 'delta', criticalityTier: 1, urgency: [] },
+  'beta2-internal-attachment': { category: 'service-requests', scope: 'localised', contractTier: 'delta', criticalityTier: 2, urgency: [] },
+  'beta2-snoozed-assigned': { category: 'status-follow-up', scope: 'isolated', contractTier: 'delta', criticalityTier: 3, urgency: [] },
+  'beta2-resolved': { category: 'other', scope: 'isolated', contractTier: 'delta', criticalityTier: 4, urgency: [] },
+  'beta2-email': { category: 'transactions-billing', scope: 'isolated', contractTier: 'bravo', criticalityTier: 3, urgency: [] },
+  'beta2-security-question': { category: 'security-privacy', scope: 'systemic', contractTier: 'delta', criticalityTier: 1, urgency: ['regulatoryOfficerOnSite'] },
+  'beta2-api-update': { category: 'technical-problems', scope: 'localised', contractTier: 'delta', criticalityTier: 1, urgency: [] },
+} as const satisfies Record<Beta2ReviewTicketId, ReviewPrioritySeed>;
+
+const beta2TenantBPrioritySeeds = {
+  'beta2-b-open-unassigned': { category: 'service-requests', scope: 'isolated', contractTier: 'charlie', criticalityTier: 2, urgency: [] },
+  'beta2-b-email': { category: 'transactions-billing', scope: 'isolated', contractTier: 'delta', criticalityTier: 1, urgency: [] },
+} as const satisfies Record<'beta2-b-open-unassigned' | 'beta2-b-email', ReviewPrioritySeed>;
+
 const beta2ReviewRequesterNames = [
   'alex.morgan', 'samira.patel', 'jordan.ellis', 'priya.shah',
   'taylor.reed', 'mika.chen', 'avery.hughes', 'noor.khan',
   'robin.carter', 'jamie.clarke', 'imani.brooks', 'casey.ward',
   'leila.hassan', 'devon.price',
 ] as const;
+/** Named review customers have coherent ticket ownership; the portal case keeps its sign-in principal. */
+const beta2BaseReviewRequesters = {
+  'beta2-open-assigned': { id: 'beta2-customer-morgan', email: 'morgan.lee@synthetic.example.test', name: 'Morgan Lee' },
+  'beta2-snoozed-assigned': { id: 'beta2-customer-harper', email: 'harper.reed@synthetic.example.test', name: 'Harper Reed' },
+  'beta2-resolved': { id: 'beta2-customer-camila', email: 'camila.ortiz@synthetic.example.test', name: 'Camila Ortiz' },
+  'beta2-email': { id: 'beta2-customer-elena', email: 'elena.ward@synthetic.example.test', name: 'Elena Ward' },
+  'beta2-internal-attachment': { id: 'beta2-customer-owen', email: 'owen.hughes@synthetic.example.test', name: 'Owen Hughes' },
+} as const;
+type Beta2BaseReviewRequesterId = keyof typeof beta2BaseReviewRequesters;
+const beta2BaseReviewRequester = (ticketId: string) =>
+  ticketId in beta2BaseReviewRequesters ? beta2BaseReviewRequesters[ticketId as Beta2BaseReviewRequesterId] : undefined;
 const beta2ReviewTicket = (ticketId: string) => beta2ReviewTickets.find(ticket => ticket.id === ticketId);
 const beta2TicketAgeMinutes = (ticketId: string) => beta2ReviewTicket(ticketId)?.createdMinutesAgo ?? (ticketId === 'beta2-email' ? 600 : 240);
 const beta2ArticleAgeMinutes = (ticketId: string) => beta2ReviewTicket(ticketId)?.articleMinutesAgo ?? (ticketId === 'beta2-email' ? 540 : ticketId === 'beta2-resolved' ? 120 : 180);
@@ -335,8 +415,12 @@ function appendBeta2ReviewFixtureSql(rows: string[], now: number): void {
   }
   rows.push(`INSERT INTO support_state_definitions (tenant_id,id,legacy_status,internal_label,public_label,waiting_reason_required,next_action_required,is_compatibility_default)
     VALUES ('fixture-tenant-a','beta2-awaiting-customer','pending','Waiting on customer','We need your reply',1,1,0);`);
-  rows.push(`UPDATE ticket_support_state SET definition_id='beta2-awaiting-customer',waiting_reason='Waiting for a packaging photo',next_action='Review the photo when the customer replies',changed_at=${literal(beta2MinutesAgo(now, 70))}
+  rows.push(`UPDATE ticket_support_state SET definition_id='beta2-awaiting-customer',waiting_reason='Waiting for a packaging photo',next_action='Review the photo when the customer replies',revision=revision+1,changed_at=${literal(beta2MinutesAgo(now, 70))}
     WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-waiting-customer';`);
+  rows.push(`INSERT INTO support_state_definitions (tenant_id,id,legacy_status,internal_label,public_label,waiting_reason_required,next_action_required,is_compatibility_default)
+    VALUES ('fixture-tenant-a','beta2-awaiting-provider','pending','Waiting on carrier','We are waiting for carrier confirmation',1,1,0);`);
+  rows.push(`UPDATE ticket_support_state SET definition_id='beta2-awaiting-provider',waiting_reason='Awaiting carrier pickup confirmation',next_action='Review carrier confirmation when it arrives',revision=revision+1,changed_at=${literal(beta2MinutesAgo(now, 65))}
+    WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-waiting-provider';`);
 }
 
 /** Synthetic policy and clock snapshots for visual review only. No production policy is inferred. */
@@ -368,18 +452,34 @@ function appendBeta2SlaFixtureSql(rows: string[], now: number): void {
   ] as const;
   for (const [tenantId, ticketId, responseCompletedAt, resolutionCompletedAt] of clocks) {
     const started = now - beta2TicketAgeMinutes(ticketId) * 60_000;
-    // This one ticket predates the synthetic revision-1 target configuration.
-    // Its frozen revision-0 snapshot honestly has no SLA target.
-    const targetless = ticketId === 'beta2-pending-unassigned';
     rows.push(`INSERT INTO ticket_sla_clocks
       (tenant_id,ticket_id,response_started_at,response_due_at,response_completed_at,resolution_started_at,resolution_due_at,resolution_completed_at,
        policy_revision,policy_calendar_json,policy_response_target_ms,policy_resolution_target_ms,policy_response_reopen_policy,policy_resolution_reopen_policy)
       VALUES (${[
-        tenantId, ticketId, new Date(started).toISOString(), targetless ? null : new Date(started + responseTargetMs).toISOString(), responseCompletedAt,
-        new Date(started).toISOString(), targetless ? null : new Date(started + resolutionTargetMs).toISOString(), resolutionCompletedAt,
-        targetless ? 0 : 1, calendar, targetless ? null : responseTargetMs, targetless ? null : resolutionTargetMs, 'continue', 'continue',
+        tenantId, ticketId, new Date(started).toISOString(), new Date(started + responseTargetMs).toISOString(), responseCompletedAt,
+        new Date(started).toISOString(), new Date(started + resolutionTargetMs).toISOString(), resolutionCompletedAt,
+        1, calendar, responseTargetMs, resolutionTargetMs, 'continue', 'continue',
       ].map(literal).join(',')});`);
   }
+}
+
+/** The actual --local-beta SQL path and the disposable test path share this matrix. */
+function appendBeta2PriorityFixtureSql(rows: string[]): void {
+  const literal = (value: string | number) => sqlLiteral(String(value));
+  const add = (tenantId: string, ticketId: string, seed: ReviewPrioritySeed) => {
+    const regulatory = Number(seed.urgency.includes('regulatoryOfficerOnSite'));
+    const vip = Number(seed.urgency.includes('vipBlocked'));
+    const deadline = Number(seed.urgency.includes('hardDeadline'));
+    assert.equal(new Set(seed.urgency).size, seed.urgency.length, 'Urgency conditions must not repeat');
+    const score = calculatePriorityScore(seed.category, seed.scope, 5 * (regulatory + vip + deadline));
+    rows.push(`UPDATE tickets SET priority_category=${literal(seed.category)},priority_scope=${literal(seed.scope)},
+      priority_regulatory_officer_on_site=${regulatory},priority_vip_blocked=${vip},priority_hard_deadline=${deadline},
+      priority_score=${score},contract_sla_tier=${literal(seed.contractTier)},criticality_tier=${seed.criticalityTier}
+      WHERE tenant_id=${literal(tenantId)} AND id=${literal(ticketId)};`);
+  };
+  assert.equal(Object.keys(beta2ReviewPrioritySeeds).length, 20);
+  for (const [ticketId, seed] of Object.entries(beta2ReviewPrioritySeeds)) add('fixture-tenant-a', ticketId, seed);
+  for (const [ticketId, seed] of Object.entries(beta2TenantBPrioritySeeds)) add('fixture-tenant-b', ticketId, seed);
 }
 
 export type LocalFixtureBootstrap = Readonly<{
@@ -391,7 +491,8 @@ export type LocalFixtureBootstrap = Readonly<{
  * Builds synthetic fixture rows for a run-owned local D1 database. Callers may write
  * the SQL only to a mode-0600 temporary file and must never report its contents.
  */
-export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION_KEY'>): Promise<LocalFixtureBootstrap> {
+export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION_KEY'>,
+  options: { priorityReview?: boolean } = {}): Promise<LocalFixtureBootstrap> {
   const principals = generatedPrincipals();
   const auth = new AuthService();
   const mfa = new MFAService();
@@ -410,7 +511,14 @@ export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION
     rows.push(`INSERT INTO tenant_config (tenant_id, key, value) VALUES (${sqlLiteral(tenantId)}, 'widget.public_key', ${sqlLiteral(fixtureWidgetKeys[tenantId])});`);
     rows.push(`INSERT INTO tenant_config (tenant_id, key, value) VALUES (${sqlLiteral(tenantId)}, 'PORTAL_URL', ${sqlLiteral('http://localhost:5174')});`);
   }
-  appendBeta2FixtureSql(rows, principals);
+  appendBeta2FixtureSql(rows, principals, options.priorityReview === true);
+  if (options.priorityReview) {
+    // Only the explicit, admitted local-beta launcher selects this budgeted
+    // view on first login. Ordinary local runtimes keep the safe sort default.
+    rows.push(`INSERT INTO operator_workspace_state
+      (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,splitter_ratio)
+      VALUES ('fixture-tenant-a','fixture-operator',1,'all','priority_focus','{}','','page:1',NULL,'conversation',32);`);
+  }
   return Object.freeze({
     sql: rows.join('\n'),
     credentials: Object.freeze(principalNames.map(name => {
@@ -425,9 +533,16 @@ export async function createLocalFixtureBootstrap(env: Pick<Env, 'MFA_ENCRYPTION
   });
 }
 
-function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName, PrivatePrincipal>): void {
+function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName, PrivatePrincipal>, reviewBeta2: boolean): void {
   const literal = (value: string | number | null) => value === null ? 'NULL' : sqlLiteral(String(value));
   const now = Date.now();
+  if (reviewBeta2) {
+    for (const requester of Object.values(beta2BaseReviewRequesters)) {
+      rows.push(`INSERT INTO users (tenant_id,id,email,full_name,role,mfa_enabled) VALUES (${[
+        'fixture-tenant-a', requester.id, requester.email, requester.name, 'customer', 0,
+      ].map(literal).join(',')});`);
+    }
+  }
   const tickets = [
     ['fixture-tenant-a', 'beta2-open-assigned', 'Damaged item in recent delivery', 'open', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'web', null],
     ['fixture-tenant-a', 'beta2-pending-unassigned', 'Change delivery address before dispatch', 'pending', 'fixture-customer', principals.customerA.email, null, 'portal', null],
@@ -435,31 +550,36 @@ function appendBeta2FixtureSql(rows: string[], principals: Record<PrincipalName,
     ['fixture-tenant-a', 'beta2-resolved', 'Replacement delivered successfully', 'resolved', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'web', null],
     ['fixture-tenant-a', 'beta2-email', 'Question about invoice line items', 'open', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'email', 'support@synthetic.example.test'],
     ['fixture-tenant-a', 'beta2-internal-attachment', 'Replacement handoff and receipt', 'open', 'fixture-customer', principals.customerA.email, 'fixture-operator', 'web', null],
-    ['fixture-tenant-b', 'beta2-b-open-unassigned', 'Beta 2 tenant B open', 'open', 'fixture-customer', principals.customerB.email, null, 'portal', null],
-    ['fixture-tenant-b', 'beta2-b-email', 'Beta 2 tenant B email', 'pending', 'fixture-customer', principals.customerB.email, 'fixture-operator', 'email', 'billing@synthetic.example.test'],
+    ['fixture-tenant-b', 'beta2-b-open-unassigned', 'Warranty request for an office monitor', 'open', 'fixture-customer', principals.customerB.email, null, 'portal', null],
+    ['fixture-tenant-b', 'beta2-b-email', 'Invoice attachment needs review', 'pending', 'fixture-customer', principals.customerB.email, 'fixture-operator', 'email', 'billing@synthetic.example.test'],
   ] as const;
   for (const [index, [tenantId, id, subject, status, customerId, customerEmail, assignedTo, source, sourceEmail]] of tickets.entries()) {
     const priority = id === 'beta2-open-assigned' || id === 'beta2-email' ? 'high' : id === 'beta2-pending-unassigned' ? 'low' : 'normal';
-    rows.push(`INSERT INTO tickets (tenant_id,id,ticket_no,subject,status,priority,customer_id,customer_email,assigned_to,source,source_email,created_at,updated_at) VALUES (${[tenantId,id,index < 6 ? 201 + index : 301 + index - 6,subject,status,priority,customerId,customerEmail,assignedTo,source,sourceEmail,beta2MinutesAgo(now, beta2TicketAgeMinutes(id)),beta2MinutesAgo(now, beta2ArticleAgeMinutes(id))].map(literal).join(',')});`);
+    const requester = reviewBeta2 && tenantId === 'fixture-tenant-a' ? beta2BaseReviewRequester(id) : undefined;
+    rows.push(`INSERT INTO tickets (tenant_id,id,ticket_no,subject,status,priority,customer_id,customer_email,assigned_to,source,source_email,created_at,updated_at) VALUES (${[tenantId,id,index < 6 ? 201 + index : 301 + index - 6,subject,status,priority,requester?.id ?? customerId,requester?.email ?? customerEmail,assignedTo,source,sourceEmail,beta2MinutesAgo(now, beta2TicketAgeMinutes(id)),beta2MinutesAgo(now, beta2ArticleAgeMinutes(id))].map(literal).join(',')});`);
   }
   const articles = [
     ['fixture-tenant-a', 'beta2-article-open', 'beta2-open-assigned', 'fixture-customer', 'customer', 'The item arrived with a damaged corner. Could you help arrange a replacement?', 'plain', 0, 'web', null],
     ['fixture-tenant-a', 'beta2-article-pending', 'beta2-pending-unassigned', 'fixture-customer', 'customer', 'Can I change the delivery address before this order ships?', 'plain', 0, 'portal', null],
-    ['fixture-tenant-a', 'beta2-article-snoozed', 'beta2-snoozed-assigned', 'fixture-operator', 'agent', 'I will check back once the replacement is delivered on Tuesday.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-snoozed', 'beta2-snoozed-assigned', 'fixture-operator', 'agent', 'I will review the delivery scan tomorrow and update you then.', 'plain', 0, 'web', null],
     ['fixture-tenant-a', 'beta2-article-resolved', 'beta2-resolved', 'fixture-operator', 'agent', 'The replacement arrived and the original issue is resolved.', 'plain', 0, 'web', null],
     ['fixture-tenant-a', 'beta2-article-email', 'beta2-email', 'fixture-customer', 'customer', 'Hello support,\n\nCould you explain the additional line item on my invoice?\n\nThanks.', 'plain', 0, 'email', 'beta2-email-raw'],
     ['fixture-tenant-a', 'beta2-article-internal', 'beta2-internal-attachment', 'fixture-operator', 'agent', 'Private handoff: verify the replacement address against the attached receipt.', 'plain', 1, 'dashboard', null],
-    ['fixture-tenant-b', 'beta2-article-b-open', 'beta2-b-open-unassigned', 'fixture-customer', 'customer', 'Tenant B synthetic request.', 'plain', 0, 'portal', null],
-    ['fixture-tenant-b', 'beta2-article-b-email', 'beta2-b-email', 'fixture-customer', 'customer', 'Tenant B email body.', 'plain', 0, 'email', 'beta2-b-email-raw'],
+    ['fixture-tenant-b', 'beta2-article-b-open', 'beta2-b-open-unassigned', 'fixture-customer', 'customer', 'The office monitor stopped displaying an image. Is it still covered by the warranty?', 'plain', 0, 'portal', null],
+    ['fixture-tenant-b', 'beta2-article-b-email', 'beta2-b-email', 'fixture-customer', 'customer', 'Hello billing,\n\nI have attached a screenshot of the invoice line I cannot reconcile. Could you review it?\n\nThank you.', 'plain', 0, 'email', 'beta2-b-email-raw'],
   ] as const;
   for (const [tenantId,id,ticketId,senderId,senderType,body,bodyFormat,isInternal,intakeSource,rawEmailId] of articles) {
-    rows.push(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,snippet,body_format,is_internal,intake_source,raw_email_id,created_at) VALUES (${[tenantId,id,ticketId,senderId,senderType,body,body.substring(0, 250),bodyFormat,isInternal,intakeSource,rawEmailId,beta2MinutesAgo(now, beta2ArticleAgeMinutes(ticketId))].map(literal).join(',')});`);
+    const requester = reviewBeta2 && tenantId === 'fixture-tenant-a' && senderType === 'customer'
+      ? beta2BaseReviewRequester(ticketId) : undefined;
+    rows.push(`INSERT INTO articles (tenant_id,id,ticket_id,sender_id,sender_type,body,snippet,body_format,is_internal,intake_source,raw_email_id,created_at) VALUES (${[tenantId,id,ticketId,requester?.id ?? senderId,senderType,body,body.substring(0, 250),bodyFormat,isInternal,intakeSource,rawEmailId,beta2MinutesAgo(now, beta2ArticleAgeMinutes(ticketId))].map(literal).join(',')});`);
   }
-  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-a','beta2-attachment-pdf','beta2-article-internal','order-summary.pdf',24576,'application/pdf','fixture-tenant-a/beta2-internal-attachment/order-summary.pdf','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
-  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-b','beta2-attachment-image','beta2-article-b-email','invoice.png',8192,'image/png','fixture-tenant-b/beta2-b-email/invoice.png','2026-09-10T09:20:00.000Z'].map(literal).join(',')});`);
-  rows.push(`UPDATE ticket_support_state SET snoozed_until='2099-01-01T12:00:00.000Z',resurface_reason='manual' WHERE tenant_id='fixture-tenant-a' AND ticket_id='beta2-snoozed-assigned';`);
+  const [pdf, image] = beta2ReviewAttachmentObjects();
+  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-a','beta2-attachment-pdf','beta2-article-internal','order-summary.pdf',pdf.bytes.byteLength,pdf.contentType,pdf.key,beta2MinutesAgo(now, beta2ArticleAgeMinutes('beta2-internal-attachment'))].map(literal).join(',')});`);
+  rows.push(`INSERT INTO attachments (tenant_id,id,article_id,file_name,file_size,content_type,r2_key,created_at) VALUES (${['fixture-tenant-b','beta2-attachment-image','beta2-article-b-email','invoice.png',image.bytes.byteLength,image.contentType,image.key,beta2MinutesAgo(now, beta2ArticleAgeMinutes('beta2-b-email'))].map(literal).join(',')});`);
+  appendBeta2SnoozeFixtureSql(rows, now);
   appendBeta2ReviewFixtureSql(rows, now);
   appendBeta2SlaFixtureSql(rows, now);
+  appendBeta2PriorityFixtureSql(rows);
 }
 
 async function seedPrincipals(db: D1Database, env: Env, principals: Record<PrincipalName, PrivatePrincipal>): Promise<void> {
@@ -487,12 +607,19 @@ async function seedFixtureTenantConfig(db: D1Database): Promise<void> {
 
 async function seedScopedTickets(db: D1Database, principals: Record<PrincipalName, PrivatePrincipal>, reviewBeta2: boolean): Promise<void> {
   const now = Date.now();
+  if (reviewBeta2) {
+    for (const requester of Object.values(beta2BaseReviewRequesters)) {
+      await db.prepare('INSERT INTO users (tenant_id,id,email,full_name,role,mfa_enabled) VALUES (?,?,?,?,?,?)')
+        .bind('fixture-tenant-a', requester.id, requester.email, requester.name, 'customer', 0).run();
+    }
+  }
   const rows = [
     ['fixture-tenant-a', 'fixture-ticket', 'Fixture ticket A', principals.customerA.localId, principals.customerA.email],
     ['fixture-tenant-b', 'fixture-ticket', 'Fixture ticket B', principals.customerB.localId, principals.customerB.email],
     ['fixture-tenant-b', 'fixture-b-only', 'Fixture ticket B only', principals.customerB.localId, principals.customerB.email],
   ];
   for (const [tenantId, id, subject, customerId, customerEmail] of rows) {
+    if (reviewBeta2 && tenantId === 'fixture-tenant-a' && id === 'fixture-ticket') continue;
     await db.prepare('INSERT INTO tickets (tenant_id, id, subject, customer_id, customer_email, source) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(tenantId, id, subject, customerId, customerEmail, 'fixture').run();
   }
@@ -506,59 +633,61 @@ async function seedScopedTickets(db: D1Database, principals: Record<PrincipalNam
     ['fixture-tenant-a', 'beta2-resolved', 'Replacement delivered successfully', 'resolved', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'web', null],
     ['fixture-tenant-a', 'beta2-email', 'Question about invoice line items', 'open', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'email', 'support@synthetic.example.test'],
     ['fixture-tenant-a', 'beta2-internal-attachment', 'Replacement handoff and receipt', 'open', principals.customerA.localId, principals.customerA.email, principals.operatorA.localId, 'web', null],
-    ['fixture-tenant-b', 'beta2-b-open-unassigned', 'Beta 2 tenant B open', 'open', principals.customerB.localId, principals.customerB.email, null, 'portal', null],
-    ['fixture-tenant-b', 'beta2-b-email', 'Beta 2 tenant B email', 'pending', principals.customerB.localId, principals.customerB.email, principals.operatorB.localId, 'email', 'billing@synthetic.example.test'],
+    ['fixture-tenant-b', 'beta2-b-open-unassigned', 'Warranty request for an office monitor', 'open', principals.customerB.localId, principals.customerB.email, null, 'portal', null],
+    ['fixture-tenant-b', 'beta2-b-email', 'Invoice attachment needs review', 'pending', principals.customerB.localId, principals.customerB.email, principals.operatorB.localId, 'email', 'billing@synthetic.example.test'],
   ] as const;
   for (const [index, [tenantId, id, subject, status, customerId, customerEmail, assignedTo, source, sourceEmail]] of betaRows.entries()) {
     const priority = id === 'beta2-open-assigned' || id === 'beta2-email' ? 'high' : id === 'beta2-pending-unassigned' ? 'low' : 'normal';
+    const requester = reviewBeta2 && tenantId === 'fixture-tenant-a' ? beta2BaseReviewRequester(id) : undefined;
     await db.prepare(`INSERT INTO tickets
       (tenant_id, id, ticket_no, subject, status, priority, customer_id, customer_email, assigned_to, source, source_email, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(tenantId, id, index < 6 ? 201 + index : 301 + index - 6, subject, status, priority, customerId, customerEmail, assignedTo, source, sourceEmail,
+      .bind(tenantId, id, index < 6 ? 201 + index : 301 + index - 6, subject, status, priority, requester?.id ?? customerId, requester?.email ?? customerEmail, assignedTo, source, sourceEmail,
         beta2MinutesAgo(now, beta2TicketAgeMinutes(id)), beta2MinutesAgo(now, beta2ArticleAgeMinutes(id))).run();
   }
 
   const articles = [
     ['fixture-tenant-a', 'beta2-article-open', 'beta2-open-assigned', principals.customerA.localId, 'customer', 'The item arrived with a damaged corner. Could you help arrange a replacement?', 'plain', 0, 'web', null],
     ['fixture-tenant-a', 'beta2-article-pending', 'beta2-pending-unassigned', principals.customerA.localId, 'customer', 'Can I change the delivery address before this order ships?', 'plain', 0, 'portal', null],
-    ['fixture-tenant-a', 'beta2-article-snoozed', 'beta2-snoozed-assigned', principals.operatorA.localId, 'agent', 'I will check back once the replacement is delivered on Tuesday.', 'plain', 0, 'web', null],
+    ['fixture-tenant-a', 'beta2-article-snoozed', 'beta2-snoozed-assigned', principals.operatorA.localId, 'agent', 'I will review the delivery scan tomorrow and update you then.', 'plain', 0, 'web', null],
     ['fixture-tenant-a', 'beta2-article-resolved', 'beta2-resolved', principals.operatorA.localId, 'agent', 'The replacement arrived and the original issue is resolved.', 'plain', 0, 'web', null],
     ['fixture-tenant-a', 'beta2-article-email', 'beta2-email', principals.customerA.localId, 'customer', 'Hello support,\n\nCould you explain the additional line item on my invoice?\n\nThanks.', 'plain', 0, 'email', 'beta2-email-raw'],
     ['fixture-tenant-a', 'beta2-article-internal', 'beta2-internal-attachment', principals.operatorA.localId, 'agent', 'Private handoff: verify the replacement address against the attached receipt.', 'plain', 1, 'dashboard', null],
-    ['fixture-tenant-b', 'beta2-article-b-open', 'beta2-b-open-unassigned', principals.customerB.localId, 'customer', 'Tenant B synthetic request.', 'plain', 0, 'portal', null],
-    ['fixture-tenant-b', 'beta2-article-b-email', 'beta2-b-email', principals.customerB.localId, 'customer', 'Tenant B email body.', 'plain', 0, 'email', 'beta2-b-email-raw'],
+    ['fixture-tenant-b', 'beta2-article-b-open', 'beta2-b-open-unassigned', principals.customerB.localId, 'customer', 'The office monitor stopped displaying an image. Is it still covered by the warranty?', 'plain', 0, 'portal', null],
+    ['fixture-tenant-b', 'beta2-article-b-email', 'beta2-b-email', principals.customerB.localId, 'customer', 'Hello billing,\n\nI have attached a screenshot of the invoice line I cannot reconcile. Could you review it?\n\nThank you.', 'plain', 0, 'email', 'beta2-b-email-raw'],
   ] as const;
   for (const [tenantId, id, ticketId, senderId, senderType, body, bodyFormat, isInternal, intakeSource, rawEmailId] of articles) {
+    const requester = reviewBeta2 && tenantId === 'fixture-tenant-a' && senderType === 'customer'
+      ? beta2BaseReviewRequester(ticketId) : undefined;
     await db.prepare(`INSERT INTO articles
       (tenant_id, id, ticket_id, sender_id, sender_type, body, snippet, body_format, is_internal, intake_source, raw_email_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(tenantId, id, ticketId, senderId, senderType, body, body.substring(0, 250), bodyFormat, isInternal, intakeSource, rawEmailId,
+      .bind(tenantId, id, ticketId, requester?.id ?? senderId, senderType, body, body.substring(0, 250), bodyFormat, isInternal, intakeSource, rawEmailId,
         beta2MinutesAgo(now, beta2ArticleAgeMinutes(ticketId))).run();
   }
 
+  const [pdf, image] = beta2ReviewAttachmentObjects();
   await db.prepare(`INSERT INTO attachments
     (tenant_id, id, article_id, file_name, file_size, content_type, r2_key, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind('fixture-tenant-a', 'beta2-attachment-pdf', 'beta2-article-internal', 'order-summary.pdf', 24576,
-      'application/pdf', 'fixture-tenant-a/beta2-internal-attachment/order-summary.pdf', '2026-09-10T09:20:00.000Z').run();
+    .bind('fixture-tenant-a', 'beta2-attachment-pdf', 'beta2-article-internal', 'order-summary.pdf', pdf.bytes.byteLength,
+      pdf.contentType, pdf.key, beta2MinutesAgo(now, beta2ArticleAgeMinutes('beta2-internal-attachment'))).run();
   await db.prepare(`INSERT INTO attachments
     (tenant_id, id, article_id, file_name, file_size, content_type, r2_key, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind('fixture-tenant-b', 'beta2-attachment-image', 'beta2-article-b-email', 'invoice.png', 8192,
-      'image/png', 'fixture-tenant-b/beta2-b-email/invoice.png', '2026-09-10T09:20:00.000Z').run();
+    .bind('fixture-tenant-b', 'beta2-attachment-image', 'beta2-article-b-email', 'invoice.png', image.bytes.byteLength,
+      image.contentType, image.key, beta2MinutesAgo(now, beta2ArticleAgeMinutes('beta2-b-email'))).run();
 
-  await db.prepare(`UPDATE ticket_support_state
-    SET snoozed_until = ?, resurface_reason = ?
-    WHERE tenant_id = ? AND ticket_id = ?`)
-    .bind('2099-01-01T12:00:00.000Z', 'manual', 'fixture-tenant-a', 'beta2-snoozed-assigned').run();
+  const snoozeStatements: string[] = [];
+  appendBeta2SnoozeFixtureSql(snoozeStatements, now);
+  await db.batch(snoozeStatements.map(statement => db.prepare(statement)));
   if (reviewBeta2) {
-    // Keep the general-purpose test ticket out of the review Inbox's first 20
-    // without changing baseline tests that initialize its SLA at creation time.
-    await db.prepare("UPDATE tickets SET created_at=?,updated_at=? WHERE tenant_id='fixture-tenant-a' AND id='fixture-ticket'")
-      .bind(beta2MinutesAgo(now, 43_200), beta2MinutesAgo(now, 43_200)).run();
+    // The review fixture has exactly 20 classified tenant-A tickets. The
+    // general-purpose fixture ticket belongs only to non-review test runs.
     const reviewStatements: string[] = [];
     appendBeta2ReviewFixtureSql(reviewStatements, now);
     appendBeta2SlaFixtureSql(reviewStatements, now);
+    appendBeta2PriorityFixtureSql(reviewStatements);
     await db.batch(reviewStatements.map(statement => db.prepare(statement)));
   }
 }
@@ -630,6 +759,9 @@ export async function withTwoTenantFixture<T>(callback: (fixture: LocalTenantFix
     }] }));
     const db = await miniflare.getD1Database('DB');
     const rawBucket = await miniflare.getR2Bucket('ATTACHMENTS_BUCKET') as unknown as R2Bucket;
+    for (const attachment of beta2ReviewAttachmentObjects()) {
+      await rawBucket.put(attachment.objectKey, attachment.bytes, { httpMetadata: { contentType: attachment.contentType } });
+    }
     const r2 = countedR2Bucket(rawBucket);
     let notificationAttempts = 0;
     let remainingNotificationFailures = 0;

@@ -464,13 +464,17 @@ export class SqlTicketRepository implements TicketRepository {
     try { results = await this.db.batch<Ticket | Article>([
       ...(ticket.assigned_to ? [capacityAssignmentStatement(this.db,this.scope.tenantId,ticket.assigned_to,null)] : []),
       this.db.prepare(`INSERT INTO tickets
-        (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields, intake_received_at, intake_processed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
+        (tenant_id, id, subject, status, priority, customer_id, customer_email, assigned_to, group_id, source, source_email, custom_fields, intake_received_at, intake_processed_at,
+         priority_category,priority_scope,priority_regulatory_officer_on_site,priority_vip_blocked,priority_hard_deadline,priority_score,contract_sla_tier,criticality_tier)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`).bind(
         this.scope.tenantId, ticketId, ticket.subject, ticket.status, ticket.priority,
         ticket.customer_id || null, ticket.customer_email, ticket.assigned_to || null,
         ticket.group_id || null, ticket.source, ticket.source_email || null,
         ticket.custom_fields ? (typeof ticket.custom_fields === 'string' ? ticket.custom_fields : JSON.stringify(ticket.custom_fields)) : null,
         ticket.intake_received_at, ticket.intake_processed_at,
+        ticket.priority_category ?? null, ticket.priority_scope ?? null, ticket.priority_regulatory_officer_on_site ?? null,
+        ticket.priority_vip_blocked ?? null, ticket.priority_hard_deadline ?? null, ticket.priority_score ?? null,
+        ticket.contract_sla_tier ?? null, ticket.criticality_tier ?? null,
       ),
       this.db.prepare(`INSERT INTO articles
         (tenant_id, id, ticket_id, sender_id, sender_type, body, body_format, body_r2_key, snippet, raw_email_id, qa_type, is_internal, intake_source, received_at, processed_at)

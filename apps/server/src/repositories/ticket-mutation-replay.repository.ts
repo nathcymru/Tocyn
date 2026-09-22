@@ -16,6 +16,7 @@ import type { InitialTicketArticleData } from './interfaces';
 import type { MutationNamespace, MutationReceipt, VerifiedMutationAttachment } from '../types/ticket-mutation-replay';
 import type { RequestCanonicalMutationSli } from '../observability/request-canonical-mutation-sli';
 import type { OperatorActivityRepository } from './operator-activity.repository';
+import { priorityClassificationColumns, priorityClassificationSchema, type PriorityClassificationInput } from '../domain/priority-classification';
 
 // Fixed raw-row projections are response-version 1, not a second canonical mapper.
 const ticketJson = `json_object('tenant_id',t.tenant_id,'id',t.id,'subject',t.subject,'status',t.status,
@@ -23,6 +24,14 @@ const ticketJson = `json_object('tenant_id',t.tenant_id,'id',t.id,'subject',t.su
   'group_id',t.group_id,'source',t.source,'source_email',t.source_email,'custom_fields',t.custom_fields,
   'ticket_no',t.ticket_no,'created_at',t.created_at,'updated_at',t.updated_at,
   'intake_received_at',t.intake_received_at,'intake_processed_at',t.intake_processed_at)`;
+// Staff PATCH v2 may return classification without changing the frozen API/v1
+// mutation snapshots that share ticketJson above.
+const staffTicketJson = `json_set(${ticketJson},
+  '$.priority_category',t.priority_category,'$.priority_scope',t.priority_scope,
+  '$.priority_regulatory_officer_on_site',t.priority_regulatory_officer_on_site,
+  '$.priority_vip_blocked',t.priority_vip_blocked,'$.priority_hard_deadline',t.priority_hard_deadline,
+  '$.priority_score',t.priority_score,'$.contract_sla_tier',t.contract_sla_tier,
+  '$.criticality_tier',t.criticality_tier,'$.priority_classification_revision',t.priority_classification_revision)`;
 const articleJson = `json_object('tenant_id',a.tenant_id,'id',a.id,'ticket_id',a.ticket_id,'sender_id',a.sender_id,
   'sender_type',a.sender_type,'body',a.body,'body_r2_key',a.body_r2_key,'snippet',a.snippet,
   'body_format',a.body_format,
@@ -130,7 +139,7 @@ export class TicketMutationReplayRepository {
 
   /** Dashboard PATCH uses the staff current-session fence and its own receipt
    * namespace, while sharing the one audited field-update projection. */
-  async commitStaffUpdate(ticketId: string, data: AuditedTicketUpdate, actor: ConversationActor,
+  async commitStaffUpdate(ticketId: string, data: AuditedTicketUpdate & {classification?: PriorityClassificationInput;expectedClassificationRevision?:number}, actor: ConversationActor,
     staff: StaffMutationCommit, assignmentActivity?: Readonly<{ eventId: string; statement: D1PreparedStatement }>,
     expectedAssignedTo?: string | null): Promise<string> {
     if (actor.kind !== 'staff' || actor.source !== 'dashboard' || actor.id !== staff.credential.actorId
@@ -143,12 +152,59 @@ export class TicketMutationReplayRepository {
         || staff.responsibleOwner.ownerId !== (data.assigned_to ?? null)))
       || (expectedAssignedTo === undefined && staff.responsibleOwner !== undefined)) throw new Error('Invalid staff update mutation');
     const statements: D1PreparedStatement[] = [...staffMutationStatements(this.db,this.scope,staff),...budgetGrantOperationStatements(this.db,this.scope,staff.authority)];
-    const audit = assignmentActivity
-      ? auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
-        { 'ticket.assignment_changed': assignmentActivity.eventId },expectedAssignedTo,!!staff.responsibleOwner)
-      : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo,undefined,!!staff.responsibleOwner);
-    const updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
-    statements.push(...audit.statements);
+    let updateIndex: number | undefined;
+    if (data.classification !== undefined) {
+      const parsed=priorityClassificationSchema.safeParse(data.classification);
+      const revision=data.expectedClassificationRevision;
+      if (!parsed.success || !Number.isSafeInteger(revision) || revision!<0 || revision!>=Number.MAX_SAFE_INTEGER
+        || Object.keys(data).length!==2 || assignmentActivity || expectedAssignedTo!==undefined || staff.responsibleOwner)
+        throw new Error('Invalid classification correction');
+      const columns=priorityClassificationColumns(parsed.data);
+      const names=['priority_category','priority_scope','priority_regulatory_officer_on_site','priority_vip_blocked',
+        'priority_hard_deadline','priority_score','contract_sla_tier','criticality_tier'] as const;
+      const values=names.map(name=>columns[name]);
+      const same=(alias:string)=>names.map(name=>`${alias}${name} IS ?`).join(' AND ');
+      statements.push(...(this.admission?.conditionalConversationStatements({
+        sql:`EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=?
+          AND t.priority_classification_revision=? AND NOT (${same('t.')}))`,
+        values:[this.scope.tenantId,ticketId,revision!,...values],
+      })??[]));
+      const before=`json_object('category',t.priority_category,'scope',t.priority_scope,
+        'regulatoryOfficerOnSite',json(CASE WHEN t.priority_regulatory_officer_on_site=1 THEN 'true' ELSE 'false' END),
+        'vipBlocked',json(CASE WHEN t.priority_vip_blocked=1 THEN 'true' ELSE 'false' END),
+        'hardDeadline',json(CASE WHEN t.priority_hard_deadline=1 THEN 'true' ELSE 'false' END),
+        'score',t.priority_score,'contractTier',t.contract_sla_tier,
+        'criticalityTier',t.criticality_tier)`;
+      statements.push(this.db.prepare(`INSERT INTO ticket_priority_classification_events
+        (tenant_id,id,ticket_id,actor_id,previous_revision,next_revision,before_classification,after_classification)
+        SELECT t.tenant_id,?,t.id,?,t.priority_classification_revision,t.priority_classification_revision+1,
+          CASE WHEN t.priority_category IS NULL THEN NULL ELSE ${before} END,json(?)
+        FROM tickets t WHERE t.tenant_id=? AND t.id=? AND t.priority_classification_revision=?
+          AND NOT (${same('t.')})`)
+        .bind(crypto.randomUUID(),actor.id,JSON.stringify({...parsed.data,score:columns.priority_score}),
+          this.scope.tenantId,ticketId,revision,...values));
+      updateIndex=statements.length;
+      statements.push(this.db.prepare(`UPDATE tickets SET priority_category=?,priority_scope=?,
+        priority_regulatory_officer_on_site=?,priority_vip_blocked=?,priority_hard_deadline=?,priority_score=?,
+        contract_sla_tier=?,criticality_tier=?,priority_classification_revision=priority_classification_revision+1,
+        updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=? AND priority_classification_revision=?
+          AND NOT (${same('')}) RETURNING id`)
+        .bind(...values,this.scope.tenantId,ticketId,revision,...values));
+      // A zero-row update is valid only when the same revision already has
+      // identical values. Stale revisions abort the whole D1 batch.
+      statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
+        VALUES (?,CASE WHEN changes()=1 OR EXISTS (SELECT 1 FROM tickets t WHERE t.tenant_id=? AND t.id=?
+          AND t.priority_classification_revision=? AND (${same('t.')})) THEN 1 ELSE 0 END)
+        ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`)
+        .bind(this.scope.tenantId,this.scope.tenantId,ticketId,revision,...values));
+    } else {
+      const audit = assignmentActivity
+        ? auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,
+          { 'ticket.assignment_changed': assignmentActivity.eventId },expectedAssignedTo,!!staff.responsibleOwner)
+        : auditedTicketUpdateStatements(this.db,this.scope,this.admission,ticketId,data,actor,true,expectedAssignedTo,undefined,!!staff.responsibleOwner);
+      updateIndex = audit.updateIndex === undefined ? undefined : statements.length + audit.updateIndex;
+      statements.push(...audit.statements);
+    }
     if (staff.responsibleOwner?.overrideReason && assignmentActivity) {
       statements.push(this.db.prepare(`UPDATE conversation_events SET facts=json_set(facts,'$.capacityOverride',
         json_object('reason',?,'policyRevision',COALESCE((SELECT revision FROM operator_capacity WHERE tenant_id=? AND user_id=?),0),
@@ -170,7 +226,7 @@ export class TicketMutationReplayRepository {
         (SELECT 1 FROM tickets WHERE tenant_id=? AND id=? AND assigned_to IS ?) THEN 1 ELSE 0 END WHERE tenant_id=?`)
         .bind(this.scope.tenantId,ticketId,data.assigned_to ?? null,this.scope.tenantId));
     }
-    const snapshot = `json_object('staffVersion',2,'ticket',json((SELECT ${ticketJson} FROM tickets t WHERE t.tenant_id=? AND t.id=?)))`;
+    const snapshot = `json_object('staffVersion',2,'ticket',json((SELECT ${staffTicketJson} FROM tickets t WHERE t.tenant_id=? AND t.id=?)))`;
     statements.push(this.db.prepare(`INSERT INTO budget_mutation_assertion(tenant_id,accepted)
       VALUES (?,CASE WHEN length(CAST(${snapshot} AS BLOB))<=262144 THEN 1 ELSE 0 END)
       ON CONFLICT(tenant_id) DO UPDATE SET accepted=excluded.accepted`).bind(this.scope.tenantId,this.scope.tenantId,ticketId));
@@ -246,12 +302,16 @@ export class TicketMutationReplayRepository {
       const t = candidate.ticket;
       if(t.assigned_to)statements.push(capacityAssignmentStatement(this.db,this.scope.tenantId,t.assigned_to,null));
       statements.push(this.db.prepare(`INSERT INTO tickets
-        (tenant_id,id,subject,status,priority,customer_id,customer_email,assigned_to,group_id,source,source_email,custom_fields,intake_received_at,intake_processed_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        (tenant_id,id,subject,status,priority,customer_id,customer_email,assigned_to,group_id,source,source_email,custom_fields,intake_received_at,intake_processed_at,
+         priority_category,priority_scope,priority_regulatory_officer_on_site,priority_vip_blocked,priority_hard_deadline,priority_score,contract_sla_tier,criticality_tier)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
         this.scope.tenantId, candidate.ticketId, t.subject, t.status, t.priority, t.customer_id ?? null,
         t.customer_email, t.assigned_to ?? null, t.group_id ?? null, t.source, t.source_email ?? null,
         t.custom_fields === undefined ? null : typeof t.custom_fields === 'string' ? t.custom_fields : JSON.stringify(t.custom_fields),
         t.intake_received_at, t.intake_processed_at,
+        t.priority_category ?? null, t.priority_scope ?? null, t.priority_regulatory_officer_on_site ?? null,
+        t.priority_vip_blocked ?? null, t.priority_hard_deadline ?? null, t.priority_score ?? null,
+        t.contract_sla_tier ?? null, t.criticality_tier ?? null,
       ));
     }
     if (candidate.article) {

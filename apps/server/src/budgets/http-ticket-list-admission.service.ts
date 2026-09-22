@@ -61,7 +61,7 @@ function byteReadUnits(value: number): number | null {
  * two ticket passes, two article passes for substring search, optional
  * group-membership lookups in both passes, and a conservative byte-equivalent D1-read margin.
  */
-export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { search?: string; groupRestricted: boolean; queue?: TicketQueueKey; aggregateCounts?: boolean }): ResourceAmounts | null {
+export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { search?: string; groupRestricted: boolean; queue?: TicketQueueKey; aggregateCounts?: boolean; includePriorityClocks?: boolean }): ResourceAmounts | null {
   const articlePasses = input.search ? scaled(snapshot.articleRows, 2) : 0;
   const articleBytes = input.search ? scaled(snapshot.articleSearchBytes, 2) : 0;
   // Each statement may also probe the covering (tenant,user,group) membership PK.
@@ -75,11 +75,17 @@ export function ticketListEnvelope(snapshot: TicketListScanSnapshot, input: { se
   const mentionReads = input.aggregateCounts ? scaled(snapshot.ticketRows, 2) : input.queue === 'mentions' ? scaled(snapshot.ticketRows, 4) : 0;
   // Two materialized passes consume visible rows and then stored classification flags.
   const materializedReads = input.aggregateCounts ? scaled(snapshot.ticketRows, 2) : 0;
+  // Dashboard list pages project at most 100 selected clocks in one bounded
+  // staff-fenced lookup. Reserve clock, ticket and actor/group index reads.
+  // Page projection reads selected clocks; the standard queue aggregate probes
+  // one indexed clock per visible ticket, regardless of the active UI filter.
+  const priorityClockReads = input.includePriorityClocks ? scaled(Math.min(snapshot.ticketRows, 100), 6)
+    : input.aggregateCounts ? scaled(snapshot.ticketRows, 6) : 0;
   // Lists probe state/definition in count and page. Aggregate flags probe them
   // once for actionable and once for snoozed; both require eight units per ticket.
   const supportStateReads = input.aggregateCounts || input.queue && ['actionable', 'snoozed', 'mine', 'unassigned', 'mentions'].includes(input.queue)
     ? scaled(snapshot.ticketRows, 8) : 0;
-  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1, supportStateReads ?? -1, mentionReads ?? -1, materializedReads ?? -1);
+  const reads = safeAdd(FIXED_LIST_ADMISSION_READS, ticketPasses ?? -1, articlePasses ?? -1, byteUnits ?? -1, draftReads ?? -1, supportStateReads ?? -1, mentionReads ?? -1, materializedReads ?? -1, priorityClockReads ?? -1);
   if (reads === null) return null;
   return Object.freeze({ workerRequests: 1, d1RowsRead: reads, d1RowsWritten:16,
     ...estimateDiagnosticEnvelope({ httpRequests: 1, canonicalMutationRequests: 0 }) });
@@ -120,7 +126,8 @@ export async function admitHttpTicketList(input: AdmissionInput): Promise<HttpTi
         return { status: 'rejected', reason: 'unavailable' };
       }
       snapshot = await new TicketListScanRepository(input.deps.database, input.deps.scope).snapshot(input.filterId);
-      const business = ticketListEnvelope(snapshot, { search: input.search, groupRestricted: credential.role === 'agent', queue: input.queue, aggregateCounts: input.operation === 'dashboard.ticket.queue-counts' });
+      const business = ticketListEnvelope(snapshot, { search: input.search, groupRestricted: credential.role === 'agent', queue: input.queue,
+        aggregateCounts: input.operation === 'dashboard.ticket.queue-counts', includePriorityClocks: input.operation === 'dashboard.ticket.list' });
       if (!business) return { status: 'rejected', reason: 'unavailable' };
       const fingerprint = await digest(['http-ticket-list-v1', input.operation, input.deps.scope.tenantId, input.deps.scope.actorId,
         input.filterId ?? null, input.search ?? null, input.queue ?? null, ...(input.operation==='dashboard.ticket.queue-counts'?[input.draftNotExpiredAt ?? null]:[]), snapshot]);

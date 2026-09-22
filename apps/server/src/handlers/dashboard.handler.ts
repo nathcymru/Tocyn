@@ -9,6 +9,7 @@ import { ActivityBudgetFenceError } from '../repositories/operator-activity.repo
 import { SUPPORT_SLA_RECEIPT_SNAPSHOTS } from '../repositories/support-sla-mutation.repository';
 import { BetaAdmissionError } from '../types/local-beta';
 import { articlePageQuery, assertConversationResponseBounds, ConversationReadError } from '../services/conversation-read-bounds';
+import { PriorityClockRepository } from '../repositories/priority-clock.repository';
 import { conversationHistory } from './conversation-history';
 import { validateAttachmentReferences } from '../services/attachment-references';
 import { EmailService } from '../services/email/outbound.service';
@@ -45,6 +46,7 @@ import type { PreparedStaffMutation, StaffMutationOutcome } from '../types/staff
 import { OperatorActivityService } from '../services/operator-activity.service';
 import type { ActivityPresentationCredential } from '../types/operator-activity';
 import { TicketMutationError } from '../services/ticket-mutation-replay.service';
+import { priorityClassificationSchema } from '../domain/priority-classification';
 import { admitConfiguredStaffTicketMutation, admitConfiguredSupportSlaMutation, apiTicketBudgetCache, sessionTicketBudgetAdmission, STAFF_TICKET_ENVELOPES, SUPPORT_SLA_ENVELOPES, staffTicketAdmissionMode } from '../middleware/budget-admission.middleware';
 import { SupportSlaMutationService } from '../services/support-sla-mutation.service';
 import type { SupportSlaBudgetOperation } from '../middleware/budget-admission.middleware';
@@ -87,6 +89,7 @@ const createTicketSchema = z.object({
   group_id: z.string().uuid().optional().nullable(),
   assigned_to: z.string().uuid().optional().nullable(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  classification: priorityClassificationSchema,
 });
 
 const staffCreateTicketSchema = createTicketSchema.extend({
@@ -310,6 +313,10 @@ const updateTicketSchema = z.object({
   group_id: z.string().uuid().nullable().optional(),
   custom_fields: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
 });
+const classificationUpdateSchema = z.object({
+  classification: priorityClassificationSchema,
+  expectedClassificationRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER - 1),
+}).strict();
 const capacityInputSchema=z.object({expectedRevision:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER-1),
   availability:z.enum(['available','unavailable']),assignmentCeiling:z.number().int().min(0).max(1000)}).strict();
 async function operatorCapacity(c:any,write:boolean):Promise<Response>{
@@ -1018,6 +1025,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       const prepared = await mutation.prepareStaffMutation({ operation: 'dashboard.ticket.create', data: {
         subject: parsed.data.subject, customer_email: parsed.data.customer_email, body: parsed.data.body,
         bodyFormat: parsed.data.body_format, priority: parsed.data.priority, status: parsed.data.status,
+        classification: parsed.data.classification,
         group_id: parsed.data.group_id, assigned_to: parsed.data.assigned_to, custom_fields: parsed.data.custom_fields,
       } }, readIdempotencyKey(c));
       if (prepared.replay) {
@@ -1063,7 +1071,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
     }, 400);
   }
 
-  const { subject, customer_email, body: articleBody, priority, status, group_id, assigned_to, custom_fields } = result.data;
+  const { subject, customer_email, body: articleBody, priority, status, group_id, assigned_to, custom_fields, classification } = result.data;
   const d = c.get('tenantDeps') as TenantRequestDeps;
   const ticketService = new TenantTicketService(d);
   const agent = c.get("jwtPayload") as JWTPayload;
@@ -1078,7 +1086,7 @@ dashboard.post("/tickets", requestBounds(64 * 1024), async (c) => {
       priority,
       status,
       source: "dashboard",
-      customer_id: customer?.id, group_id, assigned_to, custom_fields,
+      customer_id: customer?.id, group_id, assigned_to, custom_fields, classification,
       body: articleBody,
       sender_id: customer?.id,
       sender_type: "customer",
@@ -1111,6 +1119,7 @@ dashboard.get('/tickets/queue-counts',async c=>{
     :{code:'budget_admission_unavailable',error:'Budget admission authority is unavailable'},admission.reason==='exhausted'?429:503);
   try {
     const result=await new TicketQueueCountsRepository(d.database,d.scope).counts({snapshot:admission.snapshot,draftNotExpiredAt,commit:admission.commit,
+      asOfMs:c.env.localNow?.()??Date.now(),
       credential:{role:payload.role as 'admin'|'agent',sessionVersion:payload.session_version??-1,expiresAt:payload.exp}});
     if(admission.commit)settleTicketQueueCounts(admission.commit,'committed',c.env.localNow?.()??Date.now());
     return c.json(result);
@@ -1139,15 +1148,18 @@ dashboard.get("/tickets", async (c) => {
   }
   const draftNotExpiredAt = queue.data === 'drafts' && c.env.ENVIRONMENT === 'local' && c.env.LOCAL_BETA_ENABLED === 'true'
     ? new Date(c.env.localNow?.() ?? Date.now()).toISOString() : undefined;
-  if (sort.data === 'sla_priority') {
+  if (sort.data === 'sla_priority' || sort.data === 'priority_focus' || sort.data === 'priority_criticality' || sort.data === 'priority_commitment') {
+    const priorityMatrixSort = sort.data !== 'sla_priority';
+    const restartCode = priorityMatrixSort ? 'priority_sort_restart' : 'sla_sort_restart';
+    const unavailableCode = priorityMatrixSort ? 'priority_sort_unavailable' : 'sla_sort_unavailable';
     const limit=Number(c.req.query('limit')||20),pageNumber=Number(c.req.query('page')||1),cursor=c.req.query('cursor');
     if(c.req.query('offset')!==undefined||!Number.isInteger(limit)||limit<1||limit>50||!Number.isInteger(pageNumber)||pageNumber<1)
-      return c.json({error:'Invalid SLA pagination'},400);
-    if(pageNumber>1)return c.json({code:'sla_sort_restart',error:'Restart SLA ordering from the first page'},409);
+      return c.json({error:'Invalid queue pagination'},400);
+    if(pageNumber>1)return c.json({code:restartCode,error:'Restart queue ordering from the first page'},409);
     if(staffTicketAdmissionMode(c.env)!=='enabled'||!c.env.BUDGET_COORDINATOR_DO||!payload
       ||!['admin','agent'].includes(payload.role)||payload.sub!==d.scope.actorId||payload.tenant_id!==d.scope.tenantId
       ||!Number.isSafeInteger(payload.session_version)||!Number.isSafeInteger(payload.exp)||payload.mfa_verified!==true)
-      return c.json({code:'sla_sort_unavailable',error:'SLA ordering authority is unavailable'},503);
+      return c.json({code:unavailableCode,error:'Queue ordering authority is unavailable'},503);
     const service=new SlaPriorityQueueService(d.database,d.scope,{tenantId:d.scope.tenantId,actorId:d.scope.actorId,
       role:payload.role as 'admin'|'agent',sessionVersion:payload.session_version!,expiresAt:payload.exp,mfaVerified:true},
       {service:sessionTicketBudgetAdmission,repository:d.repositories.budgetAuthority,namespace:c.env.BUDGET_COORDINATOR_DO,
@@ -1157,15 +1169,19 @@ dashboard.get("/tickets", async (c) => {
       const selection=Object.fromEntries(Object.entries({customerEmail:c.req.query('customer_email'),createdAfter:createdAfter.data,filterId:c.req.query('filter_id'),
         status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),groupId:c.req.query('group_id'),
         ticketNo:c.req.query('ticket_no'),search:search.data,queue:queue.data,draftNotExpiredAt}).filter(([,value])=>value!==undefined));
-      const result=await service.read(selection,{limit,cursor});
+      const result=await service.read(selection,{limit,cursor,sort:sort.data});
       const body={data:result.data.map(item=>item.ticket),meta:{page:result.page,limit,total:result.total,total_pages:Math.ceil(result.total/limit)},
-        sla:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.sla])),asOf:result.asOf,next:result.next};
+        sla:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.sla])),
+        priorityClocks:Object.fromEntries(result.data.map(item=>[item.ticket.id,item.priorityClock?{
+          remainingHours:item.priorityClock.timeRemainingHours,paused:item.priorityClock.paused,asOf:result.asOf,
+        }:null])),triageOverdueCount:result.triageOverdueCount,asOf:result.asOf,next:result.next,
+        nextPriorityChangeAt:result.nextPriorityChangeAt};
       assertConversationResponseBounds(body);
       const response=c.json(body);completed=result;return response;
     }catch(error){
       return error instanceof SlaQueueRestart
-        ? c.json({code:'sla_sort_restart',error:'Queue changed or expired; restart SLA ordering'},409)
-        : c.json({code:'sla_sort_unavailable',error:'The complete SLA queue is unavailable within current bounds'},503);
+        ? c.json({code:restartCode,error:'Queue changed or expired; restart ordering'},409)
+        : c.json({code:unavailableCode,error:'The complete queue is unavailable within current bounds'},503);
     }finally{service.finish(completed);}
   }
   const admission = await admitHttpTicketList({ env: c.env, deps: d, payload, operation: 'dashboard.ticket.list',
@@ -1194,13 +1210,23 @@ dashboard.get("/tickets", async (c) => {
       ...(queue.data ? { queue: queue.data as TicketQueueKey } : {}),
       ...(draftNotExpiredAt ? { draftNotExpiredAt } : {}),
     };
+    const pageClocks = async (ids: string[]) => {
+      const asOf = c.env.localNow?.() ?? Date.now();
+      const rows = await new PriorityClockRepository(d.database,d.scope).getPageForStaff(ids,
+        {tenantId:d.scope.tenantId,actorId:d.scope.actorId,role:currentCredential.role,sessionVersion:currentCredential.sessionVersion},asOf);
+      return Object.fromEntries(ids.map(id=>[id,rows[id] ? {
+        remainingHours:rows[id]!.timeRemainingHours,paused:rows[id]!.paused,asOf:new Date(asOf).toISOString(),
+      } : null]));
+    };
     if (queue.data) {
       const result = await d.repositories.queues.list({ ...listOptions, queue: queue.data });
-      const response=c.json({ data: result.items.map(item => ({ ...item.ticket, inclusion_reason: item.inclusionReason })),
+      const data=result.items.map(item => ({ ...item.ticket, inclusion_reason: item.inclusionReason }));
+      const response=c.json({ data,priorityClocks:await pageClocks(data.map(ticket=>ticket.id)),
         meta: { total: result.total, page: result.page, limit: result.limit, total_pages: result.totalPages } });
       listOutcome='committed';return response;
     }
-    const response=c.json(await d.repositories.tickets.list(listOptions));listOutcome='committed';return response;
+    const result=await d.repositories.tickets.list(listOptions);
+    const response=c.json({...result,priorityClocks:await pageClocks(result.data.map(ticket=>ticket.id))});listOutcome='committed';return response;
   } catch (error) {
     if (error instanceof TicketListScanError) return c.json({ code: 'budget_admission_unavailable', error: 'Ticket list capacity changed; retry the request' }, 503);
     throw error;
@@ -1551,12 +1577,16 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
       if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload,'assigned_to')) {
         return c.json({ code:'responsible_owner_endpoint_required', error:'Use the responsible-owner endpoint to change assignment' },400);
       }
-      const result = updateTicketSchema.safeParse(payload);
+      const classificationOnly = payload && typeof payload === 'object' &&
+        (Object.prototype.hasOwnProperty.call(payload,'classification') || Object.prototype.hasOwnProperty.call(payload,'expectedClassificationRevision'));
+      const result = (classificationOnly ? classificationUpdateSchema : updateTicketSchema).safeParse(payload);
       if (!result.success) return c.json({ error: "Validation failed", details: result.error.flatten().fieldErrors }, 400);
       const updateFields = result.data;
       if (!Object.keys(updateFields).length) return c.json({ error: "No valid fields to update" }, 400);
+      const idempotencyKey = readIdempotencyKey(c);
+      if (classificationOnly && !idempotencyKey) return c.json({code:'idempotency_key_required',error:'Idempotency-Key is required for classification updates'},400);
       const mutation = staffMutationService(c,d,'dashboard.ticket.update');
-      const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId:id,data:updateFields },readIdempotencyKey(c));
+      const prepared = await mutation.prepareStaffMutation({ operation:'dashboard.ticket.update',ticketId:id,data:updateFields },idempotencyKey);
       if (prepared.replay) {
         c.header('Idempotency-Replayed', 'true');
         return c.json(prepared.replay.body, prepared.replay.status);
@@ -1580,6 +1610,10 @@ dashboard.patch("/tickets/:id", requestBounds(64 * 1024), async (c) => {
     }
   }
   const payload = await c.req.json();
+  if (payload && typeof payload === 'object' &&
+    (Object.prototype.hasOwnProperty.call(payload,'classification') || Object.prototype.hasOwnProperty.call(payload,'expectedClassificationRevision'))) {
+    return c.json({code:'staff_mutation_unavailable',error:'Classification updates require configured staff mutation admission'},503);
+  }
   if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload,'assigned_to')) {
     return c.json({ code:'responsible_owner_endpoint_required', error:'Use the responsible-owner endpoint to change assignment' },400);
   }

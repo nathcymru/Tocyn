@@ -1,9 +1,11 @@
 /** Persisted article encodings. Missing fields on pre-versioned rows mean plain text. */
+import type { ContractTier, CriticalityTier, PriorityCategory, PriorityScope } from './priority-matrix';
 export const ARTICLE_BODY_FORMATS = ['plain', 'markdown-v1'] as const;
 export type ArticleBodyFormat = typeof ARTICLE_BODY_FORMATS[number];
 export const DEFAULT_ARTICLE_BODY_FORMAT: ArticleBodyFormat = 'plain';
 
 export * from './src/collaboration';
+export * from './priority-matrix';
 
 /**
  * Converts storage values into the explicit format contract. Only a missing
@@ -22,6 +24,15 @@ export interface Ticket {
   subject: string;
   status: 'open' | 'pending' | 'resolved' | 'closed';
   priority: 'low' | 'normal' | 'high' | 'urgent';
+  /** Null on tickets created before #317 classification was captured. */
+  priority_category?: PriorityCategory | null;
+  priority_scope?: PriorityScope | null;
+  priority_regulatory_officer_on_site?: 0 | 1 | null;
+  priority_vip_blocked?: 0 | 1 | null;
+  priority_hard_deadline?: 0 | 1 | null;
+  priority_score?: number | null;
+  contract_sla_tier?: ContractTier | null;
+  criticality_tier?: CriticalityTier | null;
   customer_id?: string;
   customer_email: string;
   assigned_to?: string;

@@ -22,4 +22,9 @@ export type TicketQueuePage<T> = Readonly<{
   totalPages: number;
 }>;
 
-export type TicketQueueCounts = Readonly<{ scope: 'standard_queues'; counts: Readonly<Record<TicketQueueKey | 'all', number>> }>;
+export type TicketQueueCounts = Readonly<{
+  scope: 'standard_queues';
+  counts: Readonly<Record<TicketQueueKey | 'all', number>>;
+  /** Visible, active fixed-hour clocks strictly past their deadline at the server's read instant. */
+  triageOverdueCount: number;
+}>;

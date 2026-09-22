@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Profiler, type ProfilerOnRenderCallback } from 'react';
@@ -20,7 +20,7 @@ const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,
 function deferred<T>() {let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return{promise,resolve};}
 let client:QueryClient;
 let ticket:ReturnType<typeof initialTicket>;
-function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'22222222-2222-4222-8222-222222222222' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
+function initialTicket(){return{id:'workflow-ticket',subject:'Operator workflow ticket',customer_email:'customer@example.invalid',ticket_no:62,status:'open',priority:'normal',assigned_to:'22222222-2222-4222-8222-222222222222' as string|null,group_id:'assigned-group' as string|null,created_at:'2026-09-09T00:00:00Z',priority_category:'technical-problems',priority_scope:'isolated',priority_regulatory_officer_on_site:0,priority_vip_blocked:0,priority_hard_deadline:0,contract_sla_tier:'charlie',criticality_tier:2,priority_score:7,priority_classification_revision:0,articles:[{id:'initial-message',body:'Customer question',sender_type:'customer',is_internal:false,created_at:'2026-09-09T00:00:00Z'}],pagination:{limit:20,next_cursor:null,has_more:false}};}
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
 function transport(handle:(path:string,options:RequestInit,url:string)=>Response|Promise<Response>, fields: unknown[] = [], workspace?: (options: RequestInit) => Response | undefined, sla: (path: string, options: RequestInit) => Response | Promise<Response> = () => json(unavailableSla), collision: boolean | (() => number) = false) {
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
@@ -47,6 +47,7 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
       {id:'open-governed-action-guidance',label:'Open action safety guidance',description:'Opens the documented action security boundary in a new tab.',slot:'more',capability:'tools.reference.read',kind:'external-link',href:'https://github.com/nathcymru/Tocyn/blob/main/docs/security/capability-permissions.md',enabled:true},
     ]});
     if(path===`/api/tickets/${ticket.id}/sla`) return sla(path,options);
+    if(path===`/api/tickets/${ticket.id}/history`) return json({events:[],nextCursor:null});
     if(path.startsWith('/api/tickets/')||path.startsWith('/api/attachments/')) {
       if (path.endsWith('/responsible-owner') && options.method === 'PATCH') {
         const { ownerId } = JSON.parse(String(options.body));
@@ -61,14 +62,14 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
     return json([]);
   }));
 }
-function showDetail(onRender?: ProfilerOnRenderCallback){
-  const router = createMemoryRouter([{ path: '/inbox/all/:id', element: <TicketDetailPage /> },{path:'/settings',element:<h1>General settings</h1>}], { initialEntries: ['/inbox/all/workflow-ticket'] });
+function showDetail(onRender?: ProfilerOnRenderCallback, onClassificationSaved?: () => void){
+  const router = createMemoryRouter([{ path: '/inbox/all/:id', element: <TicketDetailPage onClassificationSaved={onClassificationSaved} /> },{path:'/settings',element:<h1>General settings</h1>}], { initialEntries: ['/inbox/all/workflow-ticket'] });
   render(<QueryClientProvider client={client}><CollaborationProvider><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></CollaborationProvider></QueryClientProvider>);
   return router;
 }
 const selectLabels: Record<string, Record<string, string>> = {
   Status: { open: 'Open', pending: 'Pending', resolved: 'Resolved', closed: 'Closed' },
-  Priority: { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' },
+  'Legacy priority': { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' },
   'Assigned To': { '': 'Unassigned' },
   Group: { '': 'No Group' },
 };
@@ -76,6 +77,10 @@ function optionLabel(name: string, value: string) { return selectLabels[name]?.[
 async function chooseSelect(name: string, option: string) {
   await userEvent.click(screen.getByRole('combobox', { name }));
   await userEvent.click(await screen.findByRole('option', { name: option }));
+}
+async function openClassificationEditor() {
+  await userEvent.click(screen.getByRole('button', { name: 'Edit classification' }));
+  return screen.findByRole('dialog', { name: 'Edit ticket classification' });
 }
 async function typeRichReply(value: string) {
   const editor = screen.getByRole('textbox', { name: 'Reply message' });
@@ -98,6 +103,168 @@ beforeEach(()=>{
   useAuthStore.getState().setAuth('synthetic-operator-session',{id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
+
+it('prefills the Park classification editor, saves all seven fields, refreshes detail and retains the reply draft', async () => {
+  const saved = vi.fn();
+  const patchBodies: unknown[] = [];
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      const body = JSON.parse(String(options.body));
+      patchBodies.push(body);
+      expect(new Headers(options.headers).get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/);
+      ticket = { ...ticket, priority_category: body.classification.category,
+        priority_scope: body.classification.scope, priority_score: 37,
+        priority_regulatory_officer_on_site: Number(body.classification.regulatoryOfficerOnSite),
+        priority_vip_blocked: Number(body.classification.vipBlocked),
+        priority_hard_deadline: Number(body.classification.hardDeadline),
+        contract_sla_tier: body.classification.contractTier,
+        criticality_tier: body.classification.criticalityTier, priority_classification_revision: 1 };
+      return json({ success: true });
+    }
+    return json(ticket);
+  });
+  showDetail(undefined, saved);
+  await screen.findByText('Customer question');
+  await typeRichReply('Keep this reply while triaging');
+  const dialog = await openClassificationEditor();
+  expect(dialog).toHaveAttribute('data-scope', 'dialog');
+  expect(screen.getByRole('combobox', { name: 'Category (required)' })).toHaveTextContent('Technical problems');
+  expect(screen.getByRole('combobox', { name: 'Scope (required)' })).toHaveTextContent('Isolated');
+  expect(screen.getByRole('combobox', { name: 'Contract tier (required)' })).toHaveTextContent('Charlie');
+  expect(screen.getByRole('combobox', { name: 'Criticality level (required)' })).toHaveTextContent('Level 2');
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Category (required)' })).toHaveFocus());
+  expect(screen.getByRole('button', { name: 'Save classification' })).toBeDisabled();
+  expect(screen.getByText('No classification changes to save.')).toBeInTheDocument();
+  await chooseSelect('Category (required)', 'Security and privacy');
+  await chooseSelect('Scope (required)', 'Systemic');
+  await chooseSelect('Contract tier (required)', 'Alpha');
+  await chooseSelect('Criticality level (required)', 'Level 4');
+  for (const label of ['Regulatory officer on site', 'VIP blocked', 'Hard deadline'])
+    await userEvent.click(screen.getByRole('checkbox', { name: label }));
+  await userEvent.click(screen.getByRole('button', { name: 'Save classification' }));
+  await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+  expect(patchBodies).toEqual([{ expectedClassificationRevision: 0, classification: {
+    category: 'security-privacy', scope: 'systemic', contractTier: 'alpha', criticalityTier: 4,
+    regulatoryOfficerOnSite: true, vipBlocked: true, hardDeadline: true,
+  } }]);
+  expect(screen.queryByRole('dialog', { name: 'Edit ticket classification' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this reply while triaging');
+  expect(await screen.findByText('Priority score')).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Priority classification' })).toHaveTextContent('37');
+  expect(screen.getByRole('combobox', { name: 'Legacy priority' })).toBeInTheDocument();
+});
+
+it('does not submit an unchanged classification after a conflict reload and explicit review', async () => {
+  let patches = 0;
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      patches++;
+      ticket = { ...ticket, priority_vip_blocked: 1, priority_classification_revision: 1 };
+      return json({ code: 'priority_classification_conflict', error: 'Changed' }, 409);
+    }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  await openClassificationEditor();
+  await userEvent.click(screen.getByRole('checkbox', { name: 'VIP blocked' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Save classification' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Reload current ticket' }));
+  const confirmed = await screen.findByRole('region', { name: 'Current confirmed classification' });
+  expect(confirmed).toHaveTextContent('Current urgency: VIP blocked');
+  await userEvent.click(within(confirmed).getByRole('button', { name: 'Continue with my choices' }));
+  expect(screen.getByRole('button', { name: 'Retry saving classification' })).toBeDisabled();
+  expect(screen.getByText('No classification changes to save.')).toBeInTheDocument();
+  expect(patches).toBe(1);
+});
+
+it('keeps classification choices after a 409 and requires explicit reload before retry with a new key', async () => {
+  const keys: string[] = [];
+  const bodies: Array<{ expectedClassificationRevision: number }> = [];
+  let conflict = true;
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      const body = JSON.parse(String(options.body));
+      bodies.push(body); keys.push(new Headers(options.headers).get('Idempotency-Key')!);
+      if (conflict) { conflict = false; ticket = { ...ticket, priority_classification_revision: 1 }; return json({ code: 'priority_classification_conflict', error: 'Changed' }, 409); }
+      ticket = { ...ticket, priority_classification_revision: 2, priority_vip_blocked: 1 };
+      return json({ success: true });
+    }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  await openClassificationEditor();
+  await userEvent.click(screen.getByRole('checkbox', { name: 'VIP blocked' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Save classification' }));
+  expect(await screen.findByRole('button', { name: 'Reload current ticket' })).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Save classification' })).toBeDisabled();
+  expect(screen.getByRole('checkbox', { name: 'VIP blocked' })).toBeChecked();
+  await userEvent.click(screen.getByRole('button', { name: 'Reload current ticket' }));
+  const confirmed = await screen.findByRole('region', { name: 'Current confirmed classification' });
+  expect(confirmed).toHaveTextContent('Technical problems');
+  expect(confirmed).toHaveTextContent('Current urgency: No additional conditions');
+  expect(screen.getByRole('button', { name: 'Retry saving classification' })).toBeDisabled();
+  expect(screen.getByRole('checkbox', { name: 'VIP blocked' })).toBeChecked();
+  await userEvent.click(within(confirmed).getByRole('button', { name: 'Continue with my choices' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Retry saving classification' })).toHaveFocus());
+  await userEvent.click(screen.getByRole('button', { name: 'Retry saving classification' }));
+  await waitFor(() => expect(bodies).toHaveLength(2));
+  expect(bodies.map(body => body.expectedClassificationRevision)).toEqual([0, 1]);
+  expect(keys[1]).not.toBe(keys[0]);
+});
+
+it.each([503, 408])('retains a failed classification and the same replay key on an uncertain %i retry', async status => {
+  const keys: string[] = [];
+  transport((_path, options) => {
+    if (options.method === 'PATCH') {
+      keys.push(new Headers(options.headers).get('Idempotency-Key')!);
+      if (keys.length === 1) return json({ error: 'Temporary failure' }, status);
+      ticket = { ...ticket, priority_classification_revision: 1, priority_hard_deadline: 1 };
+      return json({ success: true });
+    }
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  await openClassificationEditor();
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Hard deadline' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Save classification' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Temporary failure');
+  expect(screen.getByRole('checkbox', { name: 'Hard deadline' })).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Retry saving classification' })).toHaveFocus();
+  await userEvent.click(screen.getByRole('button', { name: 'Retry saving classification' }));
+  await waitFor(() => expect(keys).toHaveLength(2));
+  expect(keys[1]).toBe(keys[0]);
+});
+
+it('does not announce or refresh a classification save after the authenticated identity changes', async () => {
+  const pending = deferred<Response>();
+  const saved = vi.fn();
+  transport((_path, options) => options.method === 'PATCH' ? pending.promise : json(ticket));
+  showDetail(undefined, saved); await screen.findByText('Customer question');
+  await openClassificationEditor();
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Hard deadline' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Save classification' }));
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, options]) =>
+    url === '/api/tickets/workflow-ticket' && options?.method === 'PATCH')).toBe(true));
+  act(() => useAuthStore.getState().setAuth('different-session', {
+    id: 'another-operator', tenant_id: 'tenant-b', email: 'other@example.invalid',
+    full_name: 'Another operator', role: 'admin', mfa_enabled: true,
+  }));
+  await act(async () => pending.resolve(json({ success: true })));
+  expect(saved).not.toHaveBeenCalled();
+  expect(screen.queryByText('Ticket classification saved.')).not.toBeInTheDocument();
+});
+
+it('requires a complete classification and focuses the first missing Park select', async () => {
+  ticket = { ...ticket, priority_category: '' };
+  transport(() => json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  await openClassificationEditor();
+  await userEvent.click(screen.getByRole('button', { name: 'Save classification' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Choose a category, scope, contract tier, and criticality level.');
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Category (required)' })).toHaveFocus());
+  expect(vi.mocked(fetch).mock.calls.some(([url, options]) =>
+    url === '/api/tickets/workflow-ticket' && options?.method === 'PATCH')).toBe(false);
+});
 
 it('lets an untouched conversation navigate after its selection preference is acknowledged',async()=>{
   transport(()=>json(ticket));
@@ -297,7 +464,7 @@ it('persists explicit assignment clearing and exposes pending/rejected state cha
 
 it.each([
   ['Status', { status: 'pending' }, 'pending'],
-  ['Priority', { priority: 'high' }, 'high'],
+  ['Legacy priority', { priority: 'high' }, 'high'],
   ['Assigned To', { assigned_to: null }, ''],
   ['Group', { group_id: null }, ''],
 ] as const)('refreshes the Park %s control after its authoritative update without losing focus', async (name, change, expected) => {
@@ -332,8 +499,8 @@ it('does not steal focus after a confirmed select update when the operator moves
     return json(ticket);
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
-  const priority = screen.getByRole('combobox', { name: 'Priority' });
-  priority.focus(); await chooseSelect('Priority', 'High');
+  const priority = screen.getByRole('combobox', { name: 'Legacy priority' });
+  priority.focus(); await chooseSelect('Legacy priority', 'High');
   // Ark returns focus to the trigger on the next animation frame after closing
   // the list. Move elsewhere after that close step, while PATCH is still pending.
   await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
@@ -342,7 +509,7 @@ it('does not steal focus after a confirmed select update when the operator moves
   expect(alternate).toHaveFocus();
   Object.assign(ticket, { priority: 'high' });
   await act(async () => { pending.resolve(json({ success: true })); });
-  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Legacy priority' })).not.toBe(priority));
   expect(alternate).toHaveFocus();
 });
 
@@ -358,11 +525,11 @@ it('keeps a committed select read-only until its detail refresh succeeds without
     return patches === 0 || confirmationAvailable ? json(ticket) : json({ error: 'Confirmation unavailable' }, 503);
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
-  const priority = screen.getByRole('combobox', { name: 'Priority' });
-  priority.focus(); await chooseSelect('Priority', 'High');
+  const priority = screen.getByRole('combobox', { name: 'Legacy priority' });
+  priority.focus(); await chooseSelect('Legacy priority', 'High');
   await screen.findByRole('alert');
   expect(screen.getByText('Ticket details saved. Refresh the ticket before making another change.')).toHaveAttribute('role', 'status');
-  expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
+  expect(screen.getByRole('combobox', { name: 'Legacy priority' })).toBe(priority);
   expect(priority).toBeDisabled();
   await userEvent.click(priority);
   expect(priority).toHaveTextContent('Normal');
@@ -371,7 +538,7 @@ it('keeps a committed select read-only until its detail refresh succeeds without
   const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
   retry.focus(); fireEvent.click(retry);
   await waitFor(() => {
-    const refreshed = screen.getByRole('combobox', { name: 'Priority' });
+    const refreshed = screen.getByRole('combobox', { name: 'Legacy priority' });
     expect(refreshed).not.toBe(priority);
     expect(refreshed).toHaveTextContent('High');
     expect(refreshed).not.toBeDisabled();
@@ -648,8 +815,8 @@ it('keeps explicit confirmation recovery available after a successful background
     return patches === 0 || confirmationAvailable ? json(ticket) : json({ error: 'Confirmation unavailable' }, 503);
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
-  const priority = screen.getByRole('combobox', { name: 'Priority' });
-  await chooseSelect('Priority', 'High');
+  const priority = screen.getByRole('combobox', { name: 'Legacy priority' });
+  await chooseSelect('Legacy priority', 'High');
   await screen.findByRole('alert');
   const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
   retry.focus();
@@ -658,7 +825,7 @@ it('keeps explicit confirmation recovery available after a successful background
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   expect(screen.getByRole('button', { name: 'Retry loading ticket' })).toBe(retry);
   expect(retry).toHaveFocus();
-  expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
+  expect(screen.getByRole('combobox', { name: 'Legacy priority' })).toBe(priority);
   expect(priority).toHaveTextContent('High');
   expect(priority).toBeDisabled();
   await userEvent.click(priority);
@@ -666,7 +833,7 @@ it('keeps explicit confirmation recovery available after a successful background
   expect(patches).toBe(1);
   await userEvent.click(retry);
   await waitFor(() => {
-    const refreshed = screen.getByRole('combobox', { name: 'Priority' });
+    const refreshed = screen.getByRole('combobox', { name: 'Legacy priority' });
     expect(refreshed).not.toBeDisabled();
     expect(refreshed).toHaveTextContent('High');
     expect(refreshed).toHaveFocus();
@@ -680,30 +847,33 @@ it('advertises and guards the separate confirmation read after mutation pending 
   let patches = 0;
   let postPatchReads = 0;
   const confirmation = deferred<Response>();
-  transport((_path, options) => {
+  transport((path, options) => {
     if (options.method === 'PATCH') {
       patches++;
       Object.assign(ticket, JSON.parse(String(options.body)));
       return json({ success: true });
     }
-    if (patches && ++postPatchReads > 1) return confirmation.promise;
+    if (patches && path === `/api/tickets/${ticket.id}`) {
+      postPatchReads++;
+      return confirmation.promise;
+    }
     return json(ticket);
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
-  const priority = screen.getByRole('combobox', { name: 'Priority' });
-  priority.focus(); await chooseSelect('Priority', 'High');
-  await waitFor(() => expect(postPatchReads).toBe(2));
+  const priority = screen.getByRole('combobox', { name: 'Legacy priority' });
+  priority.focus(); await chooseSelect('Legacy priority', 'High');
+  await waitFor(() => expect(postPatchReads).toBe(1));
   for (const select of screen.getAllByRole('combobox').filter(element => element.getAttribute('aria-label') !== 'Message format')) expect(select).toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Message format' })).not.toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Message format' }).closest('[data-scope="select"][data-part="root"]')?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
-  expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
+  expect(screen.getByRole('combobox', { name: 'Legacy priority' })).toBe(priority);
   expect(['trigger', 'list']).toContain(document.activeElement?.getAttribute('data-part'));
   await userEvent.click(priority);
-  expect(priority).toHaveTextContent('High');
+  expect(priority).toHaveTextContent('Normal');
   expect(patches).toBe(1);
   await act(async () => { confirmation.resolve(json(ticket)); });
   await waitFor(() => {
-    const refreshed = screen.getByRole('combobox', { name: 'Priority' });
+    const refreshed = screen.getByRole('combobox', { name: 'Legacy priority' });
     expect(refreshed).toBeTruthy();
     expect(refreshed).toBeDisabled();
     expect(refreshed).toHaveTextContent('High');
@@ -729,8 +899,8 @@ it.each(['another control', 'document body'])('does not steal focus when the ope
     return confirmationRead.promise;
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
-  const priority = screen.getByRole('combobox', { name: 'Priority' });
-  await chooseSelect('Priority', 'High');
+  const priority = screen.getByRole('combobox', { name: 'Legacy priority' });
+  await chooseSelect('Legacy priority', 'High');
   await screen.findByRole('alert');
   confirmationAvailable = true;
   const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
@@ -742,7 +912,7 @@ it.each(['another control', 'document body'])('does not steal focus when the ope
   const expectedFocus = destination === 'another control' ? alternate : document.body;
   expect(document.activeElement).toBe(expectedFocus);
   await act(async () => { confirmationRead.resolve(json(ticket)); });
-  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));
+  await waitFor(() => expect(screen.getByRole('combobox', { name: 'Legacy priority' })).not.toBe(priority));
   expect(document.activeElement).toBe(expectedFocus);
   expect(patches).toBe(1);
 });
@@ -1093,19 +1263,20 @@ it('waits for all pending attachment outcomes before unlocking a partial-failure
 
 it('replaces a pre-commit read when event and mutation invalidations overlap',async()=>{
   const stale=deferred<Response>();let hold=false;let reads=0;
-  transport((_path,options)=>{
+  transport((path,options)=>{
     if(options.method==='PATCH'){
       Object.assign(ticket,JSON.parse(String(options.body)));
       Socket.latest.emit({type:'ticket.updated',payload:{id:ticket.id}});
       return json({success:true});
     }
-    reads++;if(hold){hold=false;return stale.promise;}return json(ticket);
+    if(path===`/api/tickets/${ticket.id}`){reads++;if(hold){hold=false;return stale.promise;}}
+    return json(ticket);
   });
   showDetail();await screen.findByText('Customer question');
   const old=structuredClone(ticket);hold=true;
   let oldRequest:Promise<void>;
   act(()=>{oldRequest=client.invalidateQueries({queryKey:['ticket','workflow-ticket']});});
-  await waitFor(()=>expect(reads).toBeGreaterThan(2));
+  await waitFor(()=>expect(reads).toBeGreaterThan(1));
   ticket.articles.push({id:'live-message',body:'Post-event authoritative message',sender_type:'agent',is_internal:false,created_at:'2026-09-09T00:01:00Z'});
   act(()=>Socket.latest.emit({type:'article.created',payload:{ticket_id:ticket.id}}));
   await chooseSelect('Status', 'Resolved');
@@ -1114,7 +1285,7 @@ it('replaces a pre-commit read when event and mutation invalidations overlap',as
   await act(async()=>{stale.resolve(json(old));await oldRequest!;});
   expect(screen.getByRole('combobox',{name:'Status'})).toHaveTextContent('Resolved');
   expect(screen.getByText('Post-event authoritative message')).toBeInTheDocument();
-  expect(reads).toBeGreaterThan(2);
+  expect(reads).toBeGreaterThan(1);
 });
 
 

@@ -2,17 +2,20 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { assignmentIdentity } from './useTicketAssignment';
-import { Ticket, TicketWithDetails } from '@luminatick/shared';
+import { Ticket, TicketWithDetails, type ContractTier, type CriticalityTier, type PriorityCategory, type PriorityScope } from '@luminatick/shared';
+import { isPriorityMatrixSort, usePriorityMatrixTickets } from './usePriorityMatrixTickets';
 import { useSlaPriorityTickets, type TicketQueryPage } from './useSlaPriorityTickets';
 
-export function useTickets(params: Record<string, string> = {}) {
+export function useTickets(params: Record<string, string> = {}, enabled = true, onPriorityPeriodicRestart?: () => void) {
   const user = useAuthStore(state => state.user);
   const generation = useAuthStore(state => state.sessionGeneration);
   const identity = JSON.stringify([generation, user?.tenant_id, user?.id, user?.role]);
   const queryParams = new URLSearchParams(params).toString();
-  const sla = useSlaPriorityTickets(params, params.sort === 'sla_priority');
+  const sla = useSlaPriorityTickets(params, enabled && params.sort === 'sla_priority', onPriorityPeriodicRestart);
+  const priorityMatrixSort = isPriorityMatrixSort(params.sort);
+  const priorityMatrix = usePriorityMatrixTickets(params, enabled && priorityMatrixSort, onPriorityPeriodicRestart);
   const ordinary = useQuery({
-    enabled: params.sort !== 'sla_priority' && Boolean(user?.id),
+    enabled: enabled && params.sort !== 'sla_priority' && !priorityMatrixSort && Boolean(user?.id),
     queryKey: ['tickets', params, identity],
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === identity ? previous : undefined,
     queryFn: async () => {
@@ -23,10 +26,13 @@ export function useTickets(params: Record<string, string> = {}) {
     },
     refetchInterval: () => document.visibilityState === 'visible' ? 30000 : false,
   });
-  return params.sort === 'sla_priority' ? sla : { ...ordinary, restartSla: sla.restartSla };
+  if (params.sort === 'sla_priority') return { ...sla, restartPriorityMatrix: priorityMatrix.restartPriorityMatrix };
+  if (priorityMatrixSort) return { ...priorityMatrix, restartSla: sla.restartSla };
+  return { ...ordinary, restartSla: sla.restartSla, restartPriorityMatrix: priorityMatrix.restartPriorityMatrix };
 }
 
-type TicketPage = TicketWithDetails & { pagination?: { next_cursor: string | null; has_more: boolean } };
+export type TicketWithClassificationRevision = Ticket & { priority_classification_revision?: number };
+type TicketPage = TicketWithDetails & TicketWithClassificationRevision & { pagination?: { next_cursor: string | null; has_more: boolean } };
 export function useTicket(id: string) {
   const user = useAuthStore(state => state.user);
   const generation = useAuthStore(state => state.sessionGeneration);
@@ -82,6 +88,39 @@ export function useAssignResponsibleOwner() {
   });
 }
 
+export type TicketClassification = {
+  category: PriorityCategory;
+  scope: PriorityScope;
+  regulatoryOfficerOnSite: boolean;
+  vipBlocked: boolean;
+  hardDeadline: boolean;
+  contractTier: ContractTier;
+  criticalityTier: CriticalityTier;
+};
+
+export function useUpdateTicketClassification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    onMutate: () => assignmentIdentity(),
+    mutationFn: ({ id, classification, expectedClassificationRevision, idempotencyKey }: {
+      id: string; classification: TicketClassification; expectedClassificationRevision: number; idempotencyKey: string;
+    }) => dashboardApi.patch<unknown>(`/tickets/${id}`, { classification, expectedClassificationRevision },
+      { headers: { 'Idempotency-Key': idempotencyKey } }),
+    onSuccess: (_, variables, identity) => {
+      if (identity !== assignmentIdentity()) return;
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tickets'],
+          predicate: query => query.queryKey[1] !== 'priority-matrix' && query.queryKey[1] !== 'sla-priority' }),
+        // Cursor views own whole-queue snapshots. Mark old pages stale without
+        // fetching them; Inbox restarts the active view from page one.
+        queryClient.invalidateQueries({ queryKey: ['tickets', 'priority-matrix'], refetchType: 'none' }),
+        queryClient.invalidateQueries({ queryKey: ['tickets', 'sla-priority'], refetchType: 'none' }),
+        queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] }),
+      ]);
+    },
+  });
+}
+
 export function useCreateTicket() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -94,6 +133,7 @@ export function useCreateTicket() {
       group_id?: string;
       assigned_to?: string;
       custom_fields?: Record<string, any>;
+      classification: TicketClassification;
     }) => dashboardApi.post<Ticket>('/tickets', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
@@ -103,11 +143,18 @@ export function useCreateTicket() {
 
 export type StandardQueueKey='all'|'actionable'|'mine'|'unassigned'|'mentions'|'drafts'|'snoozed';
 export function useStandardQueueCounts(){
-  return useQuery({queryKey:['tickets','standard-queue-counts'],
+  const user = useAuthStore(state => state.user);
+  const generation = useAuthStore(state => state.sessionGeneration);
+  const identity = JSON.stringify([generation,user?.tenant_id,user?.id,user?.role]);
+  return useQuery({queryKey:['tickets','standard-queue-counts',identity],enabled:Boolean(user?.id),
     queryFn:async()=>{
-      const result=await dashboardApi.get<{scope:string;counts:Record<StandardQueueKey,number>}>('/tickets/queue-counts');
+      if(assignmentIdentity()!==identity)throw new DOMException('Obsolete queue counts response','AbortError');
+      const result=await dashboardApi.get<{scope:string;counts:Record<StandardQueueKey,number>;triageOverdueCount:number}>('/tickets/queue-counts');
+      if(assignmentIdentity()!==identity)throw new DOMException('Obsolete queue counts response','AbortError');
       if(result.scope!=='standard_queues'||!result.counts||(['all','actionable','mine','unassigned','mentions','drafts','snoozed'] as const)
-        .some(key=>!Number.isSafeInteger(result.counts[key])||result.counts[key]<0))throw new Error('Queue counts unavailable');
-      return result.counts;
+        .some(key=>!Number.isSafeInteger(result.counts[key])||result.counts[key]<0)
+        ||!Number.isSafeInteger(result.triageOverdueCount)||result.triageOverdueCount<0||result.triageOverdueCount>result.counts.all)
+        throw new Error('Queue counts unavailable');
+      return {...result.counts,triageOverdueCount:result.triageOverdueCount};
     },refetchInterval:()=>document.visibilityState==='visible'?30000:false});
 }

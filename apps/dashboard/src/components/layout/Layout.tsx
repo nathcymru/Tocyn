@@ -2,7 +2,7 @@ import { GlobalSearch } from './GlobalSearch';
 import { ProductLogo } from '@luminatick/ui/brand';
 import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkDialog, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
 import { IconButton as ParkIconButton, Link as ParkLink } from '@luminatick/ui/components';
-import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
+import { GlobalPriorityAlertBridge, InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
@@ -228,7 +228,7 @@ function LayoutContent() {
     }
   }, [desktopPersona, headerPersonaHost, sidebarPersonaHost, personaPortal]);
 
-  useEffect(() => { main.current?.focus(); }, [location.pathname]);
+  useEffect(() => { main.current?.focus({ preventScroll: true }); }, [location.pathname]);
   const loadActivity = React.useCallback(async () => {
     const generation = ++activityRequestGeneration.current;
     setActivityLoading(true); setActivityError(null); setActivityRetry(null);
@@ -274,7 +274,17 @@ function LayoutContent() {
     if (!lastMessage) return;
 
     if (['ticket.created', 'ticket.updated', 'article.created'].includes(lastMessage.type)) {
-      void queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      // A live event can arrive before the first list read has returned. Query
+      // invalidation reuses a pending fetch with no cached data, so cancel it
+      // first and read the authoritative post-event list.
+      void queryClient.cancelQueries({ queryKey: ['tickets'], predicate: query =>
+        query.queryKey.length === 3 && typeof query.queryKey[1] === 'object' && query.state.data === undefined,
+      }).then(() =>
+        // Cursor snapshots must restart as a whole from page one. The Inbox
+        // priority hook consumes this signal and creates a new ledger.
+        queryClient.invalidateQueries({ queryKey: ['tickets'], predicate: query =>
+          query.queryKey[1] !== 'priority-matrix' && query.queryKey[1] !== 'sla-priority',
+        }));
       void queryClient.invalidateQueries({ queryKey: ['stats'] });
       const ticketId = lastMessage.type === 'article.created'
         ? lastMessage.payload?.ticket_id ?? lastMessage.payload?.ticketId : lastMessage.payload?.id;
@@ -455,7 +465,7 @@ function LayoutContent() {
             </main>
           </div>
         </div>
-        {createPortal(<UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} desktop={desktopPersona} labelled={preferences.navigation === 'labelled'} open={accountMenuOpen} onOpenChange={setAccountMenuOpen} />, personaPortal)}
+        {createPortal(<UserMenu onNavigate={() => { setTimeout(() => main.current?.focus({ preventScroll: true }), 50); }} desktop={desktopPersona} labelled={preferences.navigation === 'labelled'} open={accountMenuOpen} onOpenChange={setAccountMenuOpen} />, personaPortal)}
     </div>
   );
 }
@@ -463,7 +473,7 @@ function LayoutContent() {
 export function Layout() {
   const { user, sessionGeneration } = useAuthStore();
   const identity = `${sessionGeneration}:${user?.tenant_id ?? ''}:${user?.id ?? ''}`;
-  return <OperatorThemeProvider key={identity}><InboxGlobalAlertProvider><LayoutContent /></InboxGlobalAlertProvider></OperatorThemeProvider>;
+  return <OperatorThemeProvider key={identity}><InboxGlobalAlertProvider><GlobalPriorityAlertBridge /><LayoutContent /></InboxGlobalAlertProvider></OperatorThemeProvider>;
 }
 
 const navigation = [

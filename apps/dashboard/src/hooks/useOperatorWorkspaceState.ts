@@ -8,7 +8,8 @@ export type WorkspaceFilters = Readonly<{
 }>;
 export type WorkspacePreference = Readonly<{
   revision: number; view: 'all' | 'mine' | 'unassigned' | 'mentions' | 'drafts' | 'snoozed' | 'needs_action' | 'team' | 'custom';
-  sort: 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'sla_priority';
+  sort: 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'sla_priority'
+    | 'priority_focus' | 'priority_criticality' | 'priority_commitment';
   filters: WorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null;
   panel: 'conversation' | 'details'; splitterRatio: number; updatedAt: string;
 }>;
@@ -17,7 +18,7 @@ export type WorkspacePreferenceStatus = 'idle' | 'loading' | 'restored' | 'unsav
 type Snapshot = WorkspacePreference & Readonly<{ status: WorkspacePreferenceStatus; error: string | null }>;
 type DraftIndex = Readonly<{ items: readonly Readonly<{ ticketId: string; updatedAt: string }>[]; next: string | null }>;
 
-const DEFAULT: WorkspacePreference = Object.freeze({ revision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '' });
+const DEFAULT: WorkspacePreference = Object.freeze({ revision: 0, view: 'all', sort: 'priority_focus', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '' });
 function empty(status: WorkspacePreferenceStatus): Snapshot { return { ...DEFAULT, filters: {}, status, error: null }; }
 function identityFor(sessionGeneration: number, tenantId: string | undefined, userId: string | undefined) {
   return tenantId && userId ? JSON.stringify([sessionGeneration, tenantId, userId]) : null;

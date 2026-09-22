@@ -19,6 +19,8 @@ test('materialized standard counts reconcile with queues and own undismissed men
     const scope=createVerifiedTenantScope(tenantId,agent.id,['agent'],1);
     const credential={role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600};
     const repos=createRepositories(scope,fixture.db),activities=new OperatorActivityRepository(scope,fixture.db);
+    const reader=new TicketQueueCountsRepository(fixture.db,scope);
+    const initial=await reader.counts({credential});
     for(const id of ['mine','snoozed','resolved','hidden'])await fixture.db.prepare("INSERT INTO tickets(tenant_id,id,subject,status,customer_email,source,assigned_to) VALUES(?,?,?,'open','synthetic@example.invalid','fixture',?)")
       .bind(tenantId,id,`Synthetic ${id}`,id==='mine'?agent.id:null).run();
     const append=async(id:string,ticketId:string,recipientUserId=agent.id,kind:'mention'|'assignment'='mention')=>{
@@ -38,10 +40,13 @@ test('materialized standard counts reconcile with queues and own undismissed men
     ]);
     const snapshot=await new TicketListScanRepository(fixture.db,scope).snapshot();
     const options={credential,snapshot,draftNotExpiredAt:'2026-09-13T12:00:00.000Z'};
-    const reader=new TicketQueueCountsRepository(fixture.db,scope);
     assert.equal((await reader.counts({credential,snapshot})).counts.drafts,2,'no expiry is inferred without the explicit local policy cutoff');
     const counts=await reader.counts(options);
-    assert.deepEqual(counts,{scope:'standard_queues',counts:{all:4,actionable:2,mine:1,unassigned:1,mentions:1,drafts:1,snoozed:1}});
+    assert.deepEqual(counts,{scope:'standard_queues',counts:{
+      all:initial.counts.all+3,actionable:initial.counts.actionable+1,mine:initial.counts.mine+1,
+      unassigned:initial.counts.unassigned,mentions:initial.counts.mentions+1,
+      drafts:initial.counts.drafts+1,snoozed:initial.counts.snoozed+1,
+    },triageOverdueCount:initial.triageOverdueCount});
     for(const queue of ['actionable','mine','unassigned','mentions','drafts','snoozed'] as const){
       const list=await repos.queues.list({queue,viewer:{role:'agent',actorId:agent.id},draftNotExpiredAt:options.draftNotExpiredAt});
       assert.equal(list.total,counts.counts[queue],queue);assert.ok(list.items.every(item=>!('facts' in item.ticket)));
@@ -84,6 +89,51 @@ test('materialized standard counts reconcile with queues and own undismissed men
   });
 });
 
+test('global triage overdue total uses active accrued clocks and current tenant/group visibility',async()=>{
+  await withTwoTenantFixture(async fixture=>{
+    const tenantId=fixture.principals.operatorA.tenantId;
+    const agent=await fixture.createAgentSession(tenantId);
+    const scope=createVerifiedTenantScope(tenantId,agent.id,['agent'],1);
+    const reader=new TicketQueueCountsRepository(fixture.db,scope);
+    const credential={role:'agent' as const,sessionVersion:1,expiresAt:Math.floor(Date.now()/1000)+3600};
+    const exactly=Date.parse('2026-09-20T01:00:00.000Z');
+    const baseline=(await reader.counts({credential,asOfMs:exactly})).triageOverdueCount;
+    const add=async(id:string,ownerTenant=tenantId,groupId:string|null=null,status='open')=>{
+      await fixture.db.prepare(`INSERT INTO tickets(tenant_id,id,subject,status,customer_email,source,group_id,created_at,
+        priority_category,priority_scope,priority_regulatory_officer_on_site,priority_vip_blocked,priority_hard_deadline,
+        priority_score,contract_sla_tier,criticality_tier)
+        VALUES(?,?,?,?,?,?,?,'2026-09-20T00:00:00.000Z','incidents-interruptions','isolated',0,0,0,10,'alpha',4)`)
+        .bind(ownerTenant,id,id,status,'synthetic@example.invalid','fixture',groupId).run();
+    };
+    await fixture.db.prepare("INSERT INTO groups(tenant_id,id,name) VALUES(?,'clock-hidden-group','Hidden')").bind(tenantId).run();
+    await add('clock-exact');
+    await add('clock-overdue');
+    await fixture.db.prepare("UPDATE ticket_priority_clocks SET active_since='2026-09-19T23:59:59.999Z',started_at='2026-09-19T23:59:59.999Z' WHERE tenant_id=? AND ticket_id='clock-overdue'")
+      .bind(tenantId).run();
+    await add('clock-paused');
+    await fixture.db.prepare("UPDATE ticket_priority_clocks SET active_since=NULL,stop_reason='waiting',accrued_active_ms=7200000 WHERE tenant_id=? AND ticket_id='clock-paused'")
+      .bind(tenantId).run();
+    await add('clock-resolved',tenantId,null,'resolved');
+    await add('clock-reopened');
+    await fixture.db.prepare("UPDATE ticket_priority_clocks SET accrued_active_ms=3599000,active_since='2026-09-20T00:59:58.000Z',updated_at='2026-09-20T00:59:58.000Z' WHERE tenant_id=? AND ticket_id='clock-reopened'")
+      .bind(tenantId).run();
+    await add('clock-hidden',tenantId,'clock-hidden-group');
+    await add('clock-foreign',fixture.principals.operatorB.tenantId);
+    await fixture.db.prepare("UPDATE ticket_priority_clocks SET active_since='2026-09-19T23:59:59.999Z',started_at='2026-09-19T23:59:59.999Z' WHERE ticket_id IN ('clock-hidden','clock-foreign')")
+      .run();
+    await fixture.db.prepare("INSERT INTO tickets(tenant_id,id,subject,status,customer_email,source,created_at) VALUES(?,'clock-unclassified','Unclassified','open','synthetic@example.invalid','fixture','2026-09-19T00:00:00.000Z')")
+      .bind(tenantId).run();
+    assert.equal((await reader.counts({credential,asOfMs:exactly})).triageOverdueCount,baseline+3,
+      'exact deadline is overdue; a paused, resolved, hidden, foreign or unclassified row is excluded');
+    assert.equal((await reader.counts({credential,asOfMs:exactly+1})).triageOverdueCount,baseline+3,
+      'the overdue total stays stable at the first millisecond after the boundary');
+    await fixture.db.prepare("UPDATE ticket_priority_clocks SET active_since='2026-09-20T01:00:00.001Z',stop_reason=NULL,updated_at='2026-09-20T01:00:00.001Z' WHERE tenant_id=? AND ticket_id='clock-paused'")
+      .bind(tenantId).run();
+    assert.equal((await reader.counts({credential,asOfMs:exactly+1})).triageOverdueCount,baseline+4,
+      'resuming a waiting clock retains accrued overdue time');
+  });
+});
+
 test('standard count HTTP completes a durable granted operation and rejects nonoperators and revoked sessions',async t=>{
   await withTwoTenantFixture(async fixture=>{
     const tenantId=fixture.principals.operatorA.tenantId,agent=await fixture.createAgentSession(tenantId);
@@ -119,7 +169,10 @@ test('standard count HTTP completes a durable granted operation and rejects nono
     const envelope=ticketListEnvelope(snapshot,{groupRestricted:true,aggregateCounts:true})!;
     assert.ok(rowsRead>0&&rowsRead<=envelope.d1RowsRead!,`reads ${rowsRead}`);assert.ok(rowsWritten>0&&rowsWritten<=envelope.d1RowsWritten!,`writes ${rowsWritten}`);
     t.diagnostic(`aggregate fenced HTTP batches: ${rowsRead} reads/${rowsWritten} durable writes within ${envelope.d1RowsRead}/${envelope.d1RowsWritten}`);
-    const body=await response.json<TicketQueueCounts>();assert.equal(body.scope,'standard_queues');assert.equal(body.counts.all,1);
+    const body=await response.json<TicketQueueCounts>();assert.equal(body.scope,'standard_queues');
+    const tenantRows=await fixture.db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE tenant_id=?').bind(tenantId).first<{total:number}>();
+    assert.equal(body.counts.all,tenantRows!.total);
+    assert.equal(body.triageOverdueCount,0,'the admitted HTTP response includes the global fixed-hour total');
     const after=await fixture.db.prepare('SELECT COUNT(*) AS total FROM budget_grant_operations WHERE tenant_id=?').bind(tenantId).first<{total:number}>();
     assert.equal(after!.total,before!.total+1,'a successful aggregate read records exact durable operation completion');
     let enteredAfterAdmission=false;

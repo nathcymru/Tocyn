@@ -11,12 +11,19 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
-import { createLocalFixtureBootstrap } from './local-tenant-fixture';
+import { beta2ReviewAttachmentObjects, createLocalFixtureBootstrap } from './local-tenant-fixture';
+import { configureLocalBetaTicketAdmission, initializeLocalBetaTicketAdmission } from './local-beta-ticket-admission';
 
 const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = resolve(serverRoot, '../..');
 const wrangler = join(repositoryRoot, 'node_modules/wrangler/bin/wrangler.js');
-const apiOrigin = 'http://localhost:8787';
+const localBeta = process.argv.includes('--local-beta');
+const testPort = process.env.TOCYN_LOCAL_FIXTURE_TEST_PORT;
+if (testPort !== undefined && (!localBeta || !/^\d+$/.test(testPort) || Number(testPort) < 1024 || Number(testPort) > 65535)) {
+  throw new Error('Invalid isolated local-beta fixture test port');
+}
+const apiPort = testPort === undefined ? 8787 : Number(testPort);
+const apiOrigin = `http://localhost:${apiPort}`;
 let temporary: string | undefined;
 let state: string | undefined;
 let configPath: string | undefined;
@@ -28,8 +35,6 @@ let draftCleanupTimer: NodeJS.Timeout | undefined;
 function localSecret(): string {
   return randomBytes(32).toString('hex');
 }
-
-const localBeta = process.argv.includes('--local-beta');
 
 const ansi = {
   reset: '\u001b[0m',
@@ -104,7 +109,7 @@ async function freeLoopbackPort(): Promise<void> {
   const probe = createServer();
   await new Promise<void>((accept, reject) => {
     probe.once('error', reject);
-    probe.listen(8787, '127.0.0.1', accept);
+    probe.listen(apiPort, '127.0.0.1', accept);
   });
   await new Promise<void>(accept => probe.close(() => accept()));
 }
@@ -115,6 +120,20 @@ function localWrangler(args: string[]): void {
     cwd: temporary, env: localEnvironment(), encoding: 'utf8', maxBuffer: 10 * 1024 * 1024,
   });
   if (result.status !== 0) throw new Error('A local Wrangler setup command failed; fixture state was removed without showing setup output');
+}
+
+function seedLocalAttachmentObjects(persistTo: string, bucketName: string): void {
+  assert.ok(temporary, 'Local fixture directory is required');
+  for (const [index, attachment] of beta2ReviewAttachmentObjects().entries()) {
+    const path = join(temporary, `seed-attachment-${index}`);
+    writeFileSync(path, attachment.bytes, { mode: 0o600 });
+    try {
+      localWrangler(['r2', 'object', 'put', `${bucketName}/${attachment.objectKey}`, '--local', '--persist-to', persistTo,
+        '--file', path, '--content-type', attachment.contentType, '--force']);
+    } finally {
+      rmSync(path, { force: true });
+    }
+  }
 }
 
 async function waitForHealth(): Promise<void> {
@@ -142,7 +161,8 @@ async function main(): Promise<void> {
   assert.equal(config.vars?.ENVIRONMENT, 'local');
   assert.ok(config.d1_databases?.every((binding: { remote?: boolean }) => binding.remote === false));
   assert.ok(config.r2_buckets?.every((binding: { remote?: boolean }) => binding.remote === false));
-  if (localBeta) config.vars.LOCAL_BETA_ENABLED = 'true';
+  configureLocalBetaTicketAdmission(config, localBeta);
+  if (testPort !== undefined) config.vars.LOCAL_RUNTIME_ORIGIN = apiOrigin;
   config.main = join(serverRoot, 'src/local-index.ts');
   config.d1_databases[0].migrations_dir = join(serverRoot, 'migrations');
   writeFileSync(configPath, JSON.stringify(config), { mode: 0o600 });
@@ -150,11 +170,14 @@ async function main(): Promise<void> {
   const secrets = { JWT_SECRET: localSecret(), APP_MASTER_KEY: localSecret(), MFA_ENCRYPTION_KEY: localSecret() };
   writeFileSync(join(temporary, '.dev.vars'), Object.entries(secrets).map(([key, value]) => `${key}=${value}`).join('\n') + '\n', { mode: 0o600 });
   localWrangler(['d1', 'migrations', 'apply', 'tocyn-local', '--local', '--persist-to', state]);
-  const bootstrap = await createLocalFixtureBootstrap(secrets);
+  const bootstrap = await createLocalFixtureBootstrap(secrets, { priorityReview: localBeta });
   const fixtureSql = join(temporary, 'fixture.sql');
   writeFileSync(fixtureSql, bootstrap.sql, { mode: 0o600 });
   localWrangler(['d1', 'execute', 'tocyn-local', '--local', '--persist-to', state, '--file', fixtureSql]);
   rmSync(fixtureSql, { force: true });
+  const localBucket = config.r2_buckets?.find((binding: { binding: string }) => binding.binding === 'ATTACHMENTS_BUCKET');
+  assert.equal(typeof localBucket?.bucket_name, 'string', 'Local attachment bucket is required');
+  seedLocalAttachmentObjects(state, localBucket.bucket_name);
 
   let betaApiKeys: { tenantId: string; apiKey: string }[] = [];
   if (localBeta) {
@@ -168,12 +191,14 @@ async function main(): Promise<void> {
         invitations.push({tenantId,kind:'api-key',id:key.id});
         betaApiKeys.push({tenantId,apiKey:key.apiKey});
       }
-      new LocalBetaOperator(db).initialize({runId:'local-beta-'+randomBytes(8).toString('hex'),tenants:['fixture-tenant-a','fixture-tenant-b'],invitations},0);
+      const runId = 'local-beta-'+randomBytes(8).toString('hex');
+      new LocalBetaOperator(db).initialize({runId,tenants:['fixture-tenant-a','fixture-tenant-b'],invitations},0);
+      initializeLocalBetaTicketAdmission(db, runId);
     } finally { db.close(); }
   }
 
   workerLog = openSync(join(temporary, 'runtime.log'), 'w', 0o600);
-  child = spawn(process.execPath, [wrangler, 'dev', '--local', '--ip', '127.0.0.1', '--port', '8787', '--persist-to', state, '--config', configPath], {
+  child = spawn(process.execPath, [wrangler, 'dev', '--local', '--ip', '127.0.0.1', '--port', String(apiPort), '--persist-to', state, '--config', configPath], {
     cwd: temporary, env: localEnvironment(), stdio: ['ignore', workerLog, workerLog], detached: process.platform !== 'win32',
   });
   await waitForHealth();
@@ -197,8 +222,8 @@ async function main(): Promise<void> {
   process.stdout.write(`${ansi.yellow}Synthetic credentials are printed once below for this terminal session only.${ansi.reset}\n`);
   process.stdout.write(section('LOCAL ACCESS'));
   process.stdout.write(`${ansi.cyan}Dashboard: http://127.0.0.1:5173/login${ansi.reset}\n`);
-  process.stdout.write(`${ansi.cyan}API:       http://127.0.0.1:8787${ansi.reset}\n`);
-  process.stdout.write(`${ansi.cyan}Health:    http://127.0.0.1:8787/health${ansi.reset}\n`);
+  process.stdout.write(`${ansi.cyan}API:       http://127.0.0.1:${apiPort}${ansi.reset}\n`);
+  process.stdout.write(`${ansi.cyan}Health:    http://127.0.0.1:${apiPort}/health${ansi.reset}\n`);
   process.stdout.write(section('OPERATOR CREDENTIALS'));
   for (const credential of bootstrap.credentials) {
     process.stdout.write(`Email: ${credential.email}\nPassword: ${credential.password}\n`);

@@ -27,6 +27,45 @@ function legacy() {
 }
 
 describe('Real Phase 1 migration chain', () => {
+  it('adds a separate classification revision without inventing values for historical tickets',()=>{
+    const db=legacy();
+    try{
+      apply(db,14,82);
+      expect(db.prepare("SELECT priority_classification_revision,priority_category FROM tickets WHERE tenant_id='default-tenant' AND id='old-ticket'").get())
+        .toEqual({priority_classification_revision:0,priority_category:null});
+      expect(db.prepare("SELECT count(*) AS count FROM ticket_priority_classification_events").get()).toEqual({count:0});
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+    }finally{db.close();}
+  });
+
+  it('preserves historical tickets while rejecting partial or forged priority classifications', () => {
+    const db = legacy();
+    try {
+      apply(db, 14, 79);
+      expect(db.prepare(`SELECT priority_category, priority_score, contract_sla_tier, criticality_tier
+        FROM tickets WHERE tenant_id='default-tenant' AND id='old-ticket'`).get()).toEqual({
+        priority_category: null, priority_score: null, contract_sla_tier: null, criticality_tier: null,
+      });
+      const insert = db.prepare(`INSERT INTO tickets
+        (tenant_id,id,subject,customer_email,source,priority_category,priority_scope,
+         priority_regulatory_officer_on_site,priority_vip_blocked,priority_hard_deadline,
+         priority_score,contract_sla_tier,criticality_tier)
+        VALUES ('default-tenant',?,'Classified','new@example.test','dashboard',?,?,?,?,?,?,?,?)`);
+      expect(() => insert.run('partial','security-privacy','systemic',1,1,0,40,'alpha',null))
+        .toThrow(/incomplete priority classification/);
+      expect(() => insert.run('forged','security-privacy','systemic',1,1,0,39,'alpha',4))
+        .toThrow(/incomplete priority classification/);
+      insert.run('valid','security-privacy','systemic',1,1,0,40,'alpha',4);
+      expect(db.prepare("SELECT priority_score FROM tickets WHERE id='valid'").get()).toEqual({ priority_score: 40 });
+      expect(() => db.prepare("UPDATE tickets SET priority_vip_blocked=0 WHERE id='valid'").run())
+        .toThrow(/incomplete priority classification/);
+      expect(() => db.prepare("UPDATE tickets SET priority_category=NULL,priority_scope=NULL,priority_regulatory_officer_on_site=NULL,priority_vip_blocked=NULL,priority_hard_deadline=NULL,priority_score=NULL,contract_sla_tier=NULL,criticality_tier=NULL WHERE id='valid'").run())
+        .toThrow(/priority classification cannot be cleared/);
+      expect(db.prepare("SELECT priority_vip_blocked FROM tickets WHERE id='valid'").get()).toEqual({ priority_vip_blocked: 1 });
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('fences a paused capability mutation in its write statement after revocation', () => {
     const db = new Database(':memory:');
     try {

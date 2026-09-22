@@ -35,7 +35,13 @@ test('SLA sort migration preserves every workspace field and the tenant/user lif
     migrate(db);
     assert.deepEqual(rows(db), before);
     assert.deepEqual(db.pragma('foreign_key_list(operator_workspace_state)'), foreignKeys);
-    assert.deepEqual(db.pragma('table_info(operator_workspace_state)'), columns);
+    // A rebuild can change physical column order without changing the named
+    // workspace contract; compare each column's definition by name.
+    const byName = (entries: unknown[]) => entries.map(entry => {
+      const { cid: _position, ...definition } = entry as {cid:number;name:string};
+      return definition;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    assert.deepEqual(byName(db.pragma('table_info(operator_workspace_state)') as unknown[]), byName(columns as unknown[]));
     assert.deepEqual(db.pragma('foreign_key_check'), []);
     db.prepare("UPDATE operator_workspace_state SET sort_key='sla_priority' WHERE tenant_id='tenant-a'").run();
     assert.equal(db.prepare("SELECT sort_key FROM operator_workspace_state WHERE tenant_id='tenant-b'").pluck().get(), 'priority_asc');

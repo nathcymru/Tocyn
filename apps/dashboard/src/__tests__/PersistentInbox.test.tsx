@@ -5,6 +5,7 @@ import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter,Link,RouterProvider,useLocation } from 'react-router-dom';
 import { afterEach,beforeEach,expect,it,vi } from 'vitest';
 import { InboxWorkspacePage } from '../pages/InboxWorkspacePage';
+import { GlobalPriorityAlertBridge, InboxGlobalAlertProvider } from '../components/InboxGlobalAlert';
 import { useAuthStore } from '../store/authStore';
 
 
@@ -17,10 +18,12 @@ const detailNavigation=vi.hoisted(()=>({pending:false,flush:vi.fn<()=>Promise<bo
 vi.mock('../pages/TicketDetailPage',async()=>{
   const {DraftNavigationGuard}=await vi.importActual<typeof import('../components/DraftNavigationGuard')>('../components/DraftNavigationGuard');
   const {useOperatorWorkspaceState}=await vi.importActual<typeof import('../hooks/useOperatorWorkspaceState')>('../hooks/useOperatorWorkspaceState');
-  return {TicketDetailPage:({id,workspaceBackHref,onResolved}:{id:string;workspaceBackHref:string;onResolved?:(id:string)=>void})=>{const state=useOperatorWorkspaceState();return <article>
+  return {TicketDetailPage:({id,workspaceBackHref,onResolved,onClassificationSaved}:{id:string;workspaceBackHref:string;onResolved?:(id:string)=>void;onClassificationSaved?:()=>void})=>{const state=useOperatorWorkspaceState();return <article>
     <DraftNavigationGuard pending={detailNavigation.pending} flush={detailNavigation.flush}/>
     <button tabIndex={-1} onClick={()=>state.update({filters:{...state.filters,status:'pending'}})}>Synthetic change filter</button>
-    <button tabIndex={-1} onClick={()=>onResolved?.(id)}>Synthetic confirmed resolve</button><h1>{`Conversation ${id}`}</h1><Link to={workspaceBackHref}>Back to conversations</Link>
+    <button tabIndex={-1} onClick={()=>onResolved?.(id)}>Synthetic confirmed resolve</button>
+    <button tabIndex={-1} onClick={()=>onClassificationSaved?.()}>Synthetic classification saved</button>
+    <h1>{`Conversation ${id}`}</h1><Link to={workspaceBackHref}>Back to conversations</Link>
   </article>;}};
 });
 
@@ -40,8 +43,22 @@ let savedRatio=32;
 function Location(){const location=useLocation();return <output data-testid="location">{location.pathname}</output>;}
 function showInbox(entry='/inbox/all',globalSearch=false){
   const router=createMemoryRouter([{path:'/inbox/*',element:<>{globalSearch&&<GlobalSearch shortcutsEnabled />}<InboxWorkspacePage/><Location/></>}],{initialEntries:[entry]});
-  const result=render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
+  const result=render(<QueryClientProvider client={client}><InboxGlobalAlertProvider><GlobalPriorityAlertBridge /><RouterProvider router={router}/></InboxGlobalAlertProvider></QueryClientProvider>);
   return {...result,router};
+}
+async function chooseTicketClassification({urgent=false}:{urgent?:boolean}={}){
+  for(const [field,choice] of [
+    ['Category (required)','Security and privacy'],
+    ['Scope (required)','Systemic'],
+    ['Contract tier (required)','Alpha'],
+    ['Criticality level (required)','Level 4'],
+  ]){
+    await userEvent.click(screen.getByRole('combobox',{name:field}));
+    await userEvent.click(await screen.findByRole('option',{name:choice}));
+  }
+  if(urgent)for(const label of ['Regulatory officer on site','VIP blocked','Hard deadline']){
+    await userEvent.click(screen.getByRole('checkbox',{name:label}));
+  }
 }
 async function chooseSort(option:string){
   await openFilters();
@@ -78,9 +95,10 @@ beforeEach(()=>{
     if(url==='/api/workspace/drafts?limit=50')return json({items:[{ticketId:'ticket-20',updatedAt:'2026-09-11T00:00:00Z'}],next:null});
     if(url==='/api/settings/filters')return json([{id:'priority-follow-up',name:'Priority follow-up'}]);
     if(url==='/api/settings')return json({TICKET_PREFIX:'#'});
-    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0}});
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0},triageOverdueCount:0});
     if(url.startsWith('/api/tickets?'))return json({data:tickets,meta:{page:1,limit:20,total:20,total_pages:1}});
     if(url==='/api/ticket-sla/projections')return json(Object.fromEntries(tickets.map(ticket=>[ticket.id,unavailableSla])));
+    if(url.includes('/history?'))return json({events:[],nextCursor:null});
     return json([]);
   }));
 });
@@ -278,9 +296,9 @@ it('uses the authoritative actionable and snoozed queue views without losing the
   expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Snoozed');
   await waitFor(()=>expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed'));
 
-  await chooseView('Needs Attention');
+  await chooseView('Needs Action');
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
-  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Action');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBeInTheDocument();
 });
 
@@ -394,16 +412,336 @@ it('keeps applied date, customer and text filters when changing the three refere
   });
   await waitFor(()=>expect(matchingQuery(null,'updated_desc')).toBe(true));
 
-  await chooseView('Highest Impact');
-  await waitFor(()=>expect(matchingQuery(null,'priority_desc')).toBe(true));
-  await chooseView('Contract SLAs');
-  await waitFor(()=>expect(matchingQuery(null,'sla_priority')).toBe(true));
   await chooseView('Needs Attention');
+  await waitFor(()=>expect(matchingQuery(null,'priority_focus')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention');
+  await chooseView('Highest Impact');
+  await waitFor(()=>expect(matchingQuery(null,'priority_criticality')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Highest Impact');
+  await chooseView('Contract SLAs');
+  await waitFor(()=>expect(matchingQuery(null,'priority_commitment')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Contract SLAs');
+  await chooseView('Needs Action');
   await waitFor(()=>expect(matchingQuery('actionable','updated_desc')).toBe(true));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Action');
   await openFilters();
   expect(screen.getByRole('button',{name:'Created: day'})).toBeInTheDocument();
   expect(screen.getByRole('textbox',{name:'Filter by exact customer email'})).toHaveValue('customer-1@example.invalid');
   expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
+});
+
+it('shows all three priority views with authoritative triage clocks and the separate calendar SLA clock',async()=>{
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const snapshot=new Date().toISOString();
+  const classified=[
+    {...tickets[0],contract_sla_tier:'alpha',criticality_tier:4},
+    {...tickets[1],contract_sla_tier:'delta',criticality_tier:1},
+  ];
+  const requestedSorts:string[]=[];
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0},triageOverdueCount:7});
+    if(String(url).startsWith('/api/tickets?')){
+      const sort=new URL(String(url),'http://localhost').searchParams.get('sort');
+      if(sort?.startsWith('priority_')){
+        requestedSorts.push(sort);
+        return json({data:classified,meta:{page:1,limit:2,total:7,total_pages:4},
+          sla:Object.fromEntries(classified.map(ticket=>[ticket.id,unavailableSla])),
+          priorityClocks:Object.fromEntries(classified.map((ticket,index)=>[ticket.id,{remainingHours:index===0?-0.5:-1,paused:false,asOf:snapshot}])),
+          triageOverdueCount:7,nextPriorityChangeAt: null, asOf:snapshot,next:'signed-next-page'});
+      }
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await chooseView('Needs Attention');
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention'));
+  const first=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(within(first).getByRole('meter',{name:/Alpha contract, level 4 priority triage clock: Overdue by/})).toHaveTextContent('A4−30m');
+  expect(within(first).queryByLabelText('Service level unavailable')).toBeNull();
+  expect(screen.getByRole('alert')).toHaveTextContent('7 fixed-hour priority countdowns have expired in your accessible inbox');
+  expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(2);
+  await choosePresentation('Table view');
+  expect(within(screen.getByRole('table',{name:'Tickets in the current view'})).getAllByRole('meter')).toHaveLength(2);
+
+  await chooseView('Highest Impact');
+  await waitFor(()=>expect(requestedSorts).toContain('priority_criticality'));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Highest Impact');
+  await chooseView('Contract SLAs');
+  await waitFor(()=>expect(requestedSorts).toContain('priority_commitment'));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Contract SLAs');
+  expect(requestedSorts).toContain('priority_focus');
+  await chooseView('All tickets');
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('All tickets'));
+  expect(within(screen.getByRole('listbox')).queryByRole('meter')).toBeNull();
+  expect(screen.getByRole('alert')).toHaveTextContent('7 fixed-hour priority countdowns have expired in your accessible inbox');
+});
+
+it('shows the A4 triage ring and countdown in an ordinary legacy sort without replacing contractual SLA data',async()=>{
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  const sampledAt=new Date().toISOString();
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?'))return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},
+      priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:sampledAt}}});
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  const row=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(within(row).getByRole('meter',{name:/Alpha contract, level 4 priority triage clock: 30m remaining/})).toHaveTextContent('A430m');
+  expect(within(row).queryByLabelText('Service level unavailable')).toBeNull();
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
+});
+
+it('restarts an expired priority snapshot without displaying stale ordinary rows',async()=>{
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const snapshot=new Date().toISOString();
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      priorityReads++;
+      return priorityReads===1?json({code:'priority_sort_restart',error:'Snapshot expired'},409)
+        :json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+          priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:snapshot}},triageOverdueCount:0,nextPriorityChangeAt: null, asOf:snapshot,next:null});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await chooseView('Needs Attention');
+  const restart=await screen.findByRole('button',{name:'Retry conversations'});
+  expect(within(screen.getByRole('listbox')).queryAllByRole('option')).toHaveLength(0);
+  expect(screen.queryByText(/Priority order set/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Refresh priority ordering'})).not.toBeInTheDocument();
+  fireEvent.click(restart);
+  expect(await within(screen.getByRole('listbox')).findByRole('meter',{name:/Alpha contract, level 4 priority triage clock/})).toBeInTheDocument();
+  expect(priorityReads).toBe(2);
+});
+
+it('keeps Retry visible after a transient priority refresh failure and reconciles again while visible', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      priorityReads++;
+      if(priorityReads===2)return json({code:'temporarily_unavailable',error:'Temporary read failure'},503);
+      const sampledAt=new Date().toISOString();
+      return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+        priorityClocks:{[classified.id]:{remainingHours:0.5,paused:false,asOf:sampledAt}},
+        triageOverdueCount:0,nextPriorityChangeAt: null, asOf:sampledAt,next:null});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await chooseView('Needs Attention');
+  await waitFor(()=>expect(priorityReads).toBe(1));
+
+  vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+  try{
+    await act(async()=>{
+      const pending=client.invalidateQueries({queryKey:['tickets','priority-matrix']});
+      await vi.advanceTimersByTimeAsync(0);
+      await pending;
+    });
+    expect(priorityReads).toBe(2);
+    expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
+
+    await act(async()=>{await vi.advanceTimersByTimeAsync(30_000);});
+    expect(priorityReads).toBe(3);
+  }finally{vi.useRealTimers();}
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'Retry conversations'})).not.toBeInTheDocument());
+  expect(await within(screen.getByRole('listbox')).findByRole('meter',{name:/Alpha contract, level 4 priority triage clock/})).toBeInTheDocument();
+});
+
+it('restarts the priority snapshot at page one after classification changes and keeps the selected conversation', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'alpha',criticality_tier:4};
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      priorityReads++;
+      const sampledAt=new Date().toISOString();
+      return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+        priorityClocks:{[classified.id]:{remainingHours:priorityReads===1?1:0.5,paused:false,asOf:sampledAt}},
+        triageOverdueCount:0,nextPriorityChangeAt: null, asOf:sampledAt,next:null});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all/ticket-1');
+  await screen.findByRole('heading',{name:'Conversation ticket-1'});
+  await chooseView('Needs Attention');
+  await waitFor(()=>expect(priorityReads).toBe(1));
+  fireEvent.click(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/}));
+  await screen.findByRole('heading',{name:'Conversation ticket-1'});
+  fireEvent.click(screen.getByRole('button',{name:'Synthetic classification saved'}));
+  await waitFor(()=>expect(priorityReads).toBe(2));
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
+  expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Classification saved');
+  expect(priorityReads).toBe(2);
+});
+
+it('removes a due ticket from the visible Snoozed priority view on the next bounded poll without closing its conversation', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified=[
+    {...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+    {...tickets[1],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+  ];
+  let due=false;
+  let priorityReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(url==='/api/workspace/state'&&options?.method!=='PUT')return json({...workspace('ticket-1'),view:'snoozed',sort:'priority_focus'});
+    if(String(url).startsWith('/api/tickets?')){
+      const search=new URL(String(url),'http://localhost').searchParams;
+      if(search.get('queue')==='snoozed'&&search.get('sort')==='priority_focus'){
+        priorityReads++;
+        const rows=due?[classified[1]]:classified;
+        const asOf=new Date().toISOString();
+        return json({data:rows,meta:{page:1,limit:20,total:rows.length,total_pages:1},
+          sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
+          priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:24,paused:false,asOf}])),
+          triageOverdueCount:0,nextPriorityChangeAt: null, asOf,next:null});
+      }
+    }
+    return base(url,options);
+  });
+  vi.useFakeTimers({toFake:['setInterval','clearInterval']});
+  try{
+    showInbox('/inbox/snoozed/ticket-1');
+    const list=screen.getByRole('listbox',{name:'Conversation list'});
+    await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    expect(priorityReads).toBe(1);
+    expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
+
+    due=true;
+    await act(async()=>{vi.advanceTimersByTime(30_000);});
+    await waitFor(()=>expect(priorityReads).toBe(2));
+    expect(within(list).queryByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).not.toBeInTheDocument();
+    expect(within(list).getByRole('option',{name:/Fixture conversation 2(?:\s|$)/})).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/inbox/snoozed/ticket-1');
+    expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
+    expect(screen.queryByText(/Priority list refreshed/)).not.toBeInTheDocument();
+    expect(priorityReads).toBe(2);
+  }finally{vi.useRealTimers();}
+});
+
+it('reconciles priority ordering when a hidden Inbox becomes visible after the snapshot ages', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified={...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4};
+  const started=Date.now();
+  let advanced=false;
+  let visible=false;
+  const visibility=vi.spyOn(document,'visibilityState','get').mockImplementation(()=>visible?'visible':'hidden');
+  vi.spyOn(Date,'now').mockImplementation(()=>started+(advanced?31_000:0));
+  let reads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      reads++;
+      const asOf=new Date(Date.now()).toISOString();
+      return json({data:[classified],meta:{page:1,limit:20,total:1,total_pages:1},sla:{[classified.id]:unavailableSla},
+        priorityClocks:{[classified.id]:{remainingHours:48,paused:false,asOf}},triageOverdueCount:0,nextPriorityChangeAt: null, asOf,next:null});
+    }
+    return base(url,options);
+  });
+  try{
+    showInbox('/inbox/all');
+    await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    await chooseView('Needs Attention');
+    await waitFor(()=>expect(reads).toBe(1));
+    advanced=true;
+    act(()=>document.dispatchEvent(new Event('visibilitychange')));
+    expect(reads).toBe(1);
+    visible=true;
+    act(()=>document.dispatchEvent(new Event('visibilitychange')));
+    await waitFor(()=>expect(reads).toBe(2));
+  }finally{visibility.mockRestore();}
+});
+
+it('reorders the whole priority view when its next drift boundary is reached', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified=[
+    {...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+    {...tickets[1],contract_sla_tier:'charlie',criticality_tier:2,priority_score:8},
+  ];
+  const nextPriorityChangeAt=new Date(Date.now()+5_000).toISOString();
+  let reads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='priority_focus'){
+      reads++;
+      const rows=reads===1?classified:[classified[1],classified[0]];
+      const asOf=new Date().toISOString();
+      return json({data:rows,meta:{page:1,limit:20,total:2,total_pages:1},sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
+        priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:reads===1?24:23,paused:false,asOf}])),
+        triageOverdueCount:0,nextPriorityChangeAt:reads===1?nextPriorityChangeAt:null,asOf,next:null});
+    }
+    return base(url,options);
+  });
+  vi.useFakeTimers({toFake:['setInterval','clearInterval']});
+  try{
+    showInbox('/inbox/all');
+    await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    await chooseView('Needs Attention');
+    await waitFor(()=>expect(reads).toBe(1));
+    const list=screen.getByRole('listbox',{name:'Conversation list'});
+    expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 1');
+    await act(async()=>{vi.advanceTimersByTime(6_000);});
+    await waitFor(()=>expect(reads).toBe(2));
+    expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 2');
+    expect(screen.queryByRole('button',{name:/Refresh priority ordering/})).not.toBeInTheDocument();
+  }finally{vi.useRealTimers();}
+});
+
+it('restarts a later Snoozed cursor page at page one when its snapshot ages, preserving the open conversation', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const classified=[
+    {...tickets[0],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+    {...tickets[1],contract_sla_tier:'delta',criticality_tier:1,priority_score:4},
+  ];
+  const firstAsOf=new Date().toISOString();
+  let due=false;
+  const priorityRequests:string[]=[];
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(url==='/api/workspace/state'&&options?.method!=='PUT')return json({...workspace('ticket-2'),view:'snoozed',sort:'priority_focus'});
+    if(String(url).startsWith('/api/tickets?')){
+      const search=new URL(String(url),'http://localhost').searchParams;
+      if(search.get('queue')==='snoozed'&&search.get('sort')==='priority_focus'){
+        priorityRequests.push(String(url));
+        const cursor=search.get('cursor');
+        const rows=cursor?[classified[1]]:[classified[0]];
+        const asOf=cursor?firstAsOf:due?new Date().toISOString():firstAsOf;
+        return json({data:rows,meta:{page:cursor?2:1,limit:1,total:due?1:2,total_pages:due?1:2},
+          sla:Object.fromEntries(rows.map(ticket=>[ticket.id,unavailableSla])),
+          priorityClocks:Object.fromEntries(rows.map(ticket=>[ticket.id,{remainingHours:24,paused:false,asOf}])),
+          triageOverdueCount:0,nextPriorityChangeAt: null, asOf,next:cursor||due?null:'signed-next-page'});
+      }
+    }
+    return base(url,options);
+  });
+  vi.useFakeTimers({toFake:['setInterval','clearInterval']});
+  try{
+    showInbox('/inbox/snoozed/ticket-2');
+    const list=screen.getByRole('listbox',{name:'Conversation list'});
+    await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+    fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
+    await within(list).findByRole('option',{name:/Fixture conversation 2(?:\s|$)/});
+    expect(priorityRequests).toHaveLength(2);
+    expect(screen.getByRole('heading',{name:'Conversation ticket-2'})).toBeInTheDocument();
+
+    detailNavigation.pending=true;
+    due=true;
+    await act(async()=>{vi.advanceTimersByTime(30_000);});
+    await waitFor(()=>expect(priorityRequests).toHaveLength(3));
+    expect(priorityRequests[2]).not.toContain('cursor=');
+    expect(within(list).queryByRole('option',{name:/Fixture conversation 2(?:\s|$)/})).not.toBeInTheDocument();
+    expect(within(list).getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
+    expect(screen.getByRole('heading',{name:'Conversation ticket-2'})).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/inbox/snoozed/ticket-2');
+    expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Priority list refreshed');
+    expect(detailNavigation.flush).not.toHaveBeenCalled();
+  }finally{vi.useRealTimers();}
 });
 
 it('uses clamped calendar dates for the month and quarter filter choices',async()=>{
@@ -539,8 +877,9 @@ it('keeps a confirmed conversation and draft/list visibility while workspace pre
   }));
   showInbox('/inbox');
   await screen.findByRole('heading',{name:'Conversation ticket-20'});
-  expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveAttribute('aria-selected','true');
-  expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
+  const selectedRow=await screen.findByRole('option',{name:/Fixture conversation 20/});
+  expect(selectedRow).toHaveAttribute('aria-selected','true');
+  expect(selectedRow).toHaveTextContent('Draft');
 
   await chooseSort('oldest first');
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Workspace preferences changed in another session. Review before replacing them.'));
@@ -560,7 +899,7 @@ it('shows recovery and no historical rows when the current tenant list read is d
     if(url==='/api/workspace/drafts?limit=50')return json({items:[],next:null});
     if(url==='/api/settings/filters')return json([]);
     if(url==='/api/settings')return json({TICKET_PREFIX:'#'});
-    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0}});
+    if(url==='/api/tickets/queue-counts')return json({scope:'standard_queues',counts:{all:20,actionable:20,mine:0,unassigned:20,mentions:0,drafts:1,snoozed:0},triageOverdueCount:0});
     if(url.startsWith('/api/tickets?'))return json({error:'Forbidden'},403);
     return json({});
   }));
@@ -636,6 +975,7 @@ it('keeps the custom list position and selected conversation when its draft refu
   detailNavigation.flush.mockResolvedValue(false);
   showInbox('/inbox/priority-follow-up/ticket-20');
   await screen.findByRole('heading',{name:'Conversation ticket-20'});
+  await screen.findByRole('option',{name:/Fixture conversation 20/});
   const pane=screen.getByRole('region',{name:'Conversations'});
   pane.scrollTop=640;
   const list=screen.getByRole('listbox',{name:'Conversation list'});
@@ -738,7 +1078,7 @@ it('opens authoritative Mine and Unassigned views without claiming refreshed own
 it('shows server standard totals separately from filtered results and retries unavailable counts without inventing zero',async()=>{
   const fallback=fetch;let available=false;
   vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
-    if(url==='/api/tickets/queue-counts')return available?json({scope:'standard_queues',counts:{all:42,actionable:12,mine:4,unassigned:8,mentions:2,drafts:3,snoozed:5}}):json({error:'Unavailable'},503);
+    if(url==='/api/tickets/queue-counts')return available?json({scope:'standard_queues',counts:{all:42,actionable:12,mine:4,unassigned:8,mentions:2,drafts:3,snoozed:5},triageOverdueCount:0}):json({error:'Unavailable'},503);
     if(url.startsWith('/api/tickets?')&&new URL(url,'http://localhost').searchParams.get('queue')==='mentions')return json({data:[{...tickets[0],inclusion_reason:'mentions'}],meta:{page:1,limit:20,total:1,total_pages:1}});
     return fallback(url,options);
   }));
@@ -833,13 +1173,46 @@ it('uses whole-view SLA ordering and same-snapshot projections, then restarts an
   await waitFor(()=>expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 20'));
   expect(vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/ticket-sla/projections')).toHaveLength(before);
   fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
-  await screen.findByRole('button',{name:'Restart SLA ordering'});
+  await waitFor(()=>expect(slaRequests).toHaveLength(3));
+  expect(slaRequests[2]).not.toContain('cursor=');
   expect(screen.getByRole('heading',{name:'Conversation ticket-1'})).toBeInTheDocument();
-  expect(within(list).queryAllByRole('option')).toHaveLength(0);
-  fireEvent.click(screen.getByRole('button',{name:'Restart SLA ordering'}));
   await within(list).findByRole('option',{name:/Fixture conversation 20/});
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
-  expect(slaRequests).toHaveLength(3);
+  expect(screen.queryByRole('button',{name:'Restart SLA ordering'})).not.toBeInTheDocument();
+});
+
+it('restarts an SLA-sorted page-two snapshot after classification save without rereading the old cursor', async () => {
+  const base=vi.mocked(fetch).getMockImplementation()!;
+  const requests:string[]=[];
+  const firstAsOf=new Date().toISOString();
+  const nextAsOf=new Date(Date.parse(firstAsOf)+1000).toISOString();
+  let firstPageReads=0;
+  vi.mocked(fetch).mockImplementation(async(url,options)=>{
+    if(String(url).startsWith('/api/tickets?')&&new URL(String(url),'http://localhost').searchParams.get('sort')==='sla_priority'){
+      const params=new URL(String(url),'http://localhost').searchParams;
+      requests.push(String(url));
+      if(params.has('cursor'))return json({data:[tickets[1]],meta:{page:2,limit:1,total:2,total_pages:2},
+        sla:{[tickets[1].id]:unavailableSla},asOf:firstAsOf,next:null});
+      firstPageReads++;
+      return json({data:[tickets[0]],meta:{page:1,limit:1,total:2,total_pages:2},
+        sla:{[tickets[0].id]:unavailableSla},asOf:firstPageReads===1?firstAsOf:nextAsOf,next:'second-cursor'});
+    }
+    return base(url,options);
+  });
+  showInbox('/inbox/all/ticket-1');
+  await screen.findByRole('heading',{name:'Conversation ticket-1'});
+  await chooseSort('contract SLA');
+  await within(screen.getByRole('listbox',{name:'Conversation list'})).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fireEvent.click(screen.getByRole('button',{name:'Next conversation page'}));
+  await within(screen.getByRole('listbox',{name:'Conversation list'})).findByRole('option',{name:/Fixture conversation 2(?:\s|$)/});
+  expect(requests).toHaveLength(2);
+  await client.invalidateQueries({queryKey:['tickets','sla-priority'],refetchType:'none'});
+  fireEvent.click(screen.getByRole('button',{name:'Synthetic classification saved'}));
+  await waitFor(()=>expect(firstPageReads).toBe(2));
+  await within(screen.getByRole('listbox',{name:'Conversation list'})).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(requests).toHaveLength(3);
+  expect(requests.filter(url=>new URL(url,'http://localhost').searchParams.has('cursor'))).toHaveLength(1);
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
 });
 
 
@@ -934,7 +1307,8 @@ it('keeps a failed New Ticket draft and retries the same validated payload in th
       posts++;
       expect(JSON.parse(String(options.body))).toEqual({
         subject:'Operator-created follow-up',customer_email:'customer@example.invalid',body:'Synthetic operator message',
-        priority:'normal',status:'open',
+        status:'open',classification:{category:'security-privacy',scope:'systemic',contractTier:'alpha',criticalityTier:4,
+          regulatoryOfficerOnSite:true,vipBlocked:true,hardDeadline:true},
       });
       return Promise.resolve(posts===1?json({error:'Creation is temporarily unavailable'},503):json(createdTicket,201));
     }
@@ -957,6 +1331,16 @@ it('keeps a failed New Ticket draft and retries the same validated payload in th
   const message=within(dialog).getByRole('textbox',{name:'Initial Message'});
   fireEvent.change(message,{target:{value:'Synthetic operator message'}});
   const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
+  expect(within(dialog).queryByRole('combobox',{name:'Priority'})).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('combobox',{name:'Category (required)'})).toHaveTextContent('Choose category');
+  fireEvent.click(submit);
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Choose a category, scope, contract tier, and criticality level');
+  expect(posts).toBe(0);
+  await chooseTicketClassification({urgent:true});
+  expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('checkbox',{name:'Regulatory officer on site'})).toBeChecked();
+  expect(within(dialog).getByRole('checkbox',{name:'VIP blocked'})).toBeChecked();
+  expect(within(dialog).getByRole('checkbox',{name:'Hard deadline'})).toBeChecked();
   fireEvent.click(submit);
   const alert=await within(dialog).findByRole('alert');
   expect(alert).toHaveAttribute('id','create-ticket-error');
@@ -992,13 +1376,15 @@ it('holds the New Ticket draft, focus and dialog while creation is pending',asyn
   fireEvent.change(subject,{target:{value:'Submitted subject'}});
   fireEvent.change(within(dialog).getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
   fireEvent.change(within(dialog).getByRole('textbox',{name:'Initial Message'}),{target:{value:'Submitted message'}});
+  await chooseTicketClassification();
   const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
   submit.focus();fireEvent.click(submit);
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Creating…'})).toHaveAttribute('aria-disabled','true'));
   expect(submit).toHaveFocus();
   fireEvent.change(subject,{target:{value:'Changed while pending'}});
   expect(subject).toHaveValue('Submitted subject');
-  expect(within(dialog).getByRole('combobox',{name:'Priority'})).toBeDisabled();
+  expect(within(dialog).getByRole('combobox',{name:'Category (required)'})).toBeDisabled();
+  expect(within(dialog).getByRole('checkbox',{name:'VIP blocked'})).toBeDisabled();
   fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
   fireEvent.keyDown(submit,{key:'Escape'});
   expect(screen.getByRole('dialog',{name:'Create New Ticket'})).toBeInTheDocument();

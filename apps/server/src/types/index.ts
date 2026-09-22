@@ -1,5 +1,5 @@
 import { VerifiedTenantScope } from '../types/tenant';
-import type { ArticleBodyFormat } from '@luminatick/shared';
+import type { ArticleBodyFormat, ContractTier, CriticalityTier, PriorityCategory, PriorityScope } from '@luminatick/shared';
 import { TenantRequestDeps } from '../middleware/tenant.middleware';
 import { ApiKeyResolution } from '../auth/api-key-resolver';
 import type { CapabilityDecision } from '../auth/capability-policy';
@@ -32,6 +32,16 @@ export interface Ticket {
   subject: string;
   status: 'open' | 'pending' | 'resolved' | 'closed';
   priority: 'low' | 'normal' | 'high' | 'urgent';
+  /** Historical rows retain null rather than invented classification. */
+  priority_category?: PriorityCategory | null;
+  priority_scope?: PriorityScope | null;
+  priority_regulatory_officer_on_site?: 0 | 1 | null;
+  priority_vip_blocked?: 0 | 1 | null;
+  priority_hard_deadline?: 0 | 1 | null;
+  priority_score?: number | null;
+  contract_sla_tier?: ContractTier | null;
+  criticality_tier?: CriticalityTier | null;
+  priority_classification_revision?: number;
   customer_id?: string | null;
   customer_email: string;
   assigned_to?: string | null;

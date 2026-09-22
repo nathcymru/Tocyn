@@ -16,6 +16,8 @@ import React, { useEffect, useState, useRef, useId, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
 import { useTicket, useAssignResponsibleOwner, useUpdateTicket, type TicketChanges } from '../hooks/useTickets';
+import { EditTicketClassificationDialog } from './EditTicketClassificationDialog';
+import { categoryOptions, contractOptions, criticalityOptions, scopeOptions } from '../components/ticket-classification';
 import { useGroups, useAgents } from '../hooks/useGroups';
 import { useSettings } from '../hooks/useSettings';
 import { useCollaboration } from '../components/CollaborationContext';
@@ -82,15 +84,15 @@ const secondaryDisclosureTrigger = css({
   _focusVisible: { focusVisibleRing: 'outside' },
 });
 
-export function TicketDetailPage({id:providedId,workspaceBackHref,onResolved}:{id?:string;workspaceBackHref?:string;onResolved?:(id:string)=>void}={}) {
+export function TicketDetailPage({id:providedId,workspaceBackHref,onResolved,onClassificationSaved}:{id?:string;workspaceBackHref?:string;onResolved?:(id:string)=>void;onClassificationSaved?:()=>void}={}) {
   const { id:routeId } = useParams<{ id: string }>();
   const id=providedId??routeId;
   const generation = useAuthStore(state => state.sessionGeneration);
   const user = useAuthStore(state => state.user);
-  return <TicketDetail key={JSON.stringify([generation, user?.tenant_id, user?.id, user?.role, id])} id={id!} workspaceBackHref={workspaceBackHref} onResolved={onResolved} />;
+  return <TicketDetail key={JSON.stringify([generation, user?.tenant_id, user?.id, user?.role, id])} id={id!} workspaceBackHref={workspaceBackHref} onResolved={onResolved} onClassificationSaved={onClassificationSaved} />;
 }
 
-function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspaceBackHref?:string;onResolved?:(id:string)=>void }) {
+function TicketDetail({ id,workspaceBackHref,onResolved,onClassificationSaved }: { id: string;workspaceBackHref?:string;onResolved?:(id:string)=>void;onClassificationSaved?:()=>void }) {
   type TicketSelectControl = 'status' | 'priority' | 'assigned_to' | 'group_id';
   const queryClient = useQueryClient();
   const { data: ticket, isLoading, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError, isFetchedAfterMount, isFetching } = useTicket(id!);
@@ -101,6 +103,8 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   const { data: ticketFields } = useTicketFields();
   const customFieldPrefix = useId();
   const updateTicket = useUpdateTicket();
+  const [classificationOpen, setClassificationOpen] = useState(false);
+  const classificationTrigger = useRef<HTMLButtonElement>(null);
   const assignResponsibleOwner = useAssignResponsibleOwner();
   const [assignmentBlocked, setAssignmentBlocked] = useState(false);
   const ticketMutationPending = updateTicket.isPending || assignResponsibleOwner.isPending || assignmentBlocked;
@@ -229,7 +233,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   ], [selectedSupportStateDefinition, supportState.data, supportStateDraft.definitionId, supportStates]);
   const assignedToOptions = React.useMemo(() => [{ value: '', label: 'Unassigned' }, ...(agents ?? []).map(agent => ({ value: agent.id, label: agent.full_name || agent.email }))], [agents]);
   const groupOptions = React.useMemo(() => [{ value: '', label: 'No Group' }, ...(groups ?? []).map(group => ({ value: group.id, label: group.name }))], [groups]);
-  const customerHistoryEvents = customerHistory.data?.events ?? [];
+  const ticketHistoryEvents = customerHistory.data?.pages.flatMap(page => page.events) ?? [];
   const selectedSupportStateNeedsDetails = Boolean(supportState.data?.definition_id) && !selectedSupportStateDefinition;
 
   const restoreSupportStateDraft = (current = supportState.data) => {
@@ -361,15 +365,31 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
   const customerHistoryLabel = (event: TicketHistoryEvent): string => {
     if (event.kind === 'ticket.intake') return 'Ticket intake';
     if (event.kind === 'ticket.assignment_changed') return 'Ticket assignment changed';
-    if (event.kind === 'ticket.state_changed') return 'Ticket state changed';
+    if (event.kind === 'ticket.state_changed') {
+      const before = event.facts.before;
+      const after = event.facts.after;
+      if (before && after && typeof before === 'object' && typeof after === 'object'
+        && Object.hasOwn(before, 'snoozedUntil') && Object.hasOwn(after, 'snoozedUntil')) {
+        const prior = (before as Record<string, unknown>).snoozedUntil;
+        const next = (after as Record<string, unknown>).snoozedUntil;
+        const valid = (value: unknown) => value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
+        if (valid(prior) && valid(next) && prior !== next) {
+          if (prior === null) return 'Snoozed ticket';
+          if (next === null) return 'Unsnoozed ticket';
+          return 'Changed snooze time';
+        }
+      }
+      return 'Ticket state changed';
+    }
     if (event.kind === 'message.reply') return 'Message reply';
     return `Conversation event: ${event.kind}`;
   };
 
   const customerHistoryActor = (event: TicketHistoryEvent): string => {
-    if (event.actor.kind === 'customer') return 'Customer';
-    if (event.actor.kind === 'api-key') return 'System';
-    return 'Support staff';
+    if (event.actor.kind === 'system' || event.actor.kind === 'api-key' || event.source === 'system') return 'System';
+    if (event.actor.kind === 'customer') return event.actor.id ? `Customer ${event.actor.id}` : 'Customer';
+    const agent = agents?.find(candidate => candidate.id === event.actor.id);
+    return agent?.full_name?.trim() || agent?.email?.trim() || event.actor.id || 'Support staff';
   };
 
   useEffect(() => {
@@ -1372,23 +1392,33 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
               <p className={css({ fontWeight: 'semibold', overflowWrap: 'anywhere' })}>{ticket.customer_email}</p>
               <p className={css({ color: 'text.muted', fontSize: 'xs' })}>Loaded from this tenant-scoped conversation.</p>
             </div>
+            <h3 className={css({ fontSize: 'sm', fontWeight: 'semibold' })}>Ticket history</h3>
             {customerHistory.isLoading ? (
-              <div role="status" aria-label="Loading customer history" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading customer history…</span><ParkSkeleton aria-hidden="true" height="4" width="80%" /><ParkSkeleton aria-hidden="true" height="4" width="60%" /></div>
-            ) : customerHistory.isError ? (
-              <ParkEmptyState headingLevel={3} title="Customer history unavailable" description={customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'} action={<ParkButton type="button" onClick={() => void customerHistory.refetch()}>Retry customer history</ParkButton>} />
-            ) : customerHistoryEvents.length === 0 ? (
-              <ParkEmptyState headingLevel={3} title="No linked customer history" description="No cross-channel identity match was made for this conversation." />
+              <div role="status" aria-label="Loading ticket history" className={css({ display: 'grid', gap: '2', p: '3' })}><span className={css({ srOnly: true })}>Loading ticket history…</span><ParkSkeleton aria-hidden="true" height="4" width="80%" /><ParkSkeleton aria-hidden="true" height="4" width="60%" /></div>
+            ) : customerHistory.isError && !customerHistory.data ? (
+              <ParkEmptyState headingLevel={3} title="Ticket history unavailable" description={customerHistory.error instanceof Error ? customerHistory.error.message : 'Try opening the conversation again.'} action={<ParkButton type="button" onClick={() => void customerHistory.refetch()}>Retry ticket history</ParkButton>} />
+            ) : ticketHistoryEvents.length === 0 ? (
+              <ParkEmptyState headingLevel={3} title="No ticket history yet" description="Changes to this conversation will appear here." />
             ) : (
-              <ul className={css({ display: 'grid', gap: '2', p: 0, listStyle: 'none' })}>
-                {customerHistoryEvents.map((historyEvent) => (
-                  <li key={historyEvent.id} className={css({ borderTopWidth: '1px', borderColor: 'border.default', pt: '2' })}>
-                    <p className={css({ fontSize: 'sm', fontWeight: 'semibold' })}>{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
-                    <p className={css({ color: 'text.muted', fontSize: 'xs' })}>
-                      {historyEvent.visibility} {historyEvent.source}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul aria-label="Ticket history" className={css({ display: 'grid', gap: '2', p: 0, listStyle: 'none' })}>
+                  {ticketHistoryEvents.map((historyEvent) => {
+                    const recordedAt = utcTimestamp(historyEvent.recordedAt);
+                    const validRecordedAt = Number.isFinite(recordedAt.getTime());
+                    return <li key={historyEvent.id} className={css({ borderTopWidth: '1px', borderColor: 'border.default', pt: '2' })}>
+                      <p className={css({ fontSize: 'sm', fontWeight: 'semibold' })}>{customerHistoryLabel(historyEvent)} — {customerHistoryActor(historyEvent)}</p>
+                      <p className={css({ color: 'text.muted', fontSize: 'xs' })}>
+                        <time dateTime={validRecordedAt ? recordedAt.toISOString() : undefined}>{validRecordedAt ? recordedAt.toLocaleString() : 'Time unavailable'}</time>
+                        {' · '}{historyEvent.visibility} {historyEvent.source}
+                      </p>
+                    </li>;
+                  })}
+                </ul>
+                {customerHistory.isFetchNextPageError && <ParkAlert.Root role="alert" status="error" variant="surface"><ParkAlert.Content><ParkAlert.Title>More ticket history could not be loaded</ParkAlert.Title><ParkAlert.Description>Earlier events remain available. Try loading the next page again.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+                {customerHistory.hasNextPage && <ParkButton type="button" variant="outline" disabled={customerHistory.isFetchingNextPage} onClick={() => void customerHistory.fetchNextPage({ cancelRefetch: false })}>
+                  {customerHistory.isFetchingNextPage ? 'Loading more history…' : customerHistory.isFetchNextPageError ? 'Retry more history' : 'Load more history'}
+                </ParkButton>}
+              </>
             )}
           </div></ParkCollapsible.Content>
         </ParkCollapsible.Root>
@@ -1398,13 +1428,37 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
             <Info className={detailStyles.attachmentIcon} />
             Ticket Details
           </h3>
+          <section aria-label="Priority classification" className={css({ display: 'grid', gap: '2', p: '3', borderWidth: '1px', borderColor: 'border.default', borderRadius: 'l2', bg: 'bg.surface' })}>
+            <div className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '2' })}>
+              <h4 className={css({ m: 0, fontSize: 'sm', fontWeight: 'semibold' })}>Priority classification</h4>
+              <ParkButton ref={classificationTrigger} type="button" variant="outline" disabled={!Number.isSafeInteger(ticket.priority_classification_revision)} onClick={() => setClassificationOpen(true)}>Edit classification</ParkButton>
+            </div>
+            <dl className={css({ display: 'grid', gridTemplateColumns: { base: '1fr 1fr', md: 'repeat(4, minmax(0, 1fr))' }, gap: '2', m: 0, fontSize: 'sm' })}>
+              {[
+                ['Category', categoryOptions.find(option => option.value === ticket.priority_category)?.label ?? 'Unavailable'],
+                ['Scope', scopeOptions.find(option => option.value === ticket.priority_scope)?.label ?? 'Unavailable'],
+                ['Contract', contractOptions.find(option => option.value === ticket.contract_sla_tier)?.label ?? 'Unavailable'],
+                ['Criticality', criticalityOptions.find(option => option.value === String(ticket.criticality_tier))?.label ?? 'Unavailable'],
+                ['Priority score', ticket.priority_score == null ? 'Unavailable' : String(ticket.priority_score)],
+              ].map(([label, value]) => <div key={label} className={css({ minW: 0 })}><dt className={css({ color: 'fg.muted' })}>{label}</dt><dd className={css({ m: 0, fontWeight: 'medium', overflowWrap: 'anywhere' })}>{value}</dd></div>)}
+            </dl>
+            <p className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>Urgency: {[
+              ticket.priority_regulatory_officer_on_site === 1 && 'Regulatory officer on site',
+              ticket.priority_vip_blocked === 1 && 'VIP blocked',
+              ticket.priority_hard_deadline === 1 && 'Hard deadline',
+            ].filter(Boolean).join(', ') || 'No additional conditions'}.</p>
+            {!Number.isSafeInteger(ticket.priority_classification_revision) && <p role="status" className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>Reload the ticket to edit its classification.</p>}
+          </section>
+          <EditTicketClassificationDialog ticket={ticket} open={classificationOpen} onOpenChange={setClassificationOpen} trigger={classificationTrigger}
+            onReload={async () => (await refetch({ throwOnError: true })).data?.pages[0] ?? null}
+            onSaved={() => { setNotice('Ticket classification saved.'); onClassificationSaved?.(); }} />
           <div className={detailStyles.contextSettingsFields}>
             <div>
               <div className={detailStyles.contextFieldControl}>
                 <DashboardSelect
                   key={`ticket-priority-${ticketSelectVersions.priority}`}
                   triggerRef={node => { ticketSelectRefs.current.priority = node; }}
-                  id="ticket-priority" label="Priority" aria-label="Priority" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
+                  id="ticket-priority" label="Legacy priority" aria-label="Legacy priority" disabled={ticketMutationPending || isConfirmingTicketSelect || Boolean(pendingTicketSelectRefresh)}
                   value={ticket.priority}
                   onValueChange={(value) => {
                     if (changing.current || assignmentBlocked || pendingTicketSelectRefresh) return;
@@ -1413,6 +1467,7 @@ function TicketDetail({ id,workspaceBackHref,onResolved }: { id: string;workspac
                   className={detailStyles.contextFieldControl}
                   options={priorityOptions}
                 />
+                <p className={css({ m: 0, color: 'fg.muted', fontSize: 'xs' })}>This original priority label does not change the calculated score or countdown above.</p>
               </div>
             </div>
             <div>
