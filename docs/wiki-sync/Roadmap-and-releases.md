@@ -25,6 +25,8 @@ Version-number milestones (`v0.1.0`, `v0.2.0`, `v0.3.0`, `v0.4.0`) were supersed
 | M9 | Linked work, knowledge, applets, feedback/reporting and Access |
 
 Full milestone membership and target dates are maintained on [[Approved-architectural-roadmap]].
+The integrated revision and open acceptance work are maintained on
+[[Current-delivery-status]].
 
 ## First private beta
 
@@ -67,7 +69,10 @@ After accepted #129 completion on11September, the same model forecasts beta.2 on
 
 Project planning preserves baseline dates separately from forecasts and actual dates. Reforecasting must not overwrite the original approved baseline. See ADR-0014 and repository `AGENTS.md`.
 
-## Delivery snapshot — 10 September 2026
+## Historical delivery snapshot — 10 September 2026
+
+This section preserves the 10 September evidence. For current delivery state, see
+[[Current-delivery-status]].
 
 Beta.2 is **not ready**. Accepted main is `32fba86fd659ca9d729ff8d0ff683b4770e81454`.
 

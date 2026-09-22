@@ -1,6 +1,6 @@
 # GitHub Wiki synchronization bundle
 
-This directory contains reviewed, repository-backed source for the Tocyn GitHub Wiki. The GitHub Wiki is a separate Git repository. This alignment read it directly using the authenticated Git route; reviewed source publication and byte comparison are required before #126 acceptance.
+This directory contains reviewed, repository-backed source for the Tocyn GitHub Wiki. The GitHub Wiki is a separate Git repository. The 22 September 2026 alignment read the live Wiki directly before updating this source. Publication still requires a fresh live clone, preservation of live-only history and comparison of every published page.
 
 ## Publication rule
 
@@ -14,10 +14,11 @@ For pages in this directory:
 - apply `_Sidebar.md` to make current architecture/privacy/roadmap navigation obvious;
 - verify every internal Wiki link after publication.
 
-## Pages in this bundle
+## Core pages in this bundle
 
 - `Home.md`
 - `Start-here.md`
+- `Current-delivery-status.md`
 - `_Sidebar.md`
 - `System-architecture.md`
 - `Architecture-and-tenant-isolation.md`

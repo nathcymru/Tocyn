@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +17,12 @@ concurrency:
 
 jobs:
   validate:
-    name: Tocyn / ${{ matrix.check }}
+    # Draft pull requests are implementation work in progress. Marking a pull
+    # request ready for review is the milestone signal that runs every required
+    # check against its exact head; later pushes while ready run them again.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Keep skipped draft check names distinct from the contexts required on main.
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && 'Draft' || 'Tocyn' }} / ${{ matrix.check }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:

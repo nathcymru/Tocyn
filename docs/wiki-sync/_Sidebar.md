@@ -15,6 +15,7 @@
 
 ### Roadmap & delivery
 
+- [[Current-delivery-status]]
 - [[Approved-architectural-roadmap]]
 - [[Roadmap-and-releases]]
 - [[Post-beta-master-baseline]]
