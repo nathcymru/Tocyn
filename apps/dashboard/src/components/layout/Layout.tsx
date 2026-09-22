@@ -1,32 +1,32 @@
 import { GlobalSearch } from './GlobalSearch';
-import { OperatorCapacityPanel } from '../capacity/OperatorCapacityPanel';
 import { ProductLogo } from '@luminatick/ui/brand';
-import { Popover } from '@luminatick/ui/ark';
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkDialog, ParkEmptyState, ParkMenu, ParkPopover, ParkScrollArea, ParkShell, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { IconButton as ParkIconButton, Link as ParkLink } from '@luminatick/ui/components';
+import { InboxGlobalAlertProvider } from '../InboxGlobalAlert';
 import { useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../../api/client';
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
-  LayoutDashboard,
+  HouseIcon,
   Ticket as TicketIcon,
   Users,
-  Key,
   Settings,
-  LogOut,
-  Book,
+  BooksIcon,
   Menu,
   X,
   WifiOff,
   Bell,
   ChevronDown,
   RefreshCw,
-} from 'lucide-react';
+} from '../icons';
 import { useAuthStore } from '../../store/authStore';
 import { useCollaboration } from '../CollaborationContext';
 import { clsx } from 'clsx';
-import { useOperatorPreferencesContext, OperatorPreferencesControl, OperatorThemeControl, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
+import { css } from '@luminatick/ui/styled-system/css';
+import { Circle, Float } from '@luminatick/ui/styled-system/jsx';
+import { useOperatorPreferencesContext, OperatorThemeProvider } from '../theme/OperatorThemeProvider';
 
 function cn(...inputs: any[]) {
   return clsx(inputs);
@@ -36,147 +36,130 @@ type ActivityItem = Readonly<{ id: string; ticketId: string; ticketSubject: stri
 type ActivityResponse = Readonly<{ page: Readonly<{ items: readonly ActivityItem[]; next: string | null }>; unread: Readonly<{ status: 'available'; count: number } | { status: 'unavailable'; count: null; reason: string }> }>;
 const ACTIVITY_PAGE_SIZE = 20;
 const MAX_RENDERED_ACTIVITY_ITEMS = 100;
+const DESKTOP_PERSONA_QUERY = '(min-width: 64rem)';
 
-interface SidebarProps { onNavigate?: () => void; navigationFocus: () => HTMLElement | null; }
+interface SidebarProps { onNavigate?: () => void; personaHost?: React.Ref<HTMLDivElement>; }
 
-function UserMenu({ onNavigate, navigationFocus }: SidebarProps) {
+function UserMenu({ onNavigate, desktop, labelled, open, onOpenChange }: { onNavigate?: () => void; desktop: boolean; labelled: boolean; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const [isOpen, setIsOpen] = useState(false);
-  const restoreAccountFocus = useRef(true);
   const loggingOut = useRef(false);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const securityProfile = useRef<HTMLAnchorElement>(null);
-  const disclosureId = React.useId();
-  const capacityTitleId=React.useId();
-  const [capacityOpen,setCapacityOpen]=useState(false);
-  const capacityClose=useRef<HTMLButtonElement>(null);
-
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutCountdown, setLogoutCountdown] = useState(10);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const accountTrigger = useRef<HTMLButtonElement>(null);
+  const logoutCancel = useRef<HTMLButtonElement>(null);
+  const logoutTitleId = React.useId();
+  const logoutDescriptionId = React.useId();
+  const shellStyles = ParkShell();
+  const handleNavigate = (path: string) => { onNavigate?.(); navigate(path); };
+  useEffect(() => {
+    if (!logoutOpen) return;
+    setLogoutCountdown(10);
+    const timer = window.setInterval(() => setLogoutCountdown(value => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [logoutOpen]);
   const handleLogout = async () => {
     if (loggingOut.current) return;
     loggingOut.current = true;
-    restoreAccountFocus.current = false;
-    let confirmed = false;
-    try { await dashboardApi.post('/auth/logout'); confirmed = true; }
-    catch { /* Local sign-out must still complete. */ }
-    finally { logout(); navigate('/login'); }
-    if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
+    setLogoutBusy(true);
+    let warning: string | undefined;
+    try { await dashboardApi.post('/auth/logout'); }
+    catch { warning = "Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data."; }
+    finally { logout(); navigate('/login', { state: warning ? { logoutWarning: warning } : undefined }); setLogoutBusy(false); setLogoutOpen(false); }
   };
 
-  return (
-    <>
-    <Popover.Root open={isOpen} onOpenChange={({open}) => { if (open) restoreAccountFocus.current = true; setIsOpen(open); }} ids={{content:disclosureId}} positioning={{placement:'top-start',strategy:'fixed'}} initialFocusEl={() => securityProfile.current} finalFocusEl={() => restoreAccountFocus.current ? trigger.current : navigationFocus()} lazyMount unmountOnExit>
-    <div className="relative mt-2">
-      <Popover.Trigger asChild>
-      <TocynButton
-        type="button"
-        ref={trigger}
-        aria-label="Account options"
-        aria-expanded={isOpen}
-        aria-controls={disclosureId}
-        title={user?.full_name || 'User'}
-        className="w-10 h-10 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold border border-slate-600 hover:ring-2 hover:ring-brand-500 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-      >
-        {user?.full_name?.[0] || 'A'}
-      </TocynButton></Popover.Trigger>
+  return <>
+  <ParkMenu.Root open={open} onOpenChange={({ open: nextOpen }) => onOpenChange(nextOpen)} positioning={{ placement: desktop ? 'top-start' : 'bottom-end', strategy: 'fixed' }}>
+    <ParkMenu.Trigger asChild>
+      <ParkButton ref={accountTrigger} type="button" variant="plain" size="md" aria-label="Account options" title={user?.full_name || 'User'} className={cn(shellStyles.personaTrigger, desktop && labelled && shellStyles.personaTriggerLabelled)}>
+        <ParkAvatar size="md" className={shellStyles.personaAvatar}>
+          <ParkAvatarFallback name={user?.full_name || 'Operator'} />
+          <Float placement="bottom-end" offset="0.125rem" pointerEvents="none">
+            <Circle className={shellStyles.personaStatus} aria-hidden="true" />
+          </Float>
+        </ParkAvatar>
+        {desktop && labelled && <span className={shellStyles.personaDetails} aria-hidden="true"><strong className={shellStyles.personaName}>{user?.full_name || 'Operator'}</strong><span className={shellStyles.personaPresence}>Signed in</span></span>}
+      </ParkButton>
+    </ParkMenu.Trigger>
+    <ParkMenu.Positioner>
+      <ParkMenu.Content aria-label="Account menu" className={shellStyles.accountMenu}>
+        <ParkMenu.ItemGroup>
+          <ParkMenu.ItemGroupLabel className={shellStyles.accountSummary}>
+            <strong className={shellStyles.accountSummaryName}>{user?.full_name || 'Operator'}</strong>
+            <span className={shellStyles.accountSummaryEmail}>{user?.email || 'No email available'}</span>
+          </ParkMenu.ItemGroupLabel>
+          <ParkMenu.Item value="account" onClick={() => handleNavigate('/settings/account')} className={shellStyles.menuItem}>Account</ParkMenu.Item>
+          <ParkMenu.Item value="settings" onClick={() => handleNavigate('/settings/general')} className={shellStyles.menuItem}>Settings</ParkMenu.Item>
+          <ParkMenu.Item value="logout" data-tone="critical" onClick={() => { setLogoutCountdown(10); setLogoutOpen(true); }} className={shellStyles.menuItem}>Log out</ParkMenu.Item>
+        </ParkMenu.ItemGroup>
+      </ParkMenu.Content>
+    </ParkMenu.Positioner>
+  </ParkMenu.Root>
+  <ParkDialog.Root open={logoutOpen} onOpenChange={({ open: next }) => { if (!logoutBusy) setLogoutOpen(next); }}
+    initialFocusEl={() => logoutCancel.current} finalFocusEl={() => accountTrigger.current}
+    closeOnEscape={!logoutBusy} closeOnInteractOutside={false} lazyMount unmountOnExit>
+    <ParkDialog.Backdrop />
+    <ParkDialog.Positioner>
+      <ParkDialog.Content role="alertdialog" aria-labelledby={logoutTitleId} aria-describedby={logoutDescriptionId}>
+        <ParkDialog.Header><ParkDialog.Title id={logoutTitleId}>Confirm Logout</ParkDialog.Title></ParkDialog.Header>
+        <ParkDialog.Body><ParkDialog.Description id={logoutDescriptionId}>You are about to log out of the system. Please ensure any active work is saved before proceeding. You will need to sign in again to resume access.</ParkDialog.Description></ParkDialog.Body>
+        <ParkDialog.Footer>
+          <ParkButton ref={logoutCancel} type="button" disabled={logoutBusy} onClick={() => setLogoutOpen(false)}>Cancel</ParkButton>
+          <ParkButton type="button" disabled={logoutBusy} onClick={() => void handleLogout()}>{`Log Out (${logoutCountdown})`}</ParkButton>
+        </ParkDialog.Footer>
+      </ParkDialog.Content>
+    </ParkDialog.Positioner>
+  </ParkDialog.Root>
+  </>;
+}
 
-      <Popover.Positioner>
-        <Popover.Content aria-label="Account options" data-tocyn-inverse="" className="w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 z-50 animate-in fade-in slide-in-from-bottom-2">
-          <div className="px-4 py-2 border-b border-slate-700">
-            <p className="text-sm font-medium text-white truncate">{user?.full_name}</p>
-            <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+function SidebarContent({ onNavigate, personaHost }: SidebarProps) {
+  const location = useLocation();
+  const labelled = useOperatorPreferencesContext().navigation === 'labelled';
+  const shellStyles = ParkShell();
+  const renderNavigationItem = (item: (typeof navigation)[number]) => {
+    const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
+    return <ParkLink key={item.name} asChild variant="plain">
+      <Link
+        to={item.href}
+        title={item.name}
+        aria-label={item.name}
+        aria-current={isActive ? 'page' : undefined}
+        onClick={onNavigate}
+        className={cn(shellStyles.navigationLink, labelled ? shellStyles.navigationLinkLabelled : shellStyles.navigationLinkIcon)}
+      >
+        <item.icon aria-hidden="true" className={shellStyles.navigationIcon} />{labelled && <span>{item.name}</span>}
+      </Link>
+    </ParkLink>;
+  };
+  return (
+        <div className={cn(shellStyles.sidebar, labelled ? shellStyles.sidebarLabelled : shellStyles.sidebarCompact)}>
+          <ParkLink asChild variant="plain">
+            <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className={shellStyles.logoLink}>
+              <ProductLogo compact decorative className={shellStyles.logo} />
+            </Link>
+          </ParkLink>
+
+          <nav aria-label="Workspace navigation" className={shellStyles.navigation}>
+            {navigation.filter(item => item.name !== 'Settings').map(renderNavigationItem)}
+          </nav>
+          <div className={shellStyles.sidebarFooter}>
+            <nav aria-label="Settings navigation" className={shellStyles.settingsNavigation}>
+              {navigation.filter(item => item.name === 'Settings').map(renderNavigationItem)}
+            </nav>
+            {personaHost && <div ref={personaHost} className={shellStyles.sidebarPersonaHost} />}
           </div>
-          <Link
-            ref={securityProfile}
-            to="/profile/security"
-            onClick={() => { restoreAccountFocus.current = false; setIsOpen(false); onNavigate?.(); }}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-          >
-            <Key className="w-4 h-4" />
-            Security Profile
-          </Link>
-          <TocynButton
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign out of all sessions
-          </TocynButton>
-          <TocynButton type="button" aria-haspopup="dialog" onClick={()=>{restoreAccountFocus.current=false;setIsOpen(false);setCapacityOpen(true);}}
-            className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Current work</TocynButton>
-          <OperatorThemeControl />
-          <OperatorPreferencesControl />
-        </Popover.Content>
-      </Popover.Positioner>
-    </div>
-    </Popover.Root>
-    <TocynDialog open={capacityOpen} onOpenChange={setCapacityOpen} labelledBy={capacityTitleId}
-      initialFocusEl={()=>capacityClose.current} finalFocusEl={()=>trigger.current}>
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border bg-white p-6 text-slate-900 shadow-xl">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 id={capacityTitleId} className="text-xl font-bold">Current work</h2>
-          <TocynButton ref={capacityClose} type="button" onClick={()=>setCapacityOpen(false)} className="rounded border px-3 py-2">Close current work</TocynButton>
         </div>
-        {capacityOpen&&user?.id&&<OperatorCapacityPanel userId={user.id}/>}
-      </div>
-    </TocynDialog>
-    </>
   );
 }
 
-function SidebarContent({ onNavigate, navigationFocus }: SidebarProps) {
-  const location = useLocation();
-  const labelled = useOperatorPreferencesContext().navigation === 'labelled';
-  return (
-        <div className="flex flex-col h-full items-center py-4">
-          <Link aria-label="Dashboard home" onClick={onNavigate} to="/" className="w-11 h-11 rounded-xl flex items-center justify-center mb-8 hover:bg-slate-700 transition-colors">
-            <ProductLogo compact decorative className="w-10 h-10 object-contain" />
-          </Link>
-
-          <nav aria-label="Workspace navigation" className="flex-1 w-full px-2 space-y-2">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  title={item.name}
-                  aria-label={item.name}
-                  aria-current={isActive ? "page" : undefined}
-                  onClick={onNavigate}
-                  className={cn(
-                    labelled ? "flex min-h-11 items-center gap-3 w-full rounded-xl px-3 py-2 text-sm" : "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
-                    isActive
-                      ? "bg-slate-800 text-white shadow-inner"
-                      : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-                  )}
-                >
-                  <item.icon aria-hidden="true" className="w-6 h-6 shrink-0" />{labelled && <span>{item.name}</span>}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="w-full px-2 space-y-2 mt-auto pb-4 border-t border-slate-800/50 pt-4 flex flex-col items-center relative">
-            <Link
-              to="/settings"
-              title="Settings"
-              aria-label="Settings"
-              onClick={onNavigate}
-              className={cn(
-                labelled ? "flex min-h-11 items-center gap-3 w-full rounded-xl px-3 py-2 text-sm" : "flex items-center justify-center w-full aspect-square rounded-xl transition-all group relative",
-                location.pathname.startsWith('/settings')
-                  ? "bg-slate-800 text-white shadow-inner"
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-              )}
-            >
-              <Settings aria-hidden="true" className="w-6 h-6 shrink-0" />{labelled && <span>Settings</span>}
-            </Link>
-
-            <UserMenu onNavigate={onNavigate} navigationFocus={navigationFocus} />
-          </div>
-        </div>
-  );
+function pageTitle(pathname: string) {
+  if (pathname.startsWith('/inbox')) return 'Support Inbox';
+  if (pathname.startsWith('/knowledge')) return 'Knowledge Base';
+  if (pathname.startsWith('/settings/account')) return 'My Account';
+  if (pathname.startsWith('/settings')) return 'Admin Settings';
+  return 'Home';
 }
 
 function LayoutContent() {
@@ -206,7 +189,44 @@ function LayoutContent() {
   const navigationTrigger = useRef<HTMLButtonElement>(null);
   const restoreNavigationFocus = useRef(true);
   const main = useRef<HTMLElement>(null);
+  const [desktopPersona, setDesktopPersona] = useState(() => window.matchMedia?.(DESKTOP_PERSONA_QUERY).matches ?? false);
+  const desktopPersonaRef = useRef(desktopPersona);
+  desktopPersonaRef.current = desktopPersona;
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuOpenRef = useRef(accountMenuOpen);
+  accountMenuOpenRef.current = accountMenuOpen;
+  const [personaPortal] = useState(() => document.createElement('div'));
+  const [headerPersonaHost, setHeaderPersonaHost] = useState<HTMLDivElement | null>(null);
+  const [sidebarPersonaHost, setSidebarPersonaHost] = useState<HTMLDivElement | null>(null);
+  const restorePersonaFocus = useRef(false);
   const isInboxRoute = location.pathname.startsWith('/inbox');
+  const shellStyles = ParkShell();
+  const title = pageTitle(location.pathname);
+
+  useEffect(() => {
+    const media = window.matchMedia?.(DESKTOP_PERSONA_QUERY);
+    if (!media) return;
+    const onBreakpointChange = () => {
+      if (media.matches === desktopPersonaRef.current) return;
+      restorePersonaFocus.current = accountMenuOpenRef.current || personaPortal.contains(document.activeElement);
+      setAccountMenuOpen(false);
+      desktopPersonaRef.current = media.matches;
+      setDesktopPersona(media.matches);
+    };
+    onBreakpointChange();
+    media.addEventListener('change', onBreakpointChange);
+    return () => media.removeEventListener('change', onBreakpointChange);
+  }, [personaPortal]);
+
+  React.useLayoutEffect(() => {
+    const destination = desktopPersona ? sidebarPersonaHost : headerPersonaHost;
+    if (!destination) return;
+    destination.appendChild(personaPortal);
+    if (restorePersonaFocus.current) {
+      restorePersonaFocus.current = false;
+      queueMicrotask(() => personaPortal.querySelector<HTMLButtonElement>('button[aria-label="Account options"]')?.focus());
+    }
+  }, [desktopPersona, headerPersonaHost, sidebarPersonaHost, personaPortal]);
 
   useEffect(() => { main.current?.focus(); }, [location.pathname]);
   const loadActivity = React.useCallback(async () => {
@@ -295,127 +315,147 @@ function LayoutContent() {
   const visibleActivityItems = activity?.page.items.filter(item => !item.dismissedAt) ?? [];
 
   return (
-    <div className={cn('flex bg-slate-50', isInboxRoute ? 'h-dvh min-h-0 overflow-hidden' : 'min-h-screen')}>
-      <aside data-tocyn-inverse="" className={cn('hidden lg:block shrink-0 bg-slate-900 border-r border-slate-800', preferences.navigation === 'labelled' ? 'w-52' : 'w-16')}>
-        <SidebarContent navigationFocus={() => main.current} />
-      </aside>
-        <TocynDialog id={mobileDialogId} open={isSidebarOpen} onOpenChange={setIsSidebarOpen}
-          labelledBy={`${mobileDialogId}-title`} initialFocusEl={() => navigationClose.current}
-          finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
-          data-tocyn-dialog-edge="" data-tocyn-inverse=""
-          className={cn('fixed inset-y-0 left-0 right-auto m-0 h-dvh max-h-none overflow-y-auto border-0 bg-slate-900 text-white p-2 backdrop:bg-slate-900/50', preferences.navigation === 'labelled' ? 'w-56 max-w-[90vw]' : 'w-20')}>
-          <h2 id={`${mobileDialogId}-title`} className="sr-only">Navigation</h2>
-          <TocynButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
-            className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"><X aria-hidden="true" /></TocynButton>
-          <div className="h-[calc(100dvh-4rem)]"><SidebarContent navigationFocus={() => main.current} onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
-        </TocynDialog>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
-          <TocynButton
+      <div className={cn(shellStyles.root, isInboxRoute ? shellStyles.rootInbox : shellStyles.rootStandard)}>
+        <header className={cn(shellStyles.header, isInboxRoute && shellStyles.headerInbox)}>
+          <ParkButton
             type="button"
             ref={navigationTrigger}
             aria-label="Open navigation"
             aria-haspopup="dialog"
             aria-expanded={isSidebarOpen}
             aria-controls={mobileDialogId}
-            className="lg:hidden rounded p-2 text-slate-600 focus-visible:outline focus-visible:outline-2"
+            className={shellStyles.mobileTrigger}
             onClick={() => { restoreNavigationFocus.current = true; setIsSidebarOpen(true); }}
           >
-            <Menu className="w-6 h-6" />
-          </TocynButton>
+            <Menu className={shellStyles.menuIcon} />
+          </ParkButton>
 
-          <GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} />
+          <span className={shellStyles.pageTitle} aria-label={`Current page: ${title}`}>{title}</span>
 
-          <Popover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
-            <Popover.Trigger asChild>
-              <TocynButton ref={activityTrigger} type="button" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className="relative rounded p-2 text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">
-                <Bell className="w-5 h-5" />
-                {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className="absolute right-0 top-0 min-w-4 rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
-              </TocynButton>
-            </Popover.Trigger>
-            <Popover.Positioner>
-              <Popover.Content aria-label="Activity" className="w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
-                <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-bold text-slate-900">Activity</h2><TocynButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2">Refresh</TocynButton></div>
-                {activityUpdatesAvailable && <p role="status" className="p-2 text-sm">Updates available. Refresh to load current activity.</p>}
-                {activityError && <div role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900"><p>{activityError}</p><TocynButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading} className="mt-2 rounded px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2">Retry loading activity</TocynButton></div>}
-                {activityLoading && !activity && <p role="status" className="p-2 text-sm text-slate-600">Loading durable activity…</p>}
-                {activity?.unread.status === 'unavailable' && <p role="status" className="rounded bg-amber-50 p-2 text-sm text-amber-900">Unread count is temporarily unavailable. Your activity remains available below.</p>}
-                {activity && visibleActivityItems.length === 0 && <p className="p-2 text-sm text-slate-600">{activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'}</p>}
-                <ul aria-label="Durable activity" className="max-h-96 divide-y overflow-y-auto">
-                  {visibleActivityItems.map(item => <li key={item.id} className="flex gap-2 py-2">
-                    <TocynButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className="min-w-0 flex-1 rounded p-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2">
-                      <p className="text-sm font-semibold text-slate-900">{item.kind.replace(/_/g, ' ')}</p>
-                      <p className="truncate text-xs font-medium text-slate-700">{item.ticketSubject ?? `Ticket ${item.ticketId}`}</p>
-                      <p className="text-xs text-slate-600">Ticket activity saved {new Date(item.createdAt).toLocaleString()}</p>
-                    </TocynButton>
-                    <TocynButton type="button" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className="rounded p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2"><X className="h-4 w-4" /></TocynButton>
-                  </li>)}
-                </ul>
-                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status" className="mt-2 text-sm text-slate-600">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
-                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className="mt-2"><TocynButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className="w-full rounded px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2">{activityLoading ? 'Loading more activity…' : 'Load more activity'}</TocynButton></div>}
-                {activity && !activityLoading && visibleActivityItems.length > 0 && <p role="status" className="sr-only">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</p>}
-              </Popover.Content>
-            </Popover.Positioner>
-          </Popover.Root>
+          <div className={shellStyles.headerSearch}><GlobalSearch shortcutsEnabled={preferences.shortcutsEnabled} /></div>
 
-          {!isConnected && <Popover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
-          <div className="flex items-center gap-4 relative">
-            <Popover.Trigger asChild>
-            <TocynButton
+          <ParkPopover.Root open={activityOpen} onOpenChange={({ open }) => openActivity(open)} ids={{content:activityId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => activityTrigger.current} lazyMount unmountOnExit>
+            <ParkPopover.Trigger asChild>
+              <ParkIconButton ref={activityTrigger} type="button" variant="plain" aria-label={activity?.unread.status === 'available' ? `Activity, ${activity.unread.count} unread` : 'Activity'} aria-expanded={activityOpen} aria-controls={activityId} className={shellStyles.activityTrigger}>
+                <Bell className={shellStyles.icon} />
+                {activity?.unread.status === 'available' && activity.unread.count > 0 && <span aria-hidden="true" className={shellStyles.activityBadge}>{activity.unread.count > 99 ? '99+' : activity.unread.count}</span>}
+              </ParkIconButton>
+            </ParkPopover.Trigger>
+            <ParkPopover.Positioner>
+              <ParkPopover.Content aria-label="Activity" className={shellStyles.activityPopover}>
+                <ParkPopover.Header className={shellStyles.activityHeader}><ParkPopover.Title className={shellStyles.activityTitle}>Activity</ParkPopover.Title><ParkButton type="button" onClick={() => void loadActivity()} disabled={activityLoading} className={shellStyles.activityRefresh}>Refresh</ParkButton></ParkPopover.Header>
+                {activityUpdatesAvailable && <ParkAlert.Root role="status" status="info"><ParkAlert.Content><ParkAlert.Description>Updates available. Refresh to load current activity.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+                {activityError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+                  <ParkAlert.Description>{activityError}</ParkAlert.Description>
+                  <ParkButton type="button" onClick={() => void (activityRetry === 'more' ? loadMoreActivity() : loadActivity())} disabled={activityLoading}>Retry loading activity</ParkButton>
+                </ParkAlert.Content></ParkAlert.Root>}
+                {activityLoading && !activity && <section role="status" aria-label="Loading activity" aria-busy="true" className={shellStyles.activityLoading}>
+                  <ParkSkeleton height="4" width="70%" />
+                  <ParkSkeleton height="4" width="90%" />
+                  <ParkSkeleton height="4" width="55%" />
+                  <ParkVisuallyHidden>Loading durable activity…</ParkVisuallyHidden>
+                </section>}
+                {activity?.unread.status === 'unavailable' && <ParkAlert.Root role="status" status="warning"><ParkAlert.Content><ParkAlert.Description>Unread count is temporarily unavailable. Your activity remains available below.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+                {activity && visibleActivityItems.length === 0 && <ParkEmptyState title={activity.page.next ? 'No current activity in the loaded items.' : 'No current activity.'} headingLevel={false} className={shellStyles.activityEmpty} />}
+                {visibleActivityItems.length > 0 && <ParkScrollArea.Root className={shellStyles.activityScroll}>
+                  <ParkScrollArea.Viewport>
+                    <ParkScrollArea.Content>
+                      <ul aria-label="Durable activity" className={shellStyles.activityList}>
+                        {visibleActivityItems.map(item => <li key={item.id} className={shellStyles.activityRow}>
+                          <ParkButton type="button" aria-label={`Open ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={async () => { if (!item.readAt) await transitionActivity(item, 'read'); navigate(`/inbox/all/${item.ticketId}`); }} className={shellStyles.activityItem}>
+                            <span>{item.kind.replace(/_/g, ' ')}</span>
+                            <span className={shellStyles.activitySubject}>{item.ticketSubject ?? `Ticket ${item.ticketId}`}</span>
+                            <span>Ticket activity saved {new Date(item.createdAt).toLocaleString()}</span>
+                          </ParkButton>
+                          <ParkIconButton type="button" variant="plain" aria-label={`Dismiss ${item.kind.replace(/_/g, ' ')} activity for ${item.ticketSubject ?? `ticket ${item.ticketId}`}`} onClick={() => void transitionActivity(item, 'dismiss')} className={shellStyles.activityDismiss}><X className={shellStyles.dismissIcon} /></ParkIconButton>
+                        </li>)}
+                      </ul>
+                    </ParkScrollArea.Content>
+                  </ParkScrollArea.Viewport>
+                  <ParkScrollArea.Scrollbar orientation="vertical" />
+                </ParkScrollArea.Root>}
+                {activity && activity.page.items.length >= MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <p role="status">Loaded activity limit reached. Refresh to restart activity recovery.</p>}
+                {activity && activity.page.items.length < MAX_RENDERED_ACTIVITY_ITEMS && activity.page.next && <div className={shellStyles.activityMoreWrap}><ParkButton type="button" onClick={() => void loadMoreActivity()} disabled={activityLoading} className={shellStyles.activityMore}>{activityLoading ? 'Loading more activity…' : 'Load more activity'}</ParkButton></div>}
+                {activity && !activityLoading && visibleActivityItems.length > 0 && <ParkVisuallyHidden role="status">Showing {visibleActivityItems.length} activity item{visibleActivityItems.length === 1 ? '' : 's'}.</ParkVisuallyHidden>}
+              </ParkPopover.Content>
+            </ParkPopover.Positioner>
+          </ParkPopover.Root>
+
+          <div ref={setHeaderPersonaHost} className={shellStyles.headerPersonaHost} />
+
+          {!isConnected && <ParkPopover.Root open={showConnDetails} onOpenChange={({open}) => setShowConnDetails(open)} ids={{content:connectionId}} positioning={{placement:'bottom-end',strategy:'fixed'}} finalFocusEl={() => connectionTrigger.current} lazyMount unmountOnExit>
+          <div className={shellStyles.connectionWrap}>
+            <ParkPopover.Trigger asChild>
+            <ParkButton
               type="button"
               ref={connectionTrigger}
+              aria-label="Disconnected"
               aria-expanded={showConnDetails}
               aria-controls={connectionId}
-              className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border shadow-sm hover:shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
-                isConnected
-                  ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                  : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-              )}
+              className={shellStyles.connectionButton}
             >
-              <WifiOff className="w-3.5 h-3.5" />
-              <span>Disconnected</span>
-              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showConnDetails && "rotate-180")} />
-            </TocynButton></Popover.Trigger>
+              <WifiOff aria-hidden="true" className={shellStyles.smallIcon} />
+              <span className={shellStyles.connectionLabel}>Disconnected</span>
+              <ChevronDown aria-hidden="true" className={cn(shellStyles.connectionChevron, showConnDetails && css({ transform: 'rotate(180deg)' }))} />
+            </ParkButton></ParkPopover.Trigger>
 
-            <Popover.Positioner>
-              <Popover.Content aria-label="Connection Status" className=" w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-slate-900">Connection Status</h3>
-                  <div className={cn(
-                    "w-2 h-2 rounded-full",
-                    isConnected ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500"
-                  )} />
-                </div>
+            <ParkPopover.Positioner>
+              <ParkPopover.Content aria-label="Connection Status" className={shellStyles.connectionPopover}>
+                <ParkPopover.Header className={shellStyles.activityHeader}>
+                  <ParkPopover.Title asChild><h3 className={shellStyles.activityTitle}>Connection Status</h3></ParkPopover.Title>
+                  <div className={shellStyles.connectionDot} data-state={isConnected ? 'connected' : 'disconnected'} />
+                </ParkPopover.Header>
 
-                <p role="status" className="text-sm text-slate-600">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
+                <p role="status">Live updates are paused. Reconnect to refresh shared changes; saved activity can be recovered from the Activity menu.</p>
 
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <TocynButton
+                <div className={shellStyles.reconnectDivider}>
+                  <ParkButton
                     onClick={() => {
                       manualReconnect();
                       setShowConnDetails(false);
                       connectionTrigger.current?.focus();
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                    className={shellStyles.reconnectButton}
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
+                    <RefreshCw className={shellStyles.smallIcon} />
                     Force Reconnect
-                  </TocynButton>
+                  </ParkButton>
                 </div>
-              </Popover.Content>
-            </Popover.Positioner>
+              </ParkPopover.Content>
+            </ParkPopover.Positioner>
           </div>
-          </Popover.Root>}
-          {connectionRecoveryMessage && <p role="status" aria-live="polite" className="sr-only">{connectionRecoveryMessage}</p>}
+          </ParkPopover.Root>}
+          {connectionRecoveryMessage && <ParkVisuallyHidden role="status" aria-live="polite">{connectionRecoveryMessage}</ParkVisuallyHidden>}
         </header>
+        <div className={shellStyles.body}>
+          <aside className={shellStyles.sidebarDesktop}>
+            <SidebarContent personaHost={setSidebarPersonaHost} />
+          </aside>
+          <ParkDialog.Root ids={{ content: mobileDialogId }} open={isSidebarOpen} onOpenChange={({ open }) => setIsSidebarOpen(open)}
+            initialFocusEl={() => navigationClose.current}
+            finalFocusEl={() => restoreNavigationFocus.current ? navigationTrigger.current : main.current}
+            closeOnInteractOutside={false} lazyMount unmountOnExit>
+            <ParkDialog.Backdrop />
+            <ParkDialog.Positioner>
+              <ParkDialog.Content aria-labelledby={`${mobileDialogId}-title`}
+                className={cn(shellStyles.mobileDialog, preferences.navigation === 'labelled' ? shellStyles.mobileDialogLabelled : shellStyles.mobileDialogCompact)}>
+                <ParkVisuallyHidden id={`${mobileDialogId}-title`}>Navigation</ParkVisuallyHidden>
+                <div className={css({ display: 'flex', justifyContent: 'flex-end' })}>
+                  <ParkButton ref={navigationClose} type="button" aria-label="Close navigation" onClick={() => setIsSidebarOpen(false)}
+                    className={shellStyles.mobileClose}><X aria-hidden="true" /></ParkButton>
+                </div>
+                <div className={shellStyles.mobileContent}><SidebarContent onNavigate={() => { restoreNavigationFocus.current = false; setIsSidebarOpen(false); }} /></div>
+              </ParkDialog.Content>
+            </ParkDialog.Positioner>
+          </ParkDialog.Root>
 
-        <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn('flex-1 min-h-0', isInboxRoute ? 'overflow-hidden' : 'overflow-auto', !location.pathname.startsWith('/settings') && !isInboxRoute && 'p-4 lg:p-8')}>
-          <Outlet />
-        </main>
-      </div>
+          <div className={shellStyles.main}>
+            <main ref={main} tabIndex={-1} aria-label="Workspace" className={cn(shellStyles.content, isInboxRoute ? shellStyles.contentInbox : shellStyles.contentStandard, !location.pathname.startsWith('/settings') && !location.pathname.startsWith('/knowledge') && !isInboxRoute && shellStyles.contentPadded)}>
+              <Outlet />
+            </main>
+          </div>
+        </div>
+        {createPortal(<UserMenu onNavigate={() => { setTimeout(() => main.current?.focus(), 50); }} desktop={desktopPersona} labelled={preferences.navigation === 'labelled'} open={accountMenuOpen} onOpenChange={setAccountMenuOpen} />, personaPortal)}
     </div>
   );
 }
@@ -423,11 +463,12 @@ function LayoutContent() {
 export function Layout() {
   const { user, sessionGeneration } = useAuthStore();
   const identity = `${sessionGeneration}:${user?.tenant_id ?? ''}:${user?.id ?? ''}`;
-  return <OperatorThemeProvider key={identity}><LayoutContent /></OperatorThemeProvider>;
+  return <OperatorThemeProvider key={identity}><InboxGlobalAlertProvider><LayoutContent /></InboxGlobalAlertProvider></OperatorThemeProvider>;
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/', icon: HouseIcon },
   { name: 'Inbox', href: '/inbox', icon: TicketIcon },
-  { name: 'Knowledge Base', href: '/knowledge', icon: Book },
+  { name: 'Knowledge Base', href: '/knowledge', icon: BooksIcon },
+  { name: 'Settings', href: '/settings/general', icon: Settings },
 ];

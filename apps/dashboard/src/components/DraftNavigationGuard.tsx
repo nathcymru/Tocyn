@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
+import { ParkAlert, ParkButton } from '@luminatick/ui/park';
 
 /** Keep SPA navigation on the current ticket until its draft has durable acknowledgement. */
-export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your draft is not saved. Stay on this ticket, retry saving, then navigate again.' }: {
-  pending: boolean; flush: () => Promise<boolean>; failureMessage?: string;
+export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your draft is not saved. Stay on this ticket, retry saving, then navigate again.', retryLabel = 'Retry saving' }: {
+  pending: boolean; flush: () => Promise<boolean>; failureMessage?: string; retryLabel?: string;
 }) {
   const blocker = useBlocker(pending);
   const flushRef = useRef(flush);
@@ -16,17 +17,19 @@ export function DraftNavigationGuard({ pending, flush, failureMessage = 'Your dr
     return () => window.removeEventListener('beforeunload', warn);
   }, [pending]);
   useEffect(() => {
-    if (blocker.state !== 'blocked') return;
+    if (blocker.state !== 'blocked' || failed) return;
     let current = true;
-    setFailed(false);
     void flushRef.current().then(saved => {
       if (!current) return;
       if (saved) blocker.proceed();
-      else { setFailed(true); blocker.reset(); }
+      else setFailed(true);
     }, () => {
-      if (current) { setFailed(true); blocker.reset(); }
+      if (current) setFailed(true);
     });
     return () => { current = false; };
-  }, [blocker]);
-  return failed ? <p role="alert">{failureMessage}</p> : null;
+  }, [blocker, failed]);
+  return failed ? <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+    <ParkAlert.Description>{failureMessage}</ParkAlert.Description>
+    <ParkButton type="button" variant="outline" onClick={() => { void flushRef.current().then(saved => { if (saved && blocker.state === 'blocked') blocker.proceed(); else setFailed(true); }, () => setFailed(true)); }}>{retryLabel}</ParkButton>
+  </ParkAlert.Content></ParkAlert.Root> : null;
 }

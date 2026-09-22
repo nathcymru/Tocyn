@@ -1,20 +1,34 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
+import { AuthLayout } from '@luminatick/ui/auth-layout';
 import { MfaPage } from '../pages/MfaPage';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
 vi.mock('../api/client', () => ({ dashboardApi: { post: vi.fn() } }));
 const staff = { id: 'synthetic-staff', email: 'staff@example.invalid', full_name: 'Synthetic staff', role: 'agent', mfa_enabled: true };
-afterEach(() => { cleanup(); useAuthStore.getState().logout(); vi.resetAllMocks(); });
+afterEach(() => { cleanup(); useAuthStore.getState().logout(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 function mount(Page: typeof LoginPage) {
   render(<MemoryRouter><Routes><Route path="/" element={<Page />} /><Route path="/mfa" element={<p>MFA destination</p>} /></Routes></MemoryRouter>);
 }
 
 describe('staff login accessibility', () => {
+  it('centers the Tocyn logo inside the login card and keeps the access notice below Sign In', () => {
+    render(<MemoryRouter><AuthLayout showOuterLogo={false}><LoginPage /></AuthLayout></MemoryRouter>);
+    const card = document.querySelector('[data-auth-login-card]');
+    const logo = screen.getByRole('img', { name: 'Tocyn' });
+    const submit = screen.getByRole('button', { name: 'Sign In' });
+    const notice = screen.getByRole('note', { name: 'Authorised users notice' });
+    expect(card).toContainElement(logo);
+    expect(notice.textContent).toBe('Authorised Users Only. Unauthorised access is strictly prohibited and subject to legal action under applicable local and international cybercrime laws. All system activity is monitored and logged.');
+    expect(submit.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notice.querySelector('button')).toBeNull();
+  });
+
   it('associates fields, announces progress/failure, retains focus and rejects duplicate pending submission', async () => {
     let reject!: (error: Error) => void;
     vi.mocked(dashboardApi.post).mockImplementation(() => new Promise((_, fail) => { reject = fail; }));
@@ -27,17 +41,18 @@ describe('staff login accessibility', () => {
     const button = screen.getByRole('button', { name: 'Sign In' });
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Signing in');
-    expect(button.hasAttribute('disabled')).toBe(false);
-    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(dashboardApi.post).toHaveBeenCalledTimes(1);
     reject(new Error('Sign-in unavailable. Try again.'));
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Sign-in unavailable');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Sign-in unavailable');
     expect(email.getAttribute('aria-describedby')).toBe(alert.id);
     expect(password.getAttribute('aria-describedby')).toBe(alert.id);
     expect(document.activeElement).toBe(button);
-    expect(button.getAttribute('aria-disabled')).toBe('false');
+    expect(button).toBeEnabled();
   });
 
   it('preserves the successful password-to-MFA handoff', async () => {
@@ -46,7 +61,7 @@ describe('staff login accessibility', () => {
     fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: staff.email } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'synthetic-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
-    await screen.findByLabelText('Authentication Code');
+    await screen.findByRole('textbox', { name: 'Authentication Code' });
     expect(screen.queryByLabelText('Password')).toBeNull();
     expect(useAuthStore.getState().mfaRequired).toBe(true);
   });
@@ -55,19 +70,41 @@ describe('staff login accessibility', () => {
     useAuthStore.getState().setAuth('synthetic-pre-mfa', staff);
     vi.mocked(dashboardApi.post).mockRejectedValue(new Error('Invalid authentication code'));
     mount(MfaPage);
-    const code = screen.getByLabelText('Authentication Code');
+    const code = screen.getByRole('textbox', { name: 'Authentication Code' });
+    const cells = screen.getAllByRole('textbox', { name: /Authentication Code/ });
+    expect(cells).toHaveLength(6);
+    expect(document.querySelector('[data-scope="pin-input"][data-part="label"]')).toHaveClass('pin-input__label');
+    expect(cells[0]).toHaveClass('pin-input__input--size_xs');
     expect(code.getAttribute('inputmode')).toBe('numeric');
     expect(code.getAttribute('autocomplete')).toBe('one-time-code');
     const button = screen.getByRole('button', { name: 'Verify Code' });
+    expect(button).toBeDisabled();
     fireEvent.click(button); expect(dashboardApi.post).not.toHaveBeenCalled();
-    fireEvent.change(code, { target: { value: '123456' } });
+    await userEvent.type(cells[0], '123456');
+    expect(button).toBeEnabled();
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Verifying code');
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Invalid authentication code');
     expect(code.getAttribute('aria-describedby')).toContain(alert.id);
-    expect((code as HTMLInputElement).value).toBe('123456');
+    expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
     expect(document.activeElement).toBe(button);
     expect(dashboardApi.post).toHaveBeenCalledWith('/auth/mfa/verify', { code: '123456' });
+  });
+
+  it('uses official Park Pin Input sizes across the mobile breakpoint without losing focus', () => {
+    const listeners = new Set<() => void>();
+    const media = { matches: true, addEventListener: (_event: string, callback: () => void) => listeners.add(callback), removeEventListener: (_event: string, callback: () => void) => listeners.delete(callback) };
+    vi.stubGlobal('matchMedia', () => media);
+    useAuthStore.getState().setAuth('synthetic-pre-mfa', staff);
+    mount(MfaPage);
+    const first = screen.getByRole('textbox', { name: 'Authentication Code' });
+    expect(first).toHaveClass('pin-input__input--size_md');
+    first.focus();
+    act(() => { media.matches = false; listeners.forEach(update => update()); });
+    expect(first).toHaveClass('pin-input__input--size_xs');
+    expect(first).toHaveFocus();
   });
 
   it('provides a named setup image and readable alternative to scanning it', async () => {
@@ -76,6 +113,6 @@ describe('staff login accessibility', () => {
     mount(MfaPage);
     await screen.findByRole('img', { name: 'Authenticator setup QR code; a text key follows' });
     expect(screen.getByText(/manually enter this secret key/)).toBeTruthy();
-    expect(screen.getByLabelText('Authentication Code').getAttribute('aria-describedby')).toBe('mfa-instructions');
+    expect(screen.getByRole('textbox', { name: 'Authentication Code' }).getAttribute('aria-describedby')).toBe('mfa-instructions');
   });
 });

@@ -1,10 +1,14 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { p } from '../portalStyles';
+import { ParkAlert, ParkButton, ParkCard, ParkPinInput, ParkPinInputSlot, ParkProgress } from '@luminatick/ui/park';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { User } from '../types';
 import { portalApi, getWidgetKey } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { Loader2, CheckCircle } from 'lucide-react';
+import {
+  IconSpinner,
+  IconCircleCheck
+} from '@luminatick/ui/icons';
 
 export function VerifyPage({ challenge, onBack }: { challenge?: { email: string; challengeId?: string }; onBack?: () => void } = {}) {
   const [searchParams] = useSearchParams();
@@ -13,8 +17,10 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
   const { login } = useAuthStore();
 
   const [code, setCode] = useState('');
-  const codeInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (challenge) codeInput.current?.focus(); }, [challenge]);
+  const codeInput = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (challenge) codeInput.current?.querySelector<HTMLInputElement>('[data-scope="pin-input"][data-part="input"]')?.focus();
+  }, [challenge]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,22 +81,22 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
   // If we're verifying a magic link from URL, show a loading state
   if (tokenParam && !error) {
     return (
-      <div className="w-full">
-        <div role="status" aria-live="polite" className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-          <Loader2 className="mx-auto w-12 h-12 text-brand-600 animate-spin mb-4" />
-          <h2 className="text-2xl font-extrabold text-gray-900">Verifying your login...</h2>
+      <div className={p.authShell}>
+        <div role="status" aria-live="polite" className={[p.authHeading, p.verifyLoading].join(' ')}>
+          <h2 className={p.verifyLoadingTitle}>Verifying your login...</h2>
+          <ParkProgress value={null} label="Verification in progress" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+    <div className={p.authShell}>
+      <div className={[p.authHeading, p.verifyHeading].join(' ')}>
+        <h2 className={p.verifyTitle}>
           Enter Verification Code
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className={p.verifyCopy}>
           {initialEmail ? (
             <>We sent a 6-digit code to <strong>{initialEmail}</strong></>
           ) : (
@@ -99,63 +105,75 @@ export function VerifyPage({ challenge, onBack }: { challenge?: { email: string;
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="py-8">
+      <ParkCard.Root>
+        <ParkCard.Body className={p.authForm}>
           {error && (
-            <div id="portal-verify-error" role="alert" aria-atomic="true" className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md">
-              {error}
-            </div>
+            <ParkAlert.Root id="portal-verify-error" role="alert" aria-atomic="true" status="error" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>
           )}
 
-          <form aria-busy={loading} className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="code" className="block text-sm font-medium text-gray-700">
-                Authentication Code
-              </label>
-              <div className="mt-1">
-                <TocynInput
-                  id="code"
-                  ref={codeInput}
-                  name="code"
-                  inputMode="numeric"
-                  aria-describedby={error ? "portal-verify-error" : undefined}
-                  type="text"
-                  required
-                  value={code}
-                  onChange={(e) => { if (!loading) setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); }}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 text-center text-2xl tracking-widest uppercase font-mono"
-                  placeholder="123456"
-                  maxLength={6}
-                  disabled={loading}
-                  autoComplete="one-time-code"
-                />
-              </div>
+          <form aria-busy={loading} className={p.authForm} onSubmit={handleSubmit}>
+            <div className={p.verifyPinWrap}>
+              <ParkPinInput
+                ref={codeInput}
+                name="code"
+                aria-describedby={error ? "portal-verify-error" : undefined}
+                required
+                count={6}
+                value={code.split('')}
+                onValueChange={(details) => { if (!loading) setCode(details.value.join('').replace(/\D/g, '').slice(0, 6)); }}
+                invalid={Boolean(error)}
+                disabled={loading}
+                readOnly={loading}
+                otp
+                placeholder="0"
+              >
+                <span className={p.visuallyHidden}>Authentication Code</span>
+                {Array.from({ length: 6 }, (_, index) => <ParkPinInputSlot
+                  key={index}
+                  index={index}
+                  aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
+                  aria-describedby={error ? 'portal-verify-error' : undefined}
+                  readOnly={loading}
+                  onInput={(event) => {
+                    // Password managers may fill the entire OTP into one visible cell.
+                    const entered = event.currentTarget.value;
+                    if (!loading && entered.length > 1) setCode(entered.replace(/\D/g, '').slice(0, 6));
+                  }}
+                  onPaste={(event) => {
+                    if (loading) return;
+                    event.preventDefault();
+                    setCode(event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6));
+                  }}
+                />)}
+              </ParkPinInput>
             </div>
 
             <div>
-              <TocynButton
+              <ParkButton
                 type="submit"
                 aria-disabled={loading || code.length !== 6}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 aria-disabled:bg-brand-700 aria-disabled:cursor-default items-center gap-2"
+                variant="solid" className={p.authSubmit}
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                {loading ? <IconSpinner className={p.authSpinner} aria-hidden="true" /> : <IconCircleCheck className={p.authIcon} aria-hidden="true" />}
                 {loading ? 'Verifying...' : 'Verify Code'}
-              </TocynButton>
+              </ParkButton>
             </div>
           </form>
-          <p role="status" aria-live="polite" className="mt-3 text-sm text-gray-700">{loading ? 'Verifying code…' : ''}</p>
+          <p role="status" aria-live="polite" className={p.authStatus}>{loading ? 'Verifying code…' : ''}</p>
 
-          <div className="mt-6 text-center">
-            <TocynButton
+          <div className={p.verifyBack}>
+            <ParkButton
               onClick={() => { if (!loading) { if (onBack) onBack(); else { const key = getWidgetKey(); navigate('/login' + (key ? '?key=' + encodeURIComponent(key) : '')); } } }}
               disabled={loading}
-              className="text-sm text-brand-600 hover:text-brand-500 font-medium"
+              variant="plain"
             >
               Request a new code
-            </TocynButton>
+            </ParkButton>
           </div>
-        </div>
-      </div>
+        </ParkCard.Body>
+      </ParkCard.Root>
     </div>
   );
 }

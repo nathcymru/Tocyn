@@ -1,14 +1,23 @@
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
+import { p } from '../portalStyles';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkTextarea } from '@luminatick/ui/park';
+import { Badge as ParkBadge, Link as ParkLink } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { portalApi } from '../api/client';
 import type { Ticket, PaginatedResponse } from '../types';
-import { Loader2, Plus, MessageSquare } from 'lucide-react';
+import {
+  IconSpinner,
+  IconPlus
+} from '@luminatick/ui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { utcTimestamp } from '../utils/utcTimestamp';
 import { ticketReference } from '../utils/ticket-reference';
+import { PortalLoadingSkeleton } from '../components/RouteContent';
+
+const ticketRowMainWrap = css({ minW: '0', flexWrap: 'wrap' });
+const ticketSubjectWrap = css({ minW: '0', overflowWrap: 'anywhere' });
 
 export function TicketListPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -104,140 +113,135 @@ export function TicketListPage() {
   };
 
   const statusColors = {
-    open: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    resolved: 'bg-gray-100 text-gray-800',
-    closed: 'bg-gray-100 text-gray-800',
+    open: p.statusOpen,
+    pending: p.statusPending,
+    resolved: p.statusResolved,
+    closed: p.statusClosed,
   };
 
   if (loading) {
-    return <div role="status" className="flex justify-center py-12"><Loader2 aria-hidden="true" className="w-8 h-8 animate-spin text-brand-600" /><span className="sr-only">Loading tickets…</span></div>;
+    return <PortalLoadingSkeleton label="Loading tickets…" className={p.ticketLoading} />;
   }
 
   if (error) {
-    return <div className="bg-red-50 text-red-700 p-4 rounded-lg">
-      <p role="alert">{error}</p>
-      <TocynButton type="button" onClick={retryTickets} className="mt-3 rounded border border-red-700 px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Retry loading tickets</TocynButton>
-    </div>;
+    return <ParkEmptyState role="alert" title="Tickets could not be loaded." description={error} headingLevel={false} className={p.ticketError} action={<ParkButton type="button" onClick={retryTickets}>Retry loading tickets</ParkButton>} />;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 ref={listHeading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Your Tickets</h1>
-        <TocynButton
+    <div className={p.ticketList}>
+      <div className={p.ticketListHeader}>
+        <h1 ref={listHeading} tabIndex={-1} className={p.ticketListTitle}>Your Tickets</h1>
+        <ParkButton
           ref={createButton}
           type="button"
           onClick={() => { setCreateError(null); setIsCreating(true); }}
-          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          variant="solid" className={p.ticketListCreate}
         >
-          <Plus className="w-5 h-5" />
+          <IconPlus className={p.ticketListIcon} aria-hidden="true" />
           New Ticket
-        </TocynButton>
+        </ParkButton>
       </div>
 
-      <p role="status" aria-live="polite" className="text-sm text-gray-700">{createStatus}</p>
-      <TocynDialog open={isCreating} onOpenChange={setIsCreating} busy={creatingTicket}
-          labelledBy="create-ticket-heading" initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
-          className="w-full max-w-lg rounded-lg border border-gray-300 bg-white p-6 shadow-xl backdrop:bg-gray-900/40">
-          <h2 id="create-ticket-heading" className="text-lg font-semibold mb-4">Create New Ticket</h2>
-          {createError && <p id="create-ticket-error" role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">{createError}</p>}
-          <p role="status" aria-live="polite" className="mb-3 text-sm text-gray-700">{creatingTicket ? 'Creating ticket…' : ''}</p>
-          <form aria-busy={creatingTicket} onSubmit={handleCreate} className="space-y-4">
-            <div>
-              <label htmlFor="create-ticket-subject" className="block text-sm font-medium text-gray-700">Subject</label>
-              <TocynInput
-                id="create-ticket-subject"
-                ref={subjectInput}
-                readOnly={creatingTicket}
-                aria-describedby={createError ? "create-ticket-error" : undefined}
-                type="text"
-                required
-                value={newSubject}
-                onChange={(e) => { if (!creatingTicket) setNewSubject(e.target.value); }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm"
-                placeholder="What do you need help with?"
-              />
-            </div>
-            <div>
-              <label htmlFor="create-ticket-message" className="block text-sm font-medium text-gray-700">Message</label>
-              <TocynTextarea
-                id="create-ticket-message"
-                readOnly={creatingTicket}
-                aria-describedby={createError ? "create-ticket-error" : undefined}
-                required
-                rows={4}
-                value={newMessage}
-                onChange={(e) => { if (!creatingTicket) setNewMessage(e.target.value); }}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm"
-                placeholder="Describe your issue in detail..."
-              />
-            </div>
-            <div className="flex justify-end gap-3">
-              {turnstileSiteKey && (
-                <Turnstile
-                  ref={turnstileRef}
-                  siteKey={turnstileSiteKey}
-                  options={{ size: 'invisible', execution: 'execute' }}
-                  onSuccess={(token) => submitTicket(token)}
-                  onError={() => {
-                    setCreateError('Security check failed. Please try again.');
-                    setCreatingTicket(false);
-                    turnstileRef.current?.reset();
-                  }}
-                />
-              )}
-              <TocynButton
-                type="button"
-                aria-disabled={creatingTicket}
-                onClick={() => { if (!creatingTicket) setIsCreating(false); }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
-              >
-                Cancel
-              </TocynButton>
-              <TocynButton
-                type="submit"
-                aria-disabled={creatingTicket}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md aria-disabled:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
-              >
-                {creatingTicket && <Loader2 className="w-4 h-4 animate-spin" />}
-                Create Ticket
-              </TocynButton>
-            </div>
-          </form>
-      </TocynDialog>
+      {createStatus && <ParkAlert.Root role="status" aria-live="polite" status="success" variant="surface">
+        <ParkAlert.Content><ParkAlert.Description>{createStatus}</ParkAlert.Description></ParkAlert.Content>
+      </ParkAlert.Root>}
+      <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!creatingTicket) setIsCreating(open); }}
+        initialFocusEl={() => subjectInput.current} finalFocusEl={() => createButton.current}
+        closeOnEscape={!creatingTicket} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby="create-ticket-heading" className={p.ticketDialog}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id="create-ticket-heading" className={p.ticketDialogTitle}>Create New Ticket</ParkDialog.Title>
+            </ParkDialog.Header>
+            <ParkDialog.Body>
+              <form aria-busy={creatingTicket} onSubmit={handleCreate} className={[p.ticketForm, p.ticketFieldInput].join(' ')}>
+                {createError && <ParkAlert.Root id="create-ticket-error" role="alert" status="error">
+                  <ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content>
+                </ParkAlert.Root>}
+                <p role="status" aria-live="polite" className={p.ticketDialogStatus}>{creatingTicket ? 'Creating ticket…' : ''}</p>
+                <ParkField label="Subject" className={p.ticketField}>
+                  <ParkInput
+                    ref={subjectInput}
+                    readOnly={creatingTicket}
+                    aria-describedby={createError ? 'create-ticket-error' : undefined}
+                    type="text"
+                    required
+                    value={newSubject}
+                    onChange={(e) => { if (!creatingTicket) setNewSubject(e.target.value); }}
+                    className={p.ticketFieldInput}
+                    placeholder="What do you need help with?"
+                  />
+                </ParkField>
+                <ParkField label="Message" className={p.ticketField}>
+                  <ParkTextarea
+                    readOnly={creatingTicket}
+                    aria-describedby={createError ? 'create-ticket-error' : undefined}
+                    required
+                    rows={4}
+                    value={newMessage}
+                    onChange={(e) => { if (!creatingTicket) setNewMessage(e.target.value); }}
+                    className={p.ticketFieldInput}
+                    placeholder="Describe your issue in detail..."
+                  />
+                </ParkField>
+                <div className={p.ticketActions}>
+                  {turnstileSiteKey && (
+                    <Turnstile
+                      ref={turnstileRef}
+                      siteKey={turnstileSiteKey}
+                      options={{ size: 'invisible', execution: 'execute' }}
+                      onSuccess={(token) => submitTicket(token)}
+                      onError={() => {
+                        setCreateError('Security check failed. Please try again.');
+                        setCreatingTicket(false);
+                        turnstileRef.current?.reset();
+                      }}
+                    />
+                  )}
+                  <ParkButton type="button" variant="outline" aria-disabled={creatingTicket}
+                    onClick={() => { if (!creatingTicket) setIsCreating(false); }}>Cancel</ParkButton>
+                  <ParkButton type="submit" aria-disabled={creatingTicket} variant="solid" className={p.ticketSubmit}>
+                    {creatingTicket && <IconSpinner className={p.ticketSpinner} aria-hidden="true" />}
+                    Create Ticket
+                  </ParkButton>
+                </div>
+              </form>
+            </ParkDialog.Body>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <ParkCard.Root variant="outline">
         {tickets.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg">You haven't created any tickets yet.</p>
-          </div>
+          <ParkEmptyState title="You haven't created any tickets yet." description="Create a ticket to start a conversation with support." action={<ParkButton type="button" onClick={() => { setCreateError(null); setIsCreating(true); }} variant="solid" className={p.ticketEmptyCreate}> <IconPlus className={p.ticketListIcon} aria-hidden="true" /> New Ticket</ParkButton>} className={p.ticketEmpty} />
         ) : (
-          <ul className="divide-y divide-gray-200">
+          <ul className={p.ticketListItems}>
             {tickets.map((ticket) => (
-              <li key={ticket.id} className="hover:bg-gray-50 transition-colors">
-                <Link to={`/tickets/${ticket.id}`} className="block p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-gray-500 font-mono">{ticketReference(ticket, ticketPrefix)}</span>
-                      <h3 className="text-lg font-medium text-gray-900">{ticket.subject}</h3>
+              <li key={ticket.id} className={p.ticketListItem}>
+                <ParkLink asChild variant="plain">
+                  <RouterLink to={`/tickets/${ticket.id}`} className={p.ticketListLink}>
+                  <div className={p.ticketListRow}>
+                    <div className={[p.ticketRowMain, ticketRowMainWrap].join(' ')}>
+                      <span className={p.ticketReference}>{ticketReference(ticket, ticketPrefix)}</span>
+                      <h3 className={[p.ticketSubject, ticketSubjectWrap].join(' ')}>{ticket.subject}</h3>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColors[ticket.status]}`}>
-                      {ticket.status}
-                    </span>
+                    <ParkBadge asChild variant="subtle" className={[p.ticketStatus, statusColors[ticket.status]].join(' ')}>
+                      <span>{ticket.status}</span>
+                    </ParkBadge>
                   </div>
-                  <div className="mt-2 text-sm text-gray-500 flex items-center gap-4">
+                  <div className={p.ticketListMeta}>
                     <span>Created {formatDistanceToNow(utcTimestamp(ticket.created_at), { addSuffix: true })}</span>
                     <span>•</span>
-                    <span className="capitalize text-gray-700 font-medium">Priority: {ticket.priority}</span>
+                    <span className={p.ticketPriority}>Priority: {ticket.priority}</span>
                   </div>
-                </Link>
+                  </RouterLink>
+                </ParkLink>
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </ParkCard.Root>
     </div>
   );
 }

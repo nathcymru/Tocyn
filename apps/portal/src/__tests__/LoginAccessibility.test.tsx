@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
 import { VerifyPage } from '../pages/VerifyPage';
@@ -16,32 +17,44 @@ describe('customer login accessibility', () => {
     mount(VerifyPage, '/verify');
     const code = screen.getByLabelText('Authentication Code') as HTMLInputElement;
     const submit = screen.getByRole('button', { name: 'Verify Code' });
-    fireEvent.change(code, { target: { value: 'ABCDEF' } });
+    const cells = screen.getAllByRole('textbox', { name: /Authentication Code/ }) as HTMLInputElement[];
+    expect(cells).toHaveLength(6);
+    await userEvent.type(code, 'ABCDEF');
     fireEvent.click(submit);
-    expect(code.value).toBe('');
+    expect(cells.map(cell => cell.value).join('')).toBe('');
     expect(portalApi.post).not.toHaveBeenCalled();
-    fireEvent.change(code, { target: { value: '12-x' } });
+    await userEvent.type(code, '12-x');
     fireEvent.click(submit);
-    expect(code.value).toBe('12');
+    expect(cells.map(cell => cell.value).join('')).toBe('12');
     expect(portalApi.post).not.toHaveBeenCalled();
     vi.mocked(portalApi.post).mockRejectedValueOnce(new Error('Synthetic invalid code'));
-    fireEvent.change(code, { target: { value: 'ab12-34 56x7' } });
-    expect(code.value).toBe('123456');
+    await userEvent.click(code);
+    await userEvent.paste('ab12-34 56x7');
+    expect(cells.map(cell => cell.value).join('')).toBe('123456');
     fireEvent.click(submit);
     await screen.findByRole('alert');
     expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456', challengeId: undefined });
   });
 
-  it('names the login-method group and exposes which native button is selected', () => {
+  it('uses official Park Radio Group anatomy and keyboard selection for the login method', async () => {
     vi.mocked(portalApi.get).mockResolvedValue({});
     mount(LoginPage);
-    expect(screen.getByRole('group', { name: 'Login method' })).toBeTruthy();
-    const magic = screen.getByRole('button', { name: 'Magic Link' });
-    const code = screen.getByRole('button', { name: 'Code (OTP)' });
-    expect(magic.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(code);
-    expect(magic.getAttribute('aria-pressed')).toBe('false');
-    expect(code.getAttribute('aria-pressed')).toBe('true');
+    const group = screen.getByRole('radiogroup', { name: 'Login method' });
+    const magic = screen.getByRole('radio', { name: 'Magic Link' });
+    const code = screen.getByRole('radio', { name: 'Code (OTP)' });
+    const email = screen.getByLabelText('Email address');
+    expect(email.closest('.field__root')).toBeInTheDocument();
+    expect(email.closest('.card__root')).toBeInTheDocument();
+    expect(group).toHaveClass('radio-group__root');
+    expect(magic.closest('.radio-group__item')).toBeInTheDocument();
+    expect(code.closest('.radio-group__item')).toBeInTheDocument();
+    expect(magic).toBeChecked();
+    expect(code).not.toBeChecked();
+    magic.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(magic).not.toBeChecked();
+    expect(code).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Send Code' })).toBeInTheDocument();
   });
 
   it('announces sending/failure and preserves a focusable submit control with no repeated request', async () => {
@@ -58,6 +71,8 @@ describe('customer login accessibility', () => {
     fireEvent.click(button); expect(portalApi.post).toHaveBeenCalledTimes(1);
     reject(new Error('Login instructions unavailable'));
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Login instructions unavailable');
     expect(email.getAttribute('aria-describedby')).toBe(alert.id);
     expect(document.activeElement).toBe(button);
   });
@@ -71,15 +86,15 @@ describe('customer login accessibility', () => {
     fireEvent.change(email, { target: { value: 'submitted@example.invalid' } });
     const submit = screen.getByRole('button', { name: 'Send Magic Link' });
     submit.focus(); fireEvent.click(submit);
-    const otp = screen.getByRole('button', { name: 'Code (OTP)' });
+    const otp = screen.getByRole('radio', { name: 'Code (OTP)' });
     expect(email.readOnly).toBe(true);
     expect(email.disabled).toBe(false);
-    expect(otp.hasAttribute('disabled')).toBe(false);
-    expect(otp.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.click(otp);
+    expect(otp).toBeDisabled();
+    fireEvent.click(otp.closest('.radio-group__item')!);
     fireEvent.change(email, { target: { value: 'attempted-change@example.invalid' } });
     expect(email.value).toBe('submitted@example.invalid');
-    expect(screen.getByRole('button', { name: 'Magic Link' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Magic Link' }).closest('.radio-group__item')).toHaveAttribute('data-state', 'checked');
+    expect(screen.getByRole('button', { name: 'Sending...' })).toBeInTheDocument();
     expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/auth/request', expect.objectContaining({
       email: 'submitted@example.invalid', type: 'magic_link',
     }));
@@ -95,7 +110,10 @@ describe('customer login accessibility', () => {
     mount(LoginPage);
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'customer@example.invalid' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send Magic Link' }));
-    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBe(document.activeElement);
+    const heading = await screen.findByRole('heading', { name: 'Check your email', level: 2 });
+    expect(heading).toBe(document.activeElement);
+    expect(heading).toHaveClass('alert__title');
+    expect(heading.closest('.alert__root')).toHaveAttribute('role', 'status');
   });
 
   it('exposes pending magic-link verification as status while retaining the heading', () => {
@@ -110,15 +128,21 @@ describe('customer login accessibility', () => {
     vi.mocked(portalApi.post).mockRejectedValue(new Error('Code expired. Request a new code.'));
     mount(VerifyPage);
     const code = screen.getByLabelText('Authentication Code');
+    expect(code.closest('.pin-input__root')).toBeInTheDocument();
+    expect(code.closest('.card__root')).toBeInTheDocument();
     expect(code.getAttribute('inputmode')).toBe('numeric');
-    fireEvent.change(code, { target: { value: '123456' } });
+    await userEvent.type(code, '123456');
     const button = screen.getByRole('button', { name: 'Verify Code' });
     button.focus(); fireEvent.click(button);
     expect(screen.getByRole('status').textContent).toContain('Verifying code');
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Code expired. Request a new code.');
     expect(code.getAttribute('aria-describedby')).toBe(alert.id);
     expect(document.activeElement).toBe(button);
-    expect(screen.getByRole('button', { name: 'Request a new code' }).hasAttribute('disabled')).toBe(false);
+    const retry = screen.getByRole('button', { name: 'Request a new code' });
+    expect(retry.hasAttribute('disabled')).toBe(false);
+    expect(retry).toHaveClass('button--variant_plain');
     expect(portalApi.post).toHaveBeenCalledTimes(1);
   });
 });

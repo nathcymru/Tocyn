@@ -1,20 +1,31 @@
 import { useTicketSla, type SlaTarget } from '../hooks/useTicketSla';
+import { ParkAlert, ParkButton, ParkSkeleton, ParkTicketDetail } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 
 import { slaTargetLabel } from './SlaTargetStatus';
 
-function Target({ label, target }: { label: string; target: SlaTarget }) {
-  const tone = target.state === 'breached' ? 'text-[var(--tocyn-sla-breach-text)]' : target.state === 'on-track' ? 'text-[var(--tocyn-sla-on-track-text)]' : 'text-slate-600';
-  return <div><dt className="text-sm font-medium text-slate-700">{label}</dt><dd className={tone}>{slaTargetLabel(target)}</dd></div>;
+function Target({ label, target, detailStyles }: { label: string; target: SlaTarget; detailStyles: ReturnType<typeof ParkTicketDetail> }) {
+  return <div><dt className={detailStyles.slaLabel}>{label}</dt><dd data-state={target.state} className={detailStyles.slaValue}>{slaTargetLabel(target)}</dd></div>;
 }
 
 /** Independent ticket-detail section; the composing page mounts it after its own data boundary. */
 export function TicketSlaPanel({ ticketId }: { ticketId: string }) {
+  const detailStyles = ParkTicketDetail();
   const { data, isLoading, isError, refetch, isFetching } = useTicketSla(ticketId);
-  if (isLoading) return <section aria-label="Service level" className="rounded border border-slate-200 p-4 text-sm text-slate-600">Loading service level…</section>;
-  if (isError || !data) return <section aria-label="Service level" className="rounded border border-slate-200 p-4 text-sm text-slate-600">Service level is unavailable. <button type="button" className="underline" disabled={isFetching} onClick={() => void refetch()}>Retry</button></section>;
-  return <section aria-label="Service level" className="rounded border border-slate-200 p-4">
-    <h2 className="font-semibold text-slate-900">Service level</h2>
-    <dl className="mt-3 grid gap-3 sm:grid-cols-2"><Target label="First response" target={data.response}/><Target label="Resolution" target={data.resolution}/></dl>
-    {data.handlerName ? <p className="mt-3 text-sm text-slate-600">Handler: {data.handlerName}</p> : null}
+  if (isLoading) return <section role="status" aria-busy="true" aria-label="Service level" className={css({ display: 'grid', gap: '2', p: '3', bg: 'bg.subtle' })}>
+    <span className={css({ srOnly: true })}>Loading service level…</span>
+    <ParkSkeleton aria-hidden="true" height="4" width="70%" />
+    <ParkSkeleton aria-hidden="true" height="4" width="90%" />
+  </section>;
+  if (isError || !data) return <ParkAlert.Root role="alert" aria-label="Service level" status="error" variant="surface">
+    <ParkAlert.Content>
+      <ParkAlert.Description>Service level is unavailable.</ParkAlert.Description>
+      <ParkButton type="button" variant="plain" size="sm" disabled={isFetching} onClick={() => void refetch()}>Retry</ParkButton>
+    </ParkAlert.Content>
+  </ParkAlert.Root>;
+  return <section aria-label="Service level" className={detailStyles.slaPanel}>
+    <h2 className={detailStyles.slaTitle}>Service level</h2>
+    <dl className={detailStyles.slaGrid}><Target label="First response" target={data.response} detailStyles={detailStyles}/><Target label="Resolution" target={data.resolution} detailStyles={detailStyles}/></dl>
+    {data.handlerName ? <p className={detailStyles.slaHandler}>Handler: {data.handlerName}</p> : null}
   </section>;
 }

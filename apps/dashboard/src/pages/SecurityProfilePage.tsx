@@ -1,14 +1,38 @@
-import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkPinInput, ParkPinInputSlot } from '@luminatick/ui/park';
+import { Badge } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { Shield, ShieldOff, KeyRound, AlertTriangle } from 'lucide-react';
+import {
+  IconShieldHalved,
+  IconShield,
+  IconKey
+} from '@luminatick/ui/icons';
 
 interface SetupResponse {
   provisioning_uri: string;
 }
+
+const securityStyles = {
+  page: css({ width: '100%', maxWidth: '48rem', marginInline: 'auto', padding: '2rem 1rem', display: 'grid', gap: '1.5rem', color: 'fg.default' }),
+  title: css({ margin: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' }),
+  description: css({ marginTop: '0.375rem', color: 'fg.muted' }),
+  statusIcon: css({ width: '1.5rem', height: '1.5rem', flexShrink: '0' }),
+  cardBody: css({ display: 'grid', gap: '1.25rem' }),
+  stack: css({ display: 'grid', justifyItems: 'start', gap: '1rem' }),
+  note: css({ margin: '0', color: 'fg.muted' }),
+  setup: css({ display: 'grid', gap: '1.5rem', minWidth: '0' }),
+  step: css({ display: 'grid', gap: '0.75rem', minWidth: '0' }),
+  stepTitle: css({ margin: '0', fontSize: '1rem', fontWeight: '600' }),
+  stepCopy: css({ margin: '0', color: 'fg.muted' }),
+  qr: css({ justifySelf: 'start', maxWidth: '100%', padding: '0.75rem', borderWidth: '1px', borderStyle: 'solid', borderColor: 'border.default', borderRadius: 'l2', background: 'bg.subtle', '& svg': { maxWidth: '100%', height: 'auto' } }),
+  secret: css({ display: 'inline-block', marginTop: '0.5rem', padding: '0.375rem 0.625rem', borderRadius: 'l1', background: 'bg.subtle', color: 'fg.default', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', userSelect: 'all' }),
+  verifyForm: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '0.75rem' }),
+  codeField: css({ display: 'grid', gap: '0.375rem', minWidth: '0', maxWidth: '100%', flex: '1 1 100%' }),
+  codeCell: css({ fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums' }),
+};
 
 export function SecurityProfilePage() {
   const { user, logout, setAuth, sessionGeneration, sessionAnnouncement, clearSessionAnnouncement } = useAuthStore();
@@ -20,9 +44,12 @@ export function SecurityProfilePage() {
 
   const pending = useRef(false);
   const setupButton = useRef<HTMLButtonElement>(null);
-  const codeInput = useRef<HTMLInputElement>(null);
+  const codeInput = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const disableButton = useRef<HTMLButtonElement>(null);
+  const disableCancel = useRef<HTMLButtonElement>(null);
+  const disableTitleId = React.useId();
+  const disableDescriptionId = React.useId();
   const [disableOpen, setDisableOpen] = useState(false);
   useEffect(() => { setSetupData(null); setCode(''); setDisableOpen(false); }, [sessionGeneration]);
   useEffect(() => {
@@ -30,7 +57,9 @@ export function SecurityProfilePage() {
     setSuccessMessage(sessionAnnouncement.message);
     clearSessionAnnouncement(sessionGeneration);
   }, [clearSessionAnnouncement, sessionAnnouncement, sessionGeneration]);
-  useEffect(() => { if (setupData) codeInput.current?.focus(); }, [setupData]);
+  useEffect(() => {
+    if (setupData) codeInput.current?.querySelector<HTMLInputElement>('[data-scope="pin-input"][data-part="input"]')?.focus();
+  }, [setupData]);
   useEffect(() => {
     if (!successMessage) return;
     // AuthQueryBoundary remounts the workspace after a replacement session; run after its
@@ -95,145 +124,172 @@ export function SecurityProfilePage() {
     }
   };
 
-  if (!user) return null;
+  if (!user) return <ParkEmptyState
+    role="alert"
+    title="Security profile is unavailable"
+    description="Your signed-in identity could not be confirmed. Sign in again to view your security settings."
+    action={<ParkButton asChild><a href="/login" onClick={logout}>Sign in again</a></ParkButton>}
+  />;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <TocynConfirmDialog open={disableOpen} onOpenChange={setDisableOpen} busy={isLoading}
-        title="Disable two-factor authentication?" description="This will make your account less secure and sign you out. You will need to sign in again."
-        confirmLabel="Disable 2FA" error={error ?? undefined} onConfirm={() => { void disableMfa(); }}
-        finalFocusEl={() => user.mfa_enabled ? disableButton.current : heading.current} />
+    <div className={securityStyles.page}>
+      <ParkDialog.Root open={disableOpen} onOpenChange={({ open }) => { if (!isLoading) setDisableOpen(open); }}
+        initialFocusEl={() => disableCancel.current}
+        finalFocusEl={() => user.mfa_enabled ? disableButton.current : heading.current}
+        closeOnEscape={!isLoading} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={disableTitleId} aria-describedby={disableDescriptionId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={disableTitleId}>Disable two-factor authentication?</ParkDialog.Title>
+            </ParkDialog.Header>
+            <ParkDialog.Body>
+              <ParkDialog.Description id={disableDescriptionId}>This will make your account less secure and sign you out. You will need to sign in again.</ParkDialog.Description>
+              {error && <ParkAlert.Root role="alert" aria-atomic="true" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton ref={disableCancel} type="button" disabled={isLoading} onClick={() => setDisableOpen(false)}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={isLoading} onClick={() => { void disableMfa(); }}>Disable 2FA</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
       <div>
-        <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Security Profile</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 ref={heading} tabIndex={-1} className={securityStyles.title}>Security Profile</h1>
+        <p className={securityStyles.description}>
           Manage your account security and two-factor authentication settings.
         </p>
       </div>
 
       {successMessage && (
-        <div role="status" className="bg-green-50 border-l-4 border-green-400 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <Shield className="h-5 w-5 text-green-400" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-green-700">{successMessage}</p>
-            </div>
-          </div>
-        </div>
+        <ParkAlert.Root role="status" status="success">
+          <ParkAlert.Content><ParkAlert.Description>{successMessage}</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>
       )}
 
       {error && !disableOpen && (
-        <div role="alert" className="bg-red-50 border-l-4 border-red-400 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <AlertTriangle className="h-5 w-5 text-red-400" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        </div>
+        <ParkAlert.Root role="alert" status="error">
+          <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>
       )}
 
-      <div className="bg-white shadow sm:rounded-lg">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900 flex items-center gap-2">
-            <Shield className="h-5 w-5 text-indigo-500" />
+      <ParkCard.Root variant="outline">
+        <ParkCard.Header>
+          <ParkCard.Title asChild><h2 className={css({ display: 'flex', alignItems: 'center', gap: '2' })}>
+            <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
             Two-Factor Authentication (2FA)
-          </h3>
-          <div className="mt-2 max-w-xl text-sm text-gray-500">
-            <p>
-              Add an additional layer of security to your account by requiring more than just a password to sign in.
-            </p>
-          </div>
-
-          <div className="mt-5">
+          </h2></ParkCard.Title>
+          <ParkCard.Description>
+            Add an additional layer of security to your account by requiring more than just a password to sign in.
+          </ParkCard.Description>
+        </ParkCard.Header>
+        <ParkCard.Body className={securityStyles.cardBody}>
+          <div>
             {user.mfa_enabled ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-green-700 font-medium">
-                  <Shield className="h-5 w-5" />
+              <div className={securityStyles.stack}>
+                <Badge colorPalette="green">
+                  <IconShieldHalved className={securityStyles.statusIcon} aria-hidden="true" />
                   2FA is currently enabled
-                </div>
+                </Badge>
                 {(user.role === 'admin' || user.role === 'agent') ? (
-                  <p className="text-sm text-gray-500">
+                  <p className={securityStyles.note}>
                     Two-Factor Authentication is mandatory for your role and cannot be disabled.
                   </p>
                 ) : (
-                  <TocynButton
+                  <ParkButton
                     type="button"
                     ref={disableButton}
                     onClick={() => { setError(null); setDisableOpen(true); }}
                     disabled={isLoading}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                    variant="outline"
+                    colorPalette="red"
                   >
-                    <ShieldOff className="h-4 w-4 mr-2" />
+                    <IconShield className={securityStyles.statusIcon} aria-hidden="true" />
                     Disable 2FA
-                  </TocynButton>
+                  </ParkButton>
                 )}
               </div>
             ) : (
               <div>
                 {!setupData ? (
-                  <TocynButton
+                  <ParkButton
                     type="button"
                     ref={setupButton}
                     onClick={startSetup}
                     disabled={isLoading}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    variant="solid"
                   >
-                    <KeyRound className="h-4 w-4 mr-2" />
+                    <IconKey className={securityStyles.statusIcon} aria-hidden="true" />
                     Set up 2FA
-                  </TocynButton>
+                  </ParkButton>
                 ) : (
-                  <div className="bg-gray-50 rounded-lg p-6 space-y-6 border border-gray-200">
-                    <div className="space-y-4">
-                      <h4 className="font-medium text-gray-900">Step 1: Scan QR Code</h4>
-                      <p className="text-sm text-gray-600">
+                  <div className={securityStyles.setup}>
+                    <div className={securityStyles.step}>
+                      <h4 className={securityStyles.stepTitle}>Step 1: Scan QR Code</h4>
+                      <p className={securityStyles.stepCopy}>
                         Scan the QR code below with your authenticator app (like Google Authenticator, Authy, or Microsoft Authenticator).
                       </p>
-                      <div className="bg-white p-4 rounded-lg inline-block shadow-sm">
-                        <QRCodeSVG value={setupData.provisioning_uri} size={200} />
+                      <div className={securityStyles.qr}>
+                        <QRCodeSVG role="img" aria-label="Authenticator setup QR code; a text key follows" value={setupData.provisioning_uri} size={200} />
                       </div>
-                      <p className="text-xs text-gray-500">
+                      <p className={securityStyles.stepCopy}>
                         If you can't scan the QR code, you can manually enter this secret key:<br/>
-                        <code className="bg-gray-100 px-2 py-1 rounded mt-1 inline-block font-mono text-sm">{getSecretFromUri(setupData.provisioning_uri)}</code>
+                        <code className={securityStyles.secret}>{getSecretFromUri(setupData.provisioning_uri)}</code>
                       </p>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="font-medium text-gray-900 mb-4">Step 2: Verify Code</h4>
-                      <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className="flex gap-4 items-end">
-                        <div className="flex-1 max-w-xs">
-                          <label htmlFor="code" className="block text-sm font-medium text-gray-700">
-                            Authentication Code
-                          </label>
-                          <TocynInput
-                            type="text"
-                            id="code" ref={codeInput} inputMode="numeric" autoComplete="one-time-code" disabled={isLoading}
-                            value={code}
-                            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            placeholder="000000"
-                            maxLength={6}
-                            required
-                          />
+                    <div className={securityStyles.step}>
+                      <h4 className={securityStyles.stepTitle}>Step 2: Verify Code</h4>
+                      <form onSubmit={confirmSetup} aria-label="Verify two-factor setup" aria-busy={isLoading} className={securityStyles.verifyForm}>
+                        <div className={securityStyles.codeField}>
+                          <ParkPinInput
+                            id="code"
+                            ref={codeInput}
+                            count={6}
+                            size="xs"
+                            label="Authentication Code"
+                            name="code"
+                            otp
+                            value={Array.from({ length: 6 }, (_, index) => code[index] ?? '')}
+                            onValueChange={({ value }) => {
+                              if (!isLoading) {
+                                setCode(value.join('').replace(/\D/g, '').slice(0, 6));
+                                setError(null);
+                              }
+                            }}
+                            sanitizeValue={value => value.replace(/\D/g, '').slice(0, 6)}
+                            disabled={isLoading}
+                            readOnly={isLoading}
+                            invalid={Boolean(error)}
+                            placeholder="0"
+                          >
+                            {Array.from({ length: 6 }, (_, index) => (
+                              <ParkPinInputSlot
+                                key={index}
+                                index={index}
+                                aria-label={index === 0 ? 'Authentication Code' : `Authentication Code digit ${index + 1}`}
+                                className={securityStyles.codeCell}
+                              />
+                            ))}
+                          </ParkPinInput>
                         </div>
-                        <TocynButton
+                        <ParkButton
                           type="submit"
                           disabled={isLoading || code.length !== 6}
-                          className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                          variant="solid"
                         >
                           Verify & Enable
-                        </TocynButton>
-                        <TocynButton
+                        </ParkButton>
+                        <ParkButton
                           type="button"
                           onClick={() => { setSetupData(null); setCode(''); setError(null); requestAnimationFrame(() => setupButton.current?.focus()); }}
                           disabled={isLoading}
-                          className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          variant="outline"
                         >
                           Cancel
-                        </TocynButton>
+                        </ParkButton>
                       </form>
                     </div>
                   </div>
@@ -241,8 +297,8 @@ export function SecurityProfilePage() {
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </ParkCard.Body>
+      </ParkCard.Root>
     </div>
   );
 }

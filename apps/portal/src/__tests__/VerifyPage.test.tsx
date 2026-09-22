@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BrowserRouter, Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { VerifyPage } from '../pages/VerifyPage';
 import { portalApi } from '../api/client';
@@ -31,6 +32,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('verification flows', () => {
+  it('announces indeterminate Park progress while a single magic-link request is pending', async () => {
+    let resolve!: (value: { user: { id: string; name: string; email: string }; token: string }) => void;
+    vi.mocked(portalApi.post).mockReturnValue(new Promise(done => { resolve = done; }));
+
+    mount('/verify?token=synthetic-pending');
+
+    expect(screen.getByRole('status')).toHaveTextContent('Verifying your login...');
+    expect(screen.getByText('Verification in progress')).toBeInTheDocument();
+    const progress = screen.getByRole('progressbar', { name: 'Verification in progress' });
+    expect(progress).toBeInTheDocument();
+    expect(progress).not.toHaveAttribute('aria-valuenow');
+    expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/auth/verify', { token: 'synthetic-pending' });
+
+    await act(async () => {
+      resolve({ user: { id: 'synthetic-user', name: 'Test', email: 'test@example.com' }, token: 'synthetic-session' });
+    });
+    expect(await screen.findByText('Ticket destination')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
   it('uses a magic-link token only once during StrictMode replay', async () => {
     vi.mocked(portalApi.post).mockResolvedValue({
       user: { id: 'synthetic-user', name: 'Test', email: 'test@example.com' },
@@ -75,7 +96,7 @@ describe('verification flows', () => {
     const restarted = render(<BrowserFlow />);
     try {
       expect(screen.getByText('test@example.com')).toBeInTheDocument();
-      fireEvent.change(screen.getByLabelText('Authentication Code'), { target: { value: '123456' } });
+      await userEvent.type(screen.getByRole('textbox', { name: 'Authentication Code' }), '123456');
       fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
       expect(await screen.findByText('Ticket destination')).toBeInTheDocument();
       expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/auth/verify', { token: '123456', challengeId: 'history-challenge' });
@@ -92,9 +113,29 @@ describe('verification flows', () => {
     });
     mount({ pathname: '/verify', state: { challengeId: 'synthetic-challenge' } });
     expect(portalApi.post).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText('Authentication Code'), { target: { value: '123456' } });
+    const cells = screen.getAllByRole('textbox', { name: /Authentication Code/ });
+    expect(cells).toHaveLength(6);
+    expect(cells[0].closest('.pin-input__root')).toBeInTheDocument();
+    await userEvent.type(cells[0], '123456');
+    expect(cells.map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
+    expect(cells[0]).toHaveAttribute('autocomplete', 'one-time-code');
     fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
     expect(await screen.findByText('Ticket destination')).toBeInTheDocument();
     expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456', challengeId: 'synthetic-challenge' });
+  });
+
+  it('accepts a six-digit one-time-code autofill in the first Park Pin Input cell', async () => {
+    vi.mocked(portalApi.post).mockResolvedValue({
+      user: { id: 'synthetic-user', name: 'Test', email: 'test@example.com' },
+      token: 'synthetic-session',
+    });
+    mount({ pathname: '/verify', state: { challengeId: 'autofill-challenge' } });
+    const firstCell = screen.getByRole('textbox', { name: 'Authentication Code' });
+    expect(firstCell).toHaveAttribute('autocomplete', 'one-time-code');
+    fireEvent.input(firstCell, { target: { value: '123456' } });
+    expect(screen.getAllByRole('textbox', { name: /Authentication Code/ }).map(cell => (cell as HTMLInputElement).value).join('')).toBe('123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
+    expect(await screen.findByText('Ticket destination')).toBeInTheDocument();
+    expect(portalApi.post).toHaveBeenCalledWith('/auth/verify', { token: '123456', challengeId: 'autofill-challenge' });
   });
 });

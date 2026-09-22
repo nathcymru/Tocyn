@@ -35,7 +35,7 @@ function show(utility:(id:string)=>Response|Promise<Response>) {
   }));
   useAuthStore.getState().setAuth('synthetic-session',{id:'operator',tenant_id:'synthetic-tenant',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});clients.push(client);
-  const router=createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage/>}],{initialEntries:['/tickets/one']});
+  const router=createMemoryRouter([{path:'/inbox/all/:id',element:<TicketDetailPage/>}],{initialEntries:['/inbox/all/one']});
   render(<QueryClientProvider client={client}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
   return {router,utilityRequests};
 }
@@ -61,14 +61,14 @@ it('rejects a manifest for the previous ticket after route navigation, then show
   let wrongTicket=true;
   const {router}=show(id=>json(id==='two'&&wrongTicket?manifest('one'):manifest(id,id!=='two')));
   await screen.findByRole('button',{name:'Copy ticket reference'});
-  await act(async()=>{await router.navigate('/tickets/two');});
+  await act(async()=>{await router.navigate('/inbox/all/two');});
   await screen.findByRole('heading',{name:'Conversation two'});
   const retry=await screen.findByRole('button',{name:'Retry ticket actions'});
   expect(screen.queryByRole('button',{name:'Copy ticket reference'})).not.toBeInTheDocument();
   wrongTicket=false;fireEvent.click(retry);
   expect(await screen.findByRole('button',{name:'Copy ticket reference'})).toBeDisabled();
   fireEvent.click(screen.getByText('More ticket actions'));
-  expect(screen.getByRole('button',{name:'View ticket reference'})).toBeDisabled();
+  expect(await screen.findByRole('button',{name:'View ticket reference'})).toBeDisabled();
   expect(screen.queryByRole('link',{name:'Open action safety guidance'})).not.toBeInTheDocument();
   expect(screen.getAllByText('Reference access denied by policy.')).toHaveLength(3);
 });
@@ -79,17 +79,36 @@ it('unmounts the active reference dialog and discards an unresolved copy result 
   const {router}=show(id=>json(manifest(id)));
   fireEvent.click(await screen.findByRole('button',{name:'Copy ticket reference'}));
   fireEvent.click(screen.getByText('More ticket actions'));
-  const opener=screen.getByRole('button',{name:'View ticket reference'});opener.focus();fireEvent.click(opener);
+  const opener=await screen.findByRole('button',{name:'View ticket reference'});opener.focus();fireEvent.click(opener);
   const dialog=await screen.findByRole('dialog',{name:'Ticket reference'});
   expect(within(dialog).getByText('#1')).toBeInTheDocument();
-  await act(async()=>{await router.navigate('/tickets/two');finishCopy();});
+  await act(async()=>{await router.navigate('/inbox/all/two');finishCopy();});
   await screen.findByRole('heading',{name:'Conversation two'});
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByText('Ticket reference copied.')).not.toBeInTheDocument();
   fireEvent.click(await screen.findByText('More ticket actions'));
-  const currentOpener=screen.getByRole('button',{name:'View ticket reference'});currentOpener.focus();fireEvent.click(currentOpener);
+  const currentOpener=await screen.findByRole('button',{name:'View ticket reference'});currentOpener.focus();fireEvent.click(currentOpener);
   const currentDialog=await screen.findByRole('dialog');
   expect(within(currentDialog).getByText('#2')).toBeInTheDocument();
   fireEvent.click(within(currentDialog).getByRole('button',{name:'Close ticket reference'}));
   await waitFor(()=>expect(currentOpener).toHaveFocus());
+});
+
+it('uses Park Dialog anatomy and restores the reference action after Escape', async () => {
+  show(id => json(manifest(id)));
+  fireEvent.click(await screen.findByText('More ticket actions'));
+  const opener = await screen.findByRole('button', { name: 'View ticket reference' });
+  opener.focus();
+  fireEvent.click(opener);
+  const dialog = await screen.findByRole('dialog', { name: 'Ticket reference' });
+  expect(dialog).toHaveAttribute('data-scope', 'dialog');
+  expect(dialog).toHaveAttribute('data-part', 'content');
+  expect(dialog).toHaveClass('dialog__content');
+  expect(dialog.querySelector('[data-part="title"]')).toHaveTextContent('Ticket reference');
+  expect(dialog.querySelector('[data-part="description"]')).toHaveTextContent('Use this reference');
+  const close = within(dialog).getByRole('button', { name: 'Close ticket reference' });
+  await waitFor(() => expect(close).toHaveFocus());
+  fireEvent.keyDown(close, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Ticket reference' })).not.toBeInTheDocument());
+  await waitFor(() => expect(opener).toHaveFocus());
 });

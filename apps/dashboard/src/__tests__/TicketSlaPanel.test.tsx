@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TicketSlaPanel } from '../components/TicketSlaPanel';
 import { TicketSlaActionBar } from '../components/TicketSlaActionBar';
-import { ConversationSlaStatus } from '../components/ConversationSlaStatus';
 import { fetchTicketSlaBatch, parseTicketSla, type SlaTarget, type TicketSla } from '../hooks/useTicketSla';
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
@@ -16,6 +15,14 @@ const unavailable: SlaTarget = { state: 'unavailable', phase: 'unavailable', com
 const running: SlaTarget = { state: 'on-track', phase: 'running', completedAt: null, dueAt: '2026-09-11T10:00:00.000Z', remainingWorkingMilliseconds: 60000, targetWorkingMilliseconds: 3600000 };
 
 describe('SLA surfaces', () => {
+  it('shows an announced Park skeleton while the detail projection loads', () => {
+    mocks.get.mockImplementation(() => new Promise(() => undefined));
+    show();
+    const loading = screen.getByRole('status', { name: 'Service level' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(2);
+  });
+
   it('renders unavailable configuration and a breached deadline without private facts', async () => {
     mocks.get.mockResolvedValue({ response: unavailable, resolution: { ...running, state: 'breached', remainingWorkingMilliseconds: 0 }, handlerName: 'Case owner' });
     show();
@@ -35,24 +42,31 @@ describe('SLA surfaces', () => {
     expect(screen.getByLabelText('SLA status')).toBeTruthy();
   });
 
-  it('shows resolution due even when first response is not configured', () => {
-    render(<ConversationSlaStatus sla={{ response: unavailable, resolution: running, handlerName: null }}/>);
-    expect(screen.getByText(/^Due /)).toBeTruthy();
+  it('shows resolution due in the active detail panel even when first response is not configured', async () => {
+    mocks.get.mockResolvedValue({ response: unavailable, resolution: running, handlerName: null });
+    show();
+    expect(await screen.findByText(/^Due /)).toBeTruthy();
     expect(screen.getByText('Not configured')).toBeTruthy();
-    expect(mocks.get).not.toHaveBeenCalled();
   });
 
-  it('keeps a completed breach and missing projection visible through text', () => {
-    const view = render(<ConversationSlaStatus sla={{ response: { ...running, state: 'breached', phase: 'completed', completedAt: '2026-09-11T11:00:00.000Z' }, resolution: unavailable, handlerName: null }}/>);
-    expect(screen.getByText(/Completed after deadline/)).toBeTruthy();
-    view.rerender(<ConversationSlaStatus sla={undefined}/>);
-    expect(screen.getByText('Service level unavailable')).toBeTruthy();
+  it('keeps a completed breach visible in the active detail panel', async () => {
+    mocks.get.mockResolvedValue({ response: { ...running, state: 'breached', phase: 'completed', completedAt: '2026-09-11T11:00:00.000Z' }, resolution: unavailable, handlerName: null });
+    show();
+    expect(await screen.findByText(/Completed after deadline/)).toBeTruthy();
+  });
+
+  it('shows an explicit unavailable state when the detail projection is missing', async () => {
+    mocks.get.mockResolvedValue(null);
+    show();
+    const alert = await screen.findByRole('alert', { name: 'Service level' });
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Service level is unavailable.');
   });
 
   it('treats malformed detail data as a query failure and recovers only after an explicit retry', async () => {
     mocks.get.mockResolvedValueOnce({ response: unavailable, handlerName: null }).mockResolvedValueOnce({ response: unavailable, resolution: running, handlerName: null });
     show();
-    expect(await screen.findByText('Service level is unavailable.')).toBeTruthy();
+    expect(await screen.findByRole('alert', { name: 'Service level' })).toHaveClass('alert__root');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText(/^Due /)).toBeTruthy();
     expect(mocks.get).toHaveBeenCalledTimes(2);

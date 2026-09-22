@@ -1,55 +1,71 @@
+import { p } from '../portalStyles';
 import { ProductLogo } from '@luminatick/ui/brand';
-import { TocynButton } from '@luminatick/ui/primitives';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { ParkButton } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
+import { Outlet, Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { portalApi } from '../api/client';
-import { LogOut } from 'lucide-react';
+import {
+  IconArrowRightFromBracket
+} from '@luminatick/ui/icons';
 
 export function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const [logoMode, setLogoMode] = useState<'light' | 'dark'>(() => document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setLogoMode(root.classList.contains('dark') ? 'dark' : 'light');
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    sync();
+    return () => observer.disconnect();
+  }, []);
 
   const handleLogout = async () => {
-    let confirmed = false;
+    let warning: string | undefined;
     try {
       await portalApi.post('/auth/logout');
-      confirmed = true;
-    } catch { /* Local sign-out must still complete. */ }
+    } catch {
+      warning = "Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.";
+    }
     finally {
       logout();
-      navigate('/login');
+      navigate('/login', { state: warning ? { logoutWarning: warning } : null });
     }
-    if (!confirmed) window.alert("Server sign-out could not be confirmed. Local sign-in data was cleared. On a shared device, clear this site's browser data.");
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link to="/tickets" className="flex items-center gap-2">
-              <ProductLogo className="block w-32" />
-              <span className="font-semibold text-xl text-gray-900">Portal</span>
-            </Link>
+    <div className={p.layout}>
+      <header className={p.header}>
+        <div className={p.navInner}>
+          <div className={p.navRow}>
+            <ParkLink asChild variant="plain">
+              <RouterLink to="/tickets" className={p.brand} aria-label="Tocyn Portal">
+                <ProductLogo mode={logoMode} className={p.brandLogo} />
+                <span className={p.brandName}>Portal</span>
+              </RouterLink>
+            </ParkLink>
 
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">
+            <div className={p.user}>
+              <span className={p.userLabel}>
                 {user?.name} ({user?.email})
               </span>
-              <TocynButton
+              <ParkButton
                 onClick={handleLogout}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
                 title="Sign out of all sessions"
                 aria-label="Sign out of all sessions"
               >
-                <LogOut className="w-5 h-5" />
-              </TocynButton>
+                <IconArrowRightFromBracket className={p.logoutIcon} />
+              </ParkButton>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={p.main}>
         <Outlet />
       </main>
     </div>

@@ -1,8 +1,22 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { Field } from '@luminatick/ui/components';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../api/client';
 import { assignmentIdentity } from '../hooks/useTicketAssignment';
 import type { KnowledgeDoc } from '../types';
+
+const styles = {
+  root: css({ display: 'grid', gap: '1rem', minWidth: '0', color: 'text.primary' }),
+  search: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '0.75rem' }),
+  field: css({ flex: '1 1 15rem', minW: '0' }),
+  input: css({ width: 'full' }),
+  results: css({ display: 'grid', gap: '0.5rem', margin: '0', padding: '0', listStyle: 'none' }),
+  result: css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', padding: '0.75rem' }),
+  preview: css({ display: 'grid', gap: '0.75rem', border: '1px solid', borderColor: 'border.input', borderRadius: 'l2', background: 'bg.surface', padding: '1rem' }),
+  previewTitle: css({ margin: '0', fontSize: 'lg', fontWeight: 'semibold' }),
+  previewBody: css({ margin: '0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }),
+};
 
 export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: {
   articles: KnowledgeDoc[]; disabled: boolean; insertingId?: string | null; onInsert: (article: KnowledgeDoc) => void;
@@ -10,6 +24,7 @@ export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: 
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState(false);
+  const searchId = useId();
   const [preview, setPreview] = useState<{ article: KnowledgeDoc; status: 'loading' | 'ready' | 'error'; text?: string; truncated?: boolean } | null>(null);
   const generation = useRef(0);
   const active = useRef(false);
@@ -32,25 +47,36 @@ export function KnowledgeBrowser({ articles, disabled, insertingId, onInsert }: 
     } catch { if (current()) setPreview({ article, status: 'error' }); }
   };
   const close = () => { generation.current++; setPreview(null); if (trigger.current?.isConnected) trigger.current.focus(); };
-  return <div className="space-y-3">
+  return <div className={styles.root}>
     {inserting && <p role="status">Loading {inserting.title} for insertion…</p>}
-    <form onSubmit={event => { event.preventDefault(); setQuery(input.trim()); setSearched(true); }} className="space-y-2">
-      <label className="block text-sm">Search knowledge titles<TocynInput value={input} onChange={event => setInput(event.target.value)} className="mt-1 w-full rounded border p-2" /></label>
-      <p className="text-xs text-slate-600">Searches titles of the available internal knowledge articles.</p>
-      <TocynButton type="submit">Search titles</TocynButton>{searched && <TocynButton type="button" onClick={() => { setInput(''); setQuery(''); setSearched(true); }}>Clear knowledge search</TocynButton>}
+    <form onSubmit={event => { event.preventDefault(); setQuery(input.trim()); setSearched(true); }} className={styles.search}>
+      <Field.Root className={styles.field}>
+        <Field.Label htmlFor={searchId}>Search knowledge titles</Field.Label>
+        <ParkInput id={searchId} aria-describedby={`${searchId}-help`} value={input} onChange={event => setInput(event.target.value)} className={styles.input} />
+        <Field.HelperText id={`${searchId}-help`}>Searches titles of the available internal knowledge articles.</Field.HelperText>
+      </Field.Root>
+      <ParkButton type="submit">Search titles</ParkButton>{searched && <ParkButton type="button" onClick={() => { setInput(''); setQuery(''); setSearched(true); }}>Clear knowledge search</ParkButton>}
     </form>
     {searched && <p role="status">{visible.length} matching knowledge article{visible.length === 1 ? '' : 's'}.</p>}
-    {visible.length === 0 && <p>No knowledge titles match this search.</p>}
-    <ul className="space-y-2">{visible.map(article => <li key={article.id} className="space-x-2">
-      <TocynButton type="button" onClick={event => { trigger.current = event.currentTarget; void load(article); }} aria-label={`Preview ${article.title}`}>Preview {article.title}</TocynButton>
-      <TocynButton type="button" disabled={disabled} onClick={() => onInsert(article)} aria-label={`Insert ${article.title} into reply`}>Insert {article.title}</TocynButton>
+    {visible.length === 0 && <ParkEmptyState headingLevel={false} title={searched ? 'No knowledge titles match this search.' : 'No knowledge articles are available.'} action={searched ? <ParkButton type="button" variant="outline" onClick={() => { setInput(''); setQuery(''); }}>Clear search</ParkButton> : undefined} />}
+    <ul className={styles.results}>{visible.map(article => <li key={article.id} className={styles.result}>
+      <ParkButton type="button" onClick={event => { trigger.current = event.currentTarget; void load(article); }} aria-label={`Preview ${article.title}`}>Preview {article.title}</ParkButton>
+      <ParkButton type="button" disabled={disabled} onClick={() => onInsert(article)} aria-label={`Insert ${article.title} into reply`}>Insert {article.title}</ParkButton>
     </li>)}</ul>
-    {preview && <section aria-label="Knowledge preview" className="space-y-2 rounded border border-slate-300 p-3">
-      <h4 ref={heading} tabIndex={-1} className="font-semibold">Preview: {preview.article.title}</h4>
-      {preview.status === 'loading' && <p role="status">Loading knowledge preview…</p>}
-      {preview.status === 'error' && <><p role="alert">Knowledge preview could not be loaded. Your draft is unchanged.</p><TocynButton type="button" onClick={() => void load(preview.article)}>Retry preview</TocynButton></>}
-      {preview.status === 'ready' && <><p className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words">{preview.text || 'This article has no preview content.'}</p>{preview.truncated && <p>Preview shows the first 4,000 characters. Insertion requests the article again.</p>}</>}
-      <TocynButton type="button" onClick={close}>Close preview</TocynButton>
+    {preview && <section aria-label="Knowledge preview" className={styles.preview}>
+      <h4 ref={heading} tabIndex={-1} className={styles.previewTitle}>Preview: {preview.article.title}</h4>
+      {preview.status === 'loading' && <div role="status" aria-busy="true" aria-label="Loading knowledge preview" className={css({ display: 'grid', gap: '2' })}>
+        <span className={css({ srOnly: true })}>Loading knowledge preview…</span>
+        <ParkSkeleton aria-hidden="true" className={css({ h: '4', w: 'full' })} />
+        <ParkSkeleton aria-hidden="true" className={css({ h: '4', w: '4/5' })} />
+        <ParkSkeleton aria-hidden="true" className={css({ h: '4', w: '3/5' })} />
+      </div>}
+      {preview.status === 'error' && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+        <ParkAlert.Description>Knowledge preview could not be loaded. Your draft is unchanged.</ParkAlert.Description>
+        <ParkButton type="button" variant="outline" onClick={() => void load(preview.article)}>Retry preview</ParkButton>
+      </ParkAlert.Content></ParkAlert.Root>}
+      {preview.status === 'ready' && <><p className={styles.previewBody}>{preview.text || 'This article has no preview content.'}</p>{preview.truncated && <p>Preview shows the first 4,000 characters. Insertion requests the article again.</p>}</>}
+      <ParkButton type="button" onClick={close}>Close preview</ParkButton>
     </section>}
   </div>;
 }

@@ -1,10 +1,18 @@
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Badge, Link as ParkLink } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory, KnowledgeDoc } from '../types';
-import { Plus, Folder, FileText, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
+import {
+  IconPlus,
+  IconFolder,
+  IconFileLines,
+  IconTrash,
+  IconChevronRight,
+  IconChevronDown
+} from '@luminatick/ui/icons';
 
 interface CategoryNode extends KnowledgeCategory {
   children: CategoryNode[];
@@ -15,6 +23,9 @@ export const KnowledgePage: React.FC = () => {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [localBetaDisabled, setLocalBetaDisabled] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [hasLoadedData, setHasLoadedData] = useState(false);
   const [isAddingCategory, setIsAddingCategory] = useState<{ parentId: string | null } | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -26,6 +37,7 @@ export const KnowledgePage: React.FC = () => {
   }>({ isOpen: false, type: null, id: null, title: '' });
 
   const deleteTitleId = React.useId();
+  const deleteDescriptionId = React.useId();
   const deleteOpener = React.useRef<HTMLButtonElement | null>(null);
   const deleteCancel = React.useRef<HTMLButtonElement>(null);
   const heading = React.useRef<HTMLHeadingElement>(null);
@@ -36,8 +48,12 @@ export const KnowledgePage: React.FC = () => {
   const [deleteStatus, setDeleteStatus] = useState('');
   const closeDelete = () => { if (!deleteGuard.current) setDeleteConfirm(previous => ({...previous,isOpen:false})); };
   const navigate = useNavigate();
+  const pageStyles = ParkPage('knowledge');
 
   const fetchData = async () => {
+    setLoadState('loading');
+    setError(null);
+    setLocalBetaDisabled(false);
     try {
       const [cats, articles] = await Promise.all([
         dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories'),
@@ -62,8 +78,12 @@ export const KnowledgePage: React.FC = () => {
 
       setCategories(roots);
       setDocs(articles);
+      setHasLoadedData(true);
+      setLoadState('ready');
     } catch (err: any) {
       setError(err.message);
+      setLocalBetaDisabled(err?.code === 'feature_disabled');
+      setLoadState('error');
     }
   };
 
@@ -149,66 +169,64 @@ export const KnowledgePage: React.FC = () => {
     const isSelected = selectedCategoryId === node.id;
 
     return (
-      <div key={node.id} className="w-full">
+      <div key={node.id}>
         <div
-          className={`flex items-center justify-between py-1.5 px-2 rounded-md cursor-pointer group ${
-            isSelected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
-          }`}
-          style={{ paddingLeft: `${depth * 1.5 + 0.5}rem` }}
+          className={[pageStyles.knowledgeCategoryRow, css({ display: 'grid', w: 'full', maxW: 'full', gridTemplateColumns: { base: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' } }), isSelected ? pageStyles.knowledgeCategoryRowSelected : ''].filter(Boolean).join(' ')}
+          style={{ ['--tocyn-category-depth' as string]: depth }}
         >
-          <div className="flex items-center space-x-2 flex-1 min-w-0">
+          <div className={pageStyles.knowledgeCategoryMain}>
             {node.children.length > 0 ? (
-              <TocynButton
+              <ParkButton
                 aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name}`} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
-                className="p-0.5 hover:bg-gray-200 rounded text-gray-400"
+               
               >
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </TocynButton>
+                {isExpanded ? <IconChevronDown size={14} aria-hidden="true" /> : <IconChevronRight size={14} aria-hidden="true" />}
+              </ParkButton>
             ) : (
-              <span className="w-[18px]"></span>
+              <span className={pageStyles.knowledgeCategorySpacer}></span>
             )}
-            <TocynButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className="flex flex-1 min-w-0 items-center gap-2 text-left">
-            <Folder size={14} className={isSelected ? 'text-indigo-500' : 'text-gray-400'} />
-            <span className="truncate text-sm">{node.name}</span>
-            </TocynButton>
+            <ParkButton aria-pressed={isSelected} onClick={() => setSelectedCategoryId(node.id)} className={`${pageStyles.knowledgeCategoryButton} ${css({ w: 'full', maxW: 'full', h: 'auto', minH: '10', whiteSpace: 'normal', overflowWrap: 'anywhere' })}`}>
+            <IconFolder size={14} aria-hidden="true" className={css({ flexShrink: 0 })} />
+            <span className={css({ minW: 0, whiteSpace: 'normal', overflowWrap: 'anywhere' })}>{node.name}</span>
+            </ParkButton>
           </div>
-          <div className="flex items-center space-x-1">
-            <TocynButton
+          <div className={`${pageStyles.knowledgeCategoryActions} ${css({ justifySelf: 'end' })}`}>
+            <ParkButton
               onClick={(e) => {
                 e.stopPropagation();
                 setIsAddingCategory({ parentId: node.id });
                 setExpandedCategories(prev => new Set(prev).add(node.id));
               }}
-              className="p-1 hover:bg-gray-200 rounded text-gray-500"
+             
               title="Add Subcategory" aria-label={`Add subcategory to ${node.name}`}
             >
-              <Plus size={14} />
-            </TocynButton>
-            <TocynButton
+              <IconPlus size={14} aria-hidden="true" />
+            </ParkButton>
+            <ParkButton
               onClick={(e) => {
                 e.stopPropagation();
                 confirmDeleteCategory(node.id, node.name, e.currentTarget);
               }}
-              className="p-1 hover:bg-red-100 rounded text-red-500"
+             
               title="Delete Category" aria-label={`Delete category ${node.name}`}
             >
-              <Trash2 size={14} />
-            </TocynButton>
+              <IconTrash size={14} aria-hidden="true" />
+            </ParkButton>
           </div>
         </div>
 
         {isExpanded && node.children.length > 0 && (
-          <div className="mt-1">
+          <div className={pageStyles.knowledgeCategoryChildren}>
             {node.children.map(child => renderCategoryNode(child, depth + 1))}
           </div>
         )}
 
         {isAddingCategory?.parentId === node.id && (
           <div
-            className="flex items-center py-1.5 px-2 mt-1"
-            style={{ paddingLeft: `${(depth + 1) * 1.5 + 0.5}rem` }}
+            className={pageStyles.knowledgeCategoryRow}
+            style={{ ['--tocyn-category-depth' as string]: depth + 1 }}
           >
-            <TocynInput
+            <ParkInput
               aria-label={`New subcategory name for ${node.name}`}
               autoFocus
               type="text"
@@ -219,7 +237,6 @@ export const KnowledgePage: React.FC = () => {
                 if (e.key === 'Escape') setIsAddingCategory(null);
               }}
               onBlur={() => handleAddCategory(node.id)}
-              className="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2 w-full"
               placeholder="New category..."
             />
           </div>
@@ -231,57 +248,59 @@ export const KnowledgePage: React.FC = () => {
   const filteredDocs = docs.filter(doc =>
     selectedCategoryId === null || doc.category_id === selectedCategoryId
   );
-
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-gray-50">
-      <div className="flex-none px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center">
-        <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-gray-900">Knowledge Base</h1>
-        <TocynButton
+    <div className={[pageStyles.root, pageStyles.content].join(' ')}>
+      <header className={pageStyles.header}>
+        <h1 ref={heading} tabIndex={-1}>Knowledge Base</h1>
+        {!localBetaDisabled && <ParkButton
           onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+          variant="solid"
         >
-          <Plus size={16} className="mr-2" />
+          <IconPlus size={16} aria-hidden="true" />
           New Article
-        </TocynButton>
-      </div>
+        </ParkButton>}
+      </header>
 
-      {error && (
-        <div className="m-4 bg-red-50 text-red-700 p-4 rounded-md flex-none">
-          {error}
-        </div>
-      )}
+      {error && (localBetaDisabled ? <ParkEmptyState role="status" title="Knowledge is unavailable in this local review" description="The local beta does not enable knowledge browsing or editing." headingLevel={false}
+        action={<ParkButton type="button" onClick={() => navigate('/inbox/all')}>Return to Inbox</ParkButton>} /> : hasLoadedData ? <ParkAlert.Root role="alert" status="warning" variant="surface">
+        <ParkAlert.Content>
+          <ParkAlert.Title>{loadState === 'error' ? 'Knowledge could not be refreshed' : 'Knowledge change failed'}</ParkAlert.Title>
+          <ParkAlert.Description>{loadState === 'error' ? 'Showing the last loaded categories and articles. ' : ''}{error}</ParkAlert.Description>
+          {loadState === 'error' && <ParkButton type="button" onClick={() => void fetchData()}>Retry knowledge</ParkButton>}
+        </ParkAlert.Content>
+      </ParkAlert.Root> : <ParkEmptyState role="alert" title="Knowledge could not be loaded" description={error} headingLevel={false}
+        action={<ParkButton type="button" onClick={() => void fetchData()}>Retry knowledge</ParkButton>} />)}
+      {hasLoadedData && loadState === 'loading' && <p role="status" className={css({ color: 'fg.muted', fontSize: 'sm' })}>Refreshing knowledge…</p>}
 
-      <div className="flex-1 flex overflow-hidden">
+      {!localBetaDisabled && (hasLoadedData || loadState !== 'error') && <div className={pageStyles.knowledgeWorkspace}>
         {/* Sidebar */}
-        <div className="w-72 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Categories</h2>
-            <TocynButton
+        <ParkCard.Root variant="outline" className={pageStyles.knowledgeSidebar}>
+          <ParkCard.Header>
+            <ParkCard.Title asChild><h2>Categories</h2></ParkCard.Title>
+            <ParkButton
               onClick={() => setIsAddingCategory({ parentId: null })}
-              className="p-1 hover:bg-gray-100 rounded-md text-gray-500"
-              title="Add Root Category"
+              variant="plain"
+              title="Add Root Category" aria-label="Add Root Category"
             >
-              <Plus size={16} />
-            </TocynButton>
-          </div>
+              <IconPlus size={16} aria-hidden="true" />
+            </ParkButton>
+          </ParkCard.Header>
 
-          <div className="p-2">
-            <TocynButton aria-pressed={selectedCategoryId === null}
-              className={`flex w-full items-center py-1.5 px-2 rounded-md cursor-pointer mb-2 ${
-                selectedCategoryId === null ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-100 text-gray-700'
-              }`}
+          <ParkCard.Body>
+            <ParkButton aria-pressed={selectedCategoryId === null}
+              className={pageStyles.knowledgeCategoryButton}
               onClick={() => setSelectedCategoryId(null)}
             >
-              <FileText size={16} className="mr-2 text-gray-400" />
-              <span className="text-sm font-medium">All Articles</span>
-            </TocynButton>
+              <IconFileLines size={16} aria-hidden="true" />
+              <span>All Articles</span>
+            </ParkButton>
 
-            <div className="space-y-1">
+      <div className={pageStyles.knowledgeCategoryList}>
               {categories.map(root => renderCategoryNode(root))}
 
               {isAddingCategory?.parentId === null && (
-                <div className="flex items-center py-1.5 px-2 pl-6 mt-1">
-                  <TocynInput
+                <div>
+                  <ParkInput
                     aria-label="New root category name"
                     autoFocus
                     type="text"
@@ -292,100 +311,96 @@ export const KnowledgePage: React.FC = () => {
                       if (e.key === 'Escape') setIsAddingCategory(null);
                     }}
                     onBlur={() => handleAddCategory(null)}
-                    className="text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2 w-full"
+                   
                     placeholder="New category..."
                   />
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredDocs.map((doc) => (
-                  <tr
+        <ParkCard.Root variant="outline" className={pageStyles.knowledgeContent}>
+          <ParkCard.Body>
+            {hasLoadedData && filteredDocs.length === 0 ? (
+              <ParkEmptyState title="No articles found" description="No knowledge articles are available in this category." headingLevel={false}
+                action={<ParkButton onClick={() => navigate('/knowledge/new' + (selectedCategoryId ? `?categoryId=${selectedCategoryId}` : ''))}>Create article</ParkButton>} />
+            ) : (
+            <div role="region" aria-label="Knowledge articles" tabIndex={0} className={css({ maxW: 'full', overflowX: 'auto', _focusVisible: { outline: '2px solid', outlineColor: 'border.focus', outlineOffset: '2px' } })}>
+            <ParkTable.Root className={`${pageStyles.knowledgeTable} ${css({ minW: '44rem' })}`}>
+              <ParkTable.Head>
+                <ParkTable.Row>
+                  <ParkTable.Header scope="col" className={css({ w: '32%' })}>Title</ParkTable.Header><ParkTable.Header scope="col">Status</ParkTable.Header><ParkTable.Header scope="col">Tier</ParkTable.Header><ParkTable.Header scope="col">Created</ParkTable.Header><ParkTable.Header scope="col">Actions</ParkTable.Header>
+                </ParkTable.Row>
+              </ParkTable.Head>
+              <ParkTable.Body>
+                {loadState === 'loading' && !hasLoadedData && <ParkTable.Row><ParkTable.Cell colSpan={5}>
+                  <div role="status" aria-label="Loading knowledge articles">
+                    <ParkSkeleton height="8" width="full" />
+                    <ParkSkeleton height="8" width="full" />
+                    <ParkSkeleton height="8" width="full" />
+                  </div>
+                </ParkTable.Cell></ParkTable.Row>}
+                {hasLoadedData && filteredDocs.map((doc) => (
+                  <ParkTable.Row
                     key={doc.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => navigate(`/knowledge/edit/${doc.id}`)}
+                    className={pageStyles.knowledgeRow}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">{doc.title}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        doc.status === 'active' ? 'bg-green-100 text-green-800' :
-                        doc.status === 'processing' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                      }`}>
+                    <ParkTable.Cell><ParkLink asChild variant="plain"><Link to={`/knowledge/edit/${doc.id}`} aria-label={`Edit ${doc.title}`} className={css({ minW: 0, minH: '10', maxW: 'full', whiteSpace: 'normal', overflowWrap: 'anywhere', textAlign: 'start' })}>{doc.title}</Link></ParkLink></ParkTable.Cell>
+                    <ParkTable.Cell>
+                      <Badge variant="subtle" colorPalette={doc.status === 'active' ? 'blue' : doc.status === 'error' ? 'red' : 'gray'} data-status={doc.status}>
                         {doc.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        doc.tier === 'sop' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
+                      </Badge>
+                    </ParkTable.Cell>
+                    <ParkTable.Cell>
+                      <Badge variant="subtle" colorPalette="gray" data-tier={doc.tier}>
                         {doc.tier === 'sop' ? 'SOP' : 'Answer'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      </Badge>
+                    </ParkTable.Cell>
+                    <ParkTable.Cell>
                       {new Date(doc.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <TocynButton
+                    </ParkTable.Cell>
+                    <ParkTable.Cell>
+                      <ParkButton
                         onClick={(e) => confirmDeleteDoc(doc.id, doc.title, e)}
-                        className="text-red-600 hover:text-red-900"
+                       
                       >
                         Delete
-                      </TocynButton>
-                    </td>
-                  </tr>
+                      </ParkButton>
+                    </ParkTable.Cell>
+                  </ParkTable.Row>
                 ))}
-                {filteredDocs.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
-                      No articles found in this category.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+              </ParkTable.Body>
+            </ParkTable.Root>
+            </div>
+            )}
+          </ParkCard.Body>
+        </ParkCard.Root>
+      </div>}
 
       {deleteStatus && <p role="status">{deleteStatus}</p>}
-      <TocynDialog open={deleteConfirm.isOpen} busy={deleting} labelledBy={deleteTitleId} initialFocusEl={() => deleteCancel.current}
-        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current} onOpenChange={next => { if (!next) closeDelete(); }}>
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl">
-            <h3 id={deleteTitleId} className="text-lg font-medium text-gray-900 mb-4">Confirm Deletion</h3>
-            <p className="text-sm text-gray-500 mb-6">{deleteConfirm.title}</p>
-            {deleteError && <p role="alert" className="mb-4 text-red-700">{deleteError}</p>}
-            <div className="flex justify-end space-x-3">
-              <TocynButton
-                ref={deleteCancel} disabled={deleting} onClick={closeDelete}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Cancel
-              </TocynButton>
-              <TocynButton
-                disabled={deleting} onClick={executeDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-              >
-                Delete
-              </TocynButton>
-            </div>
-          </div>
-      </TocynDialog>
+      <ParkDialog.Root open={deleteConfirm.isOpen} onOpenChange={({ open }) => { if (!open && !deleting) closeDelete(); }}
+        initialFocusEl={() => deleteCancel.current}
+        finalFocusEl={() => deleteSucceeded.current ? heading.current : deleteOpener.current}
+        closeOnEscape={!deleting} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={deleteTitleId} aria-describedby={deleteDescriptionId}>
+            <ParkDialog.Header><ParkDialog.Title id={deleteTitleId}>Confirm Deletion</ParkDialog.Title></ParkDialog.Header>
+            <ParkDialog.Body>
+              <ParkDialog.Description id={deleteDescriptionId}>{deleteConfirm.title}</ParkDialog.Description>
+              {deleteError && <ParkAlert.Root role="alert" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton type="button" ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={deleting} onClick={executeDelete}>Delete</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 };

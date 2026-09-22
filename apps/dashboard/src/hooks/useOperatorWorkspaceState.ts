@@ -10,14 +10,14 @@ export type WorkspacePreference = Readonly<{
   revision: number; view: 'all' | 'mine' | 'unassigned' | 'mentions' | 'drafts' | 'snoozed' | 'needs_action' | 'team' | 'custom';
   sort: 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'priority_desc' | 'priority_asc' | 'sla_priority';
   filters: WorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null;
-  panel: 'conversation' | 'details'; updatedAt: string;
+  panel: 'conversation' | 'details'; splitterRatio: number; updatedAt: string;
 }>;
 export type WorkspacePreferencePatch = Readonly<Partial<Omit<WorkspacePreference, 'revision' | 'updatedAt'>>>;
 export type WorkspacePreferenceStatus = 'idle' | 'loading' | 'restored' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
 type Snapshot = WorkspacePreference & Readonly<{ status: WorkspacePreferenceStatus; error: string | null }>;
 type DraftIndex = Readonly<{ items: readonly Readonly<{ ticketId: string; updatedAt: string }>[]; next: string | null }>;
 
-const DEFAULT: WorkspacePreference = Object.freeze({ revision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', updatedAt: '' });
+const DEFAULT: WorkspacePreference = Object.freeze({ revision: 0, view: 'all', sort: 'updated_desc', filters: {}, listQuery: '', listAnchor: 'page:1', selectedTicketId: null, panel: 'conversation', splitterRatio: 32, updatedAt: '' });
 function empty(status: WorkspacePreferenceStatus): Snapshot { return { ...DEFAULT, filters: {}, status, error: null }; }
 function identityFor(sessionGeneration: number, tenantId: string | undefined, userId: string | undefined) {
   return tenantId && userId ? JSON.stringify([sessionGeneration, tenantId, userId]) : null;
@@ -28,12 +28,24 @@ function bounded(value: WorkspacePreference) {
 function merge(base: WorkspacePreference, patch: Partial<WorkspacePreference>): WorkspacePreference {
   return { ...base, ...patch, filters: patch.filters ? { ...patch.filters } : { ...base.filters } };
 }
+function sameEditablePreference(a: WorkspacePreference, b: WorkspacePreference) {
+  const aFilters = a.filters as Record<string, unknown>;
+  const bFilters = b.filters as Record<string, unknown>;
+  const filterKeys = new Set([...Object.keys(aFilters), ...Object.keys(bFilters)]);
+  return a.view === b.view && a.sort === b.sort && a.listQuery === b.listQuery && a.listAnchor === b.listAnchor
+    && a.selectedTicketId === b.selectedTicketId && a.panel === b.panel && Object.is(a.splitterRatio, b.splitterRatio)
+    && [...filterKeys].every(key => Object.is(aFilters[key], bFilters[key]));
+}
 function mergePatch(base: WorkspacePreferencePatch, patch: WorkspacePreferencePatch): WorkspacePreferencePatch {
   return { ...base, ...patch, ...(patch.filters ? { filters: { ...patch.filters } } : {}) };
 }
 function saveInput(value: WorkspacePreference) {
   return { expectedRevision: value.revision, view: value.view, sort: value.sort, filters: value.filters,
-    listQuery: value.listQuery, listAnchor: value.listAnchor, selectedTicketId: value.selectedTicketId, panel: value.panel };
+    listQuery: value.listQuery, listAnchor: value.listAnchor, selectedTicketId: value.selectedTicketId, panel: value.panel, splitterRatio: value.splitterRatio };
+}
+function editablePatch(value: WorkspacePreference): WorkspacePreferencePatch {
+  return { view: value.view, sort: value.sort, filters: value.filters, listQuery: value.listQuery,
+    listAnchor: value.listAnchor, selectedTicketId: value.selectedTicketId, panel: value.panel, splitterRatio: value.splitterRatio };
 }
 
 /** One authenticated operator owns a restore gate and one serialized preference-save lane. */
@@ -130,9 +142,12 @@ function createController(identity: string | null) {
 
   const update = (patch: WorkspacePreferencePatch) => {
     if (!current() && !localOnly()) return;
+    const next = merge(state, patch);
+    // Ark Splitter also emits resize-end while synchronising a controlled size.
+    // An unchanged preference is not an edit and must not fence navigation.
+    if (sameEditablePreference(state, next)) return;
     edit++; dirty = true; cancel();
     pendingPatch = mergePatch(pendingPatch, patch);
-    const next = merge(state, patch);
     if (localOnly()) { replace({ ...next, status: 'idle', error: null }); return; }
     const blocked = !known || state.status === 'conflict';
     replace({ ...next, status: blocked ? state.status : bounded(next) ? 'unsaved' : 'error', error: blocked ? state.error : bounded(next) ? null : 'Workspace preference exceeds the server limit.' });
@@ -157,9 +172,30 @@ function createController(identity: string | null) {
     subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); },
     getSnapshot: () => state,
     hasUnsavedChanges: () => dirty,
-    start: () => { active = true; epoch++; void restore(); return () => { active = false; epoch++; cancel(); }; },
+    start: () => {
+      active = true; epoch++;
+      // StrictMode immediately cleans up and restarts layout effects. The old
+      // restore is epoch-fenced, but its finally cannot clear this controller's
+      // restoring flag after the restart. Open a fresh restore lane here.
+      restoring = false;
+      if (saving) {
+        // An earlier write may still commit after cleanup. Keep every local
+        // field, wait for that write, then read its authoritative CAS revision.
+        if (dirty) pendingPatch = mergePatch(editablePatch(state), pendingPatch);
+        known = false; restoring = true;
+        replace({ ...state, status: 'loading', error: null });
+        const inFlightSave = saving;
+        const resumedEpoch = epoch;
+        void inFlightSave.finally(() => {
+          if (!current(resumedEpoch)) return;
+          saving = null; restoring = false;
+          void restore();
+        });
+      } else void restore();
+      return () => { active = false; epoch++; cancel(); };
+    },
     update, saveNow, flushBeforeNavigation,
-    retrySave: () => { if (known) void saveNow(); else void restore(); },
+    retrySave: () => { if (!known) void restore(); else if (state.status === 'conflict') void restore(true); else void saveNow(); },
     retryRestore: () => { if (!known) void restore(); },
     restoreServerState: () => { void restore(true); },
   };

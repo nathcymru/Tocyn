@@ -23,10 +23,28 @@ it('waits for durable acknowledgement before completing link navigation', async 
   expect(await screen.findByText('Next page')).toBeInTheDocument();
 });
 it('keeps browser-back navigation on the draft when saving fails', async () => {
-  const router = setup(async () => false);
+  const flush = vi.fn(async () => false);
+  const router = setup(flush);
   await act(async () => { await router.navigate(-1); });
+  const failure = await screen.findByRole('alert');
+  expect(failure).toHaveClass('alert__root');
+  expect(failure).toHaveTextContent('Your draft is not saved');
+  const retry = screen.getByRole('button', { name: 'Retry saving' });
+  await act(async () => { fireEvent.click(retry); });
+  expect(flush).toHaveBeenCalledTimes(2);
+  expect(router.state.location.pathname).toBe('/draft');
+});
+it('resumes the original navigation after a successful retry', async () => {
+  const flush = vi.fn()
+    .mockResolvedValueOnce(false)
+    .mockResolvedValueOnce(true);
+  const router = setup(flush);
+  fireEvent.click(screen.getByRole('link', { name: 'Next ticket' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Your draft is not saved');
   expect(router.state.location.pathname).toBe('/draft');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry saving' }));
+  expect(await screen.findByText('Next page')).toBeInTheDocument();
+  expect(flush).toHaveBeenCalledTimes(2);
 });
 it('warns for document unload only while unsaved work remains', () => {
   setup(async () => true);

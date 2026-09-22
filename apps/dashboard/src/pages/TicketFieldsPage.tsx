@@ -1,10 +1,18 @@
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { DashboardSelect } from '../components/DashboardSelect';
+import { css } from '@luminatick/ui/styled-system/css';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
+import { Badge, Field, IconButton as ParkIconButton } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
-import { Plus, X, List, CheckSquare, AlignLeft, Type, ToggleLeft } from 'lucide-react';
-import { clsx } from 'clsx';
+import {
+  IconPlus,
+  IconXmark,
+  IconList,
+  IconSquareCheck,
+  IconAlignLeft,
+  IconFont
+} from '@luminatick/ui/icons';
 import { useTicketFields } from '../hooks/useTicketFields';
 
 export function TicketFieldsPage() {
@@ -12,92 +20,93 @@ export function TicketFieldsPage() {
   const opener = React.useRef<HTMLButtonElement | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const { data: fields, isLoading } = useTicketFields();
+  const { data: fields, isLoading, isError, refetch } = useTicketFields();
 
   const getIconForType = (type: string) => {
     switch (type) {
-      case 'text': return <Type className="w-4 h-4" />;
-      case 'textarea': return <AlignLeft className="w-4 h-4" />;
-      case 'select': return <List className="w-4 h-4" />;
-      case 'checkbox': return <CheckSquare className="w-4 h-4" />;
-      default: return <Type className="w-4 h-4" />;
+      case 'text': return <IconFont aria-hidden="true" />;
+      case 'textarea': return <IconAlignLeft aria-hidden="true" />;
+      case 'select': return <IconList aria-hidden="true" />;
+      case 'checkbox': return <IconSquareCheck aria-hidden="true" />;
+      default: return <IconFont aria-hidden="true" />;
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className={css({ display: 'grid', gap: '6', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })}>
+      <div className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3', flexWrap: 'wrap' })}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Custom Ticket Fields</h1>
-          <p className="text-slate-500 mt-1">Manage extra attributes for your tickets.</p>
+          <h1 className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Custom Ticket Fields</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Manage extra attributes for your tickets.</p>
         </div>
-        <TocynButton
+        <ParkButton type="button"
           onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
-          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm shadow-brand-500/20 hover:bg-brand-700 transition-colors"
         >
-          <Plus className="w-4 h-4" />
+          <IconPlus aria-hidden="true" className={css({ w: '4', h: '4' })} />
           Create Field
-        </TocynButton>
+        </ParkButton>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      {isError && fields !== undefined && <ParkAlert.Root role="alert" status="warning" variant="surface">
+        <ParkAlert.Content>
+          <ParkAlert.Title>Ticket fields could not be refreshed</ParkAlert.Title>
+          <ParkAlert.Description>The last confirmed field definitions remain visible. Retry before relying on changes.</ParkAlert.Description>
+          <ParkButton type="button" onClick={() => void refetch()}>Retry ticket fields</ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>}
+      <ParkCard.Root variant="outline"><ParkCard.Body className={css({ overflowX: 'auto' })}>
         {isLoading ? (
-          <div className="p-8 text-center text-slate-500">Loading fields...</div>
+          <section role="status" aria-label="Loading ticket fields" aria-busy="true" className={css({ display: 'grid', gap: '3' })}><span className={css({ srOnly: true })}>Loading fields...</span><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /></section>
+        ) : isError && fields === undefined ? (
+          <ParkEmptyState role="alert" title="Ticket fields could not be loaded" description="Retry before managing field definitions." action={<ParkButton type="button" onClick={() => void refetch()}>Retry ticket fields</ParkButton>} />
         ) : fields?.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
-              <List className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">No custom fields</h3>
-            <p className="text-slate-500 mb-6">Create fields to collect specific information on tickets.</p>
-            <TocynButton
+          <ParkEmptyState
+            title="No custom fields"
+            description="Create fields to collect specific information on tickets."
+            className={css({"py":"6"})}
+            action={<ParkButton type="button"
               onClick={event => { opener.current = event.currentTarget; setIsModalOpen(true); }}
-              className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors"
+              className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
               Create your first field
-            </TocynButton>
-          </div>
+            </ParkButton>}
+          />
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
-              <tr>
-                <th className="px-6 py-4">Label</th>
-                <th className="px-6 py-4">Key Name</th>
-                <th className="px-6 py-4">Type</th>
-                <th className="px-6 py-4">Options</th>
-                <th className="px-6 py-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+          <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
+            <ParkTable.Head>
+              <ParkTable.Row>
+                <ParkTable.Header>Label</ParkTable.Header>
+                <ParkTable.Header>Key Name</ParkTable.Header>
+                <ParkTable.Header>Type</ParkTable.Header>
+                <ParkTable.Header>Options</ParkTable.Header>
+                <ParkTable.Header>Status</ParkTable.Header>
+              </ParkTable.Row>
+            </ParkTable.Head>
+            <ParkTable.Body>
               {fields?.map((field) => (
-                <tr key={field.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900">{field.label}</td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{field.name}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-slate-600">
+                <ParkTable.Row key={field.id}>
+                  <ParkTable.Cell>{field.label}</ParkTable.Cell>
+                  <ParkTable.Cell>{field.name}</ParkTable.Cell>
+                  <ParkTable.Cell>
+                    <div className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}>
                       {getIconForType(field.field_type)}
-                      <span className="capitalize">{field.field_type}</span>
+                      <span className={css({ textTransform: 'capitalize' })}>{field.field_type}</span>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 max-w-xs truncate">
+                  </ParkTable.Cell>
+                  <ParkTable.Cell>
                     {field.options || '-'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={clsx(
-                      "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
-                      field.is_active
-                        ? "bg-green-50 text-green-700 border border-green-200"
-                        : "bg-slate-100 text-slate-500 border border-slate-200"
-                    )}>
+                  </ParkTable.Cell>
+                  <ParkTable.Cell>
+                    <Badge colorPalette={field.is_active ? 'green' : 'gray'}>
                       {field.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                </tr>
+                    </Badge>
+                  </ParkTable.Cell>
+                </ParkTable.Row>
               ))}
-            </tbody>
-          </table>
+            </ParkTable.Body>
+          </ParkTable.Root>
         )}
-      </div>
+      </ParkCard.Body></ParkCard.Root>
 
         <CreateFieldModal open={isModalOpen} finalFocusEl={() => opener.current}
           onClose={() => setIsModalOpen(false)}
@@ -112,6 +121,7 @@ export function TicketFieldsPage() {
 
 function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: boolean, finalFocusEl: () => HTMLElement | null, onClose: () => void, onSuccess: () => void }) {
   const titleId = React.useId();
+  const formId = `${titleId}-form`;
   const initialFocus = React.useRef<HTMLInputElement>(null);
   const savingGuard = React.useRef(false);
   const [saveError, setSaveError] = useState('');
@@ -160,96 +170,76 @@ function CreateFieldModal({ open, finalFocusEl, onClose, onSuccess }: { open: bo
   };
 
   return (
-    <TocynDialog open={open} busy={mutation.isPending} onOpenChange={next => { if (!next) close(); }}
-      labelledBy={titleId} initialFocusEl={() => initialFocus.current} finalFocusEl={finalFocusEl}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 id={titleId} className="text-lg font-bold text-slate-900">Create Ticket Field</h2>
-          <TocynButton type="button" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close} className="text-slate-400 hover:text-slate-600">
-            <X className="w-5 h-5" />
-          </TocynButton>
-        </div>
+    <ParkDialog.Root open={open} onOpenChange={({ open: next }) => { if (!next && !mutation.isPending) close(); }}
+      initialFocusEl={() => initialFocus.current} finalFocusEl={finalFocusEl}
+      closeOnEscape={!mutation.isPending} closeOnInteractOutside={false} lazyMount unmountOnExit>
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={titleId}>
+        <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+          <ParkDialog.Title id={titleId}>Create Ticket Field</ParkDialog.Title>
+          <ParkIconButton type="button" variant="plain" aria-label="Close ticket field editor" disabled={mutation.isPending} onClick={close}>
+            <IconXmark aria-hidden="true" className={css({ w: '4', h: '4' })} />
+          </ParkIconButton>
+        </ParkDialog.Header>
 
-        <form onSubmit={handleSubmit} aria-labelledby={titleId} className="p-6">
-          {saveError && <p role="alert" className="mb-4 text-red-700">{saveError}</p>}
-          <fieldset disabled={mutation.isPending} className="space-y-5">
-          <div>
-            <label htmlFor={`${titleId}-label`} className="block text-sm font-bold text-slate-700 mb-1">Display Label</label>
-            <TocynInput
+        <ParkDialog.Body><form id={formId} onSubmit={handleSubmit} aria-labelledby={titleId} className={css({ display: 'grid', gap: '4' })}>
+          {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          <fieldset disabled={mutation.isPending} className={css({ display: 'grid', gap: '4' })}>
+          <Field.Root required>
+            <Field.Label htmlFor={`${titleId}-label`}>Display Label</Field.Label>
+            <ParkInput
               required
               type="text"
               id={`${titleId}-label`} ref={initialFocus} value={formData.label}
               onChange={handleLabelChange}
               placeholder="e.g., Device Model"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+              className={css({ w: 'full' })}
             />
-          </div>
+          </Field.Root>
 
-          <div>
-            <label htmlFor={`${titleId}-name`} className="block text-sm font-bold text-slate-700 mb-1">Key Name</label>
-            <TocynInput
+          <Field.Root required>
+            <Field.Label htmlFor={`${titleId}-name`}>Key Name</Field.Label>
+            <ParkInput
               required
               type="text"
-              id={`${titleId}-name`} value={formData.name}
+              id={`${titleId}-name`} aria-describedby={`${titleId}-name-help`} value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., device_model"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none font-mono"
+              className={css({ w: 'full' })}
             />
-            <p className="text-[10px] text-slate-500 mt-1">The JSON key used internally and via API.</p>
-          </div>
+            <Field.HelperText id={`${titleId}-name-help`}>The JSON key used internally and via API.</Field.HelperText>
+          </Field.Root>
 
-          <div>
-            <label htmlFor={`${titleId}-type`} className="block text-sm font-bold text-slate-700 mb-1">Field Type</label>
-            <TocynSelect
-              id={`${titleId}-type`} value={formData.field_type}
-              onChange={(e) => setFormData({ ...formData, field_type: e.target.value })}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
-            >
-              <option value="text">Text (Single line)</option>
-              <option value="textarea">Textarea (Multi-line)</option>
-              <option value="select">Dropdown (Select)</option>
-              <option value="checkbox">Checkbox</option>
-            </TocynSelect>
-          </div>
+          <DashboardSelect id={`${titleId}-type`} label="Field Type" value={formData.field_type} onValueChange={value => setFormData({ ...formData, field_type: value })} options={[{ value: 'text', label: 'Text (Single line)' }, { value: 'textarea', label: 'Textarea (Multi-line)' }, { value: 'select', label: 'Dropdown (Select)' }, { value: 'checkbox', label: 'Checkbox' }]} />
 
           {formData.field_type === 'select' && (
-            <div className="animate-in slide-in-from-top-2">
-              <label htmlFor={`${titleId}-options`} className="block text-sm font-bold text-slate-700 mb-1">Options</label>
-              <TocynInput
+            <Field.Root required>
+              <Field.Label htmlFor={`${titleId}-options`}>Options</Field.Label>
+              <ParkInput
                 required
                 type="text"
                 id={`${titleId}-options`} value={formData.options}
                 onChange={(e) => setFormData({ ...formData, options: e.target.value })}
                 placeholder="Comma-separated (e.g. Option 1, Option 2)"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                className={css({ w: 'full' })}
               />
-            </div>
+            </Field.Root>
           )}
 
-          <label className="flex min-h-11 items-center gap-3 pt-2 text-sm font-medium text-slate-700">
-            <TocynInput type="checkbox" checked={formData.is_active} onChange={e => setFormData({...formData,is_active:e.target.checked})} className="h-5 w-5" />
-            Active
-          </label>
+          <ParkCheckbox.Root checked={formData.is_active} onCheckedChange={({ checked }) => setFormData({ ...formData, is_active: checked === true })}>
+            <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+            <ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Active</ParkCheckbox.Label>
+          </ParkCheckbox.Root>
 
-          <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-            <TocynButton
-              type="button"
-              onClick={close}
-              className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 border border-transparent rounded-lg transition-colors"
-            >
-              Cancel
-            </TocynButton>
-            <TocynButton
-              type="submit"
-              disabled={mutation.isPending}
-              className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-brand-700 transition-colors disabled:opacity-50"
-            >
-              {mutation.isPending ? 'Creating...' : 'Create Field'}
-            </TocynButton>
-          </div>
           </fieldset>
-        </form>
-      </div>
-    </TocynDialog>
+        </form></ParkDialog.Body>
+        <ParkDialog.Footer>
+          <ParkButton type="button" variant="outline" disabled={mutation.isPending} onClick={close}>Cancel</ParkButton>
+          <ParkButton type="submit" form={formId} loading={mutation.isPending} loadingText="Creating field…">Create Field</ParkButton>
+        </ParkDialog.Footer>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>
   );
 }

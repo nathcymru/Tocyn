@@ -6,6 +6,11 @@ test('operator sort is validated, tenant-scoped, stable and applied before pagin
   await withTwoTenantFixture(async fixture => {
     const challenge = await (await fixture.login('operatorA')).json<{ token: string }>();
     const session = await (await fixture.request('/api/auth/mfa/verify', { method: 'POST', token: challenge.token, body: { code: fixture.currentMfaCode('operatorA') } })).json<{ token: string }>();
+    // Keep this sort/pagination contract limited to its own four rows. The
+    // shared fixture also contains Beta review conversations for other tests.
+    await fixture.db.prepare("DELETE FROM attachments WHERE tenant_id='fixture-tenant-a' AND article_id IN (SELECT id FROM articles WHERE tenant_id='fixture-tenant-a' AND ticket_id LIKE 'beta2-%')").run();
+    await fixture.db.prepare("DELETE FROM articles WHERE tenant_id='fixture-tenant-a' AND ticket_id LIKE 'beta2-%'").run();
+    await fixture.db.prepare("DELETE FROM tickets WHERE tenant_id='fixture-tenant-a' AND id LIKE 'beta2-%'").run();
     await fixture.db.prepare("UPDATE tickets SET priority='low',created_at='2020-01-01',updated_at='2020-01-01'").run();
     for (const [id, priority, created, updated] of [
       ['alpha', 'urgent', '2021-01-01', '2022-01-01'],

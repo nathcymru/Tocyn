@@ -1,11 +1,16 @@
-import { TocynButton, TocynInput, TocynTextarea, TocynSelect } from '@luminatick/ui/primitives';
+import { DashboardSelect } from '../components/DashboardSelect';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkInput, ParkPage, ParkSkeleton, ParkTextarea } from '@luminatick/ui/park';
+import { Field } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import React, { useState, useEffect } from 'react';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
-import { Building2, Settings as SettingsIcon, Mail, Save, Loader2, Cloud, AlertCircle, Shield, Activity } from 'lucide-react';
+import {
+  IconFloppyDisk,
+} from '@luminatick/ui/icons';
 import { ApiError } from '../api/client';
 
 export const SettingsPage: React.FC = () => {
-  const { data: settings, isLoading, error: fetchError } = useSettings();
+  const { data: settings, isLoading, isFetching, error: fetchError, refetch } = useSettings();
   const updateSettings = useUpdateSettings();
 
   const [formData, setFormData] = useState<Record<string, string>>({
@@ -21,12 +26,16 @@ export const SettingsPage: React.FC = () => {
   });
 
   const [masterKeyError, setMasterKeyError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveDisabled, setSaveDisabled] = useState(false);
 
   useEffect(() => {
     if (fetchError && fetchError instanceof ApiError) {
       if (fetchError.message.includes('APP_MASTER_KEY')) {
         setMasterKeyError(fetchError.message);
       }
+    } else if (!fetchError) {
+      setMasterKeyError(null);
     }
   }, [fetchError]);
 
@@ -54,7 +63,9 @@ export const SettingsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saveDisabled) return;
     setMasterKeyError(null);
+    setSaveError(null);
     try {
       // Clean and validate data before sending
       const payload: Record<string, string> = {};
@@ -90,268 +101,289 @@ export const SettingsPage: React.FC = () => {
 
       await updateSettings.mutateAsync(finalPayload);
     } catch (error: any) {
+      if (error instanceof ApiError && error.code === 'feature_disabled') {
+        setSaveDisabled(true);
+        setSaveError(null);
+        return;
+      }
       console.error('Failed to update settings:', error);
       if (error?.message?.includes('APP_MASTER_KEY')) {
         setMasterKeyError(error.message);
+      } else {
+        setSaveError('Settings could not be saved. Your changes are still in the form; try again.');
       }
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-      </div>
-    );
+  if (isLoading && !settings) {
+    return <section role="status" aria-label="Loading general settings" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '56rem', mx: 'auto', p: '6' })}>
+      <span className={css({ srOnly: true })}>Loading general settings…</span>
+      <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} />
+      <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
+      <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
+    </section>;
   }
 
+  if (!settings) {
+    return <ParkEmptyState
+      title="General settings are unavailable"
+      description={fetchError instanceof ApiError && fetchError.message.includes('APP_MASTER_KEY')
+        ? 'The server encryption key is unavailable. Ask an administrator to restore it, then retry.'
+        : 'Settings could not be loaded. Retry to restore the saved values.'}
+      action={<ParkButton type="button" onClick={() => void refetch()}>Retry settings</ParkButton>}
+    />;
+  }
+
+  const page = ParkPage('settings');
+  const hasRefreshError = Boolean(fetchError) && !(fetchError instanceof ApiError && fetchError.message.includes('APP_MASTER_KEY'));
+
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
+    <div className={[page.root, page.content].join(' ')}>
+      <header className={page.header}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">General Settings</h1>
-          <p className="text-slate-500 mt-0.5">Manage your organization and system defaults.</p>
+          <h1 className={css({ m: '0', color: 'fg.default', textStyle: '2xl', fontWeight: 'semibold' })}>General Settings</h1>
+          <p className={css({ color: 'fg.muted' })}>Manage your organization and system defaults.</p>
         </div>
-        <TocynButton
+        {!saveDisabled && <ParkButton
+          type="button"
           onClick={handleSubmit}
-          disabled={updateSettings.isPending || !!masterKeyError}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 font-medium cursor-pointer"
+          disabled={!!masterKeyError}
+          loading={updateSettings.isPending}
+          loadingText="Saving settings…"
         >
-          {updateSettings.isPending ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Save className="w-5 h-5" />
-          )}
+          <IconFloppyDisk aria-hidden="true" />
           Save Changes
-        </TocynButton>
-      </div>
+        </ParkButton>}
+      </header>
 
       {masterKeyError && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-6 flex gap-4">
-          <AlertCircle className="w-8 h-8 text-red-600 shrink-0" />
-          <div>
-            <h3 className="text-lg font-semibold text-red-800">Critical: Missing Encryption Key</h3>
-            <p className="text-red-700 mt-1">
-              Your server is missing the <code className="bg-red-100 px-1 py-0.5 rounded font-mono text-sm">APP_MASTER_KEY</code> environment variable.
+        <ParkAlert.Root role="alert" status="error">
+          <ParkAlert.Content>
+            <ParkAlert.Title>Critical: Missing Encryption Key</ParkAlert.Title>
+            <ParkAlert.Description>
+              Your server is missing the <code>APP_MASTER_KEY</code> environment variable.
               This 32-character key is required to securely encrypt and decrypt API tokens and other sensitive settings.
-            </p>
-            <p className="text-red-700 mt-2 font-medium text-sm">
+            </ParkAlert.Description>
+            <ParkAlert.Description>
               Please ask your system administrator to add it to your server's environment configuration, then restart the application.
-            </p>
-            <p className="text-red-700 mt-2 font-medium text-xs opacity-80">
+            </ParkAlert.Description>
+            <ParkAlert.Description>
               Details: {masterKeyError}
-            </p>
-          </div>
-        </div>
+            </ParkAlert.Description>
+          </ParkAlert.Content>
+        </ParkAlert.Root>
       )}
+      {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      {saveDisabled && <ParkAlert.Root role="status" status="warning" variant="surface"><ParkAlert.Content>
+        <ParkAlert.Title>General settings changes are unavailable in this local review</ParkAlert.Title>
+        <ParkAlert.Description>You can review saved settings, but this local beta does not allow changes.</ParkAlert.Description>
+      </ParkAlert.Content></ParkAlert.Root>}
+      {hasRefreshError && <ParkAlert.Root role="alert" status="error">
+        <ParkAlert.Content>
+          <ParkAlert.Title>General settings could not be refreshed</ParkAlert.Title>
+          <ParkAlert.Description>Saved values may have changed elsewhere. Your current form is retained; retry the read before relying on these values.</ParkAlert.Description>
+          <ParkButton type="button" variant="outline" loading={isFetching} loadingText="Retrying settings…" onClick={() => void refetch()}>Retry settings refresh</ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>}
 
-      <div className="space-y-6">
+      <div className={page.settingsSections}>
         {/* Organization Profile */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Building2 className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Organization Profile</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <label htmlFor="COMPANY_NAME" className="block text-sm font-medium text-slate-700 mb-1">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
+            <ParkCard.Title asChild><h2>Organization Profile</h2></ParkCard.Title>
+          </ParkCard.Header>
+          <ParkCard.Body>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="COMPANY_NAME">
                 Company Name
-              </label>
-              <TocynInput
+              </Field.Label>
+              <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="COMPANY_NAME"
                 name="COMPANY_NAME"
                 value={formData.COMPANY_NAME}
                 onChange={handleChange}
                 maxLength={100}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+               
                 placeholder="e.g. Acme Corp"
               />
-            </div>
-            <div>
-              <label htmlFor="PORTAL_URL" className="block text-sm font-medium text-slate-700 mb-1">
+            </Field.Root>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="PORTAL_URL">
                 Portal URL
-              </label>
-              <TocynInput
+              </Field.Label>
+              <ParkInput
+                disabled={saveDisabled}
                 type="url"
                 id="PORTAL_URL"
                 name="PORTAL_URL"
                 value={formData.PORTAL_URL}
                 onChange={handleChange}
                 maxLength={200}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+               
                 placeholder="e.g. https://support.acme.com"
               />
-            </div>
-          </div>
-        </section>
+            </Field.Root>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* System Defaults */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <SettingsIcon className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">System Defaults</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            <div>
-              <label htmlFor="SYSTEM_TIMEZONE" className="block text-sm font-medium text-slate-700 mb-1">
-                System Timezone
-              </label>
-              <TocynSelect
-                id="SYSTEM_TIMEZONE"
-                name="SYSTEM_TIMEZONE"
-                value={formData.SYSTEM_TIMEZONE}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
-              >
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="America/Chicago">Central Time (CT)</option>
-                <option value="America/Denver">Mountain Time (MT)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                <option value="Europe/London">London (GMT)</option>
-                <option value="Europe/Paris">Central Europe (CET)</option>
-                <option value="Asia/Tokyo">Tokyo (JST)</option>
-                <option value="Australia/Sydney">Sydney (AEST)</option>
-              </TocynSelect>
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
+            <ParkCard.Title asChild><h2>System Defaults</h2></ParkCard.Title>
+          </ParkCard.Header>
+          <ParkCard.Body>
+            <div className={page.settingsField}>
+              <DashboardSelect id="SYSTEM_TIMEZONE" label="System Timezone" name="SYSTEM_TIMEZONE" value={formData.SYSTEM_TIMEZONE}
+                disabled={saveDisabled}
+                onValueChange={value => setFormData(prev => ({ ...prev, SYSTEM_TIMEZONE: value }))}
+                options={[{ value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'Eastern Time (ET)' },
+                  { value: 'America/Chicago', label: 'Central Time (CT)' }, { value: 'America/Denver', label: 'Mountain Time (MT)' },
+                  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' }, { value: 'Europe/London', label: 'London (GMT)' },
+                  { value: 'Europe/Paris', label: 'Central Europe (CET)' }, { value: 'Asia/Tokyo', label: 'Tokyo (JST)' },
+                  { value: 'Australia/Sydney', label: 'Sydney (AEST)' }]} />
             </div>
 
-            <div>
-              <label htmlFor="TICKET_PREFIX" className="block text-sm font-medium text-slate-700 mb-1">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="TICKET_PREFIX">
                 Ticket Prefix
-              </label>
-              <TocynInput
+              </Field.Label>
+              <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="TICKET_PREFIX"
                 name="TICKET_PREFIX"
                 value={formData.TICKET_PREFIX}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 uppercase"
+               
                 placeholder="e.g. TKT"
                 maxLength={10}
               />
-              <p className="mt-1 text-sm text-slate-500">
+              <Field.HelperText className={page.settingsHelp}>
                 Tickets will be numbered as {formData.TICKET_PREFIX || 'TKT'}-1001.
-              </p>
-            </div>
-          </div>
-        </section>
+              </Field.HelperText>
+            </Field.Root>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Agent Communication */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Mail className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Agent Communication</h2>
-          </div>
-          <div className="p-6">
-            <div>
-              <label htmlFor="DEFAULT_EMAIL_SIGNATURE" className="block text-sm font-medium text-slate-700 mb-1">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
+            <ParkCard.Title asChild><h2>Agent Communication</h2></ParkCard.Title>
+          </ParkCard.Header>
+          <ParkCard.Body>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="DEFAULT_EMAIL_SIGNATURE">
                 Default Email Signature
-              </label>
-              <TocynTextarea
+              </Field.Label>
+              <ParkTextarea
+                disabled={saveDisabled}
                 id="DEFAULT_EMAIL_SIGNATURE"
                 name="DEFAULT_EMAIL_SIGNATURE"
                 value={formData.DEFAULT_EMAIL_SIGNATURE}
                 onChange={handleChange}
                 rows={4}
                 maxLength={5000}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+               
                 placeholder="e.g. --&#10;Thank you,&#10;The Support Team"
               />
-              <p className="mt-1 text-sm text-slate-500">
+              <Field.HelperText className={page.settingsHelp}>
                 This signature will be appended to agent replies if they haven't set a personal one.
-              </p>
-            </div>
-          </div>
-        </section>
+              </Field.HelperText>
+            </Field.Root>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Cloudflare Integration */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Cloud className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Cloudflare API Credentials</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            <p className="text-sm text-slate-500 mb-4">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
+            <ParkCard.Title asChild><h2>Cloudflare API Credentials</h2></ParkCard.Title>
+          </ParkCard.Header>
+          <ParkCard.Body>
+            <p>
               Configure your Cloudflare credentials to monitor usage and costs directly from the dashboard.
             </p>
-            <div>
-              <label htmlFor="CLOUDFLARE_ACCOUNT_ID" className="block text-sm font-medium text-slate-700 mb-1">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="CLOUDFLARE_ACCOUNT_ID">
                 Cloudflare Account ID
-              </label>
-              <TocynInput
+              </Field.Label>
+              <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="CLOUDFLARE_ACCOUNT_ID"
                 name="CLOUDFLARE_ACCOUNT_ID"
                 value={formData.CLOUDFLARE_ACCOUNT_ID}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+               
                 placeholder="e.g. 1234567890abcdef1234567890abcdef"
               />
-            </div>
-            <div>
-              <label htmlFor="CLOUDFLARE_API_TOKEN" className="block text-sm font-medium text-slate-700 mb-1">
+            </Field.Root>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="CLOUDFLARE_API_TOKEN">
                 Cloudflare API Token
-              </label>
-              <TocynInput
+              </Field.Label>
+              <ParkInput
+                disabled={saveDisabled}
                 type="password"
                 id="CLOUDFLARE_API_TOKEN"
                 name="CLOUDFLARE_API_TOKEN"
                 value={formData.CLOUDFLARE_API_TOKEN}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+               
                 placeholder="Enter your API token"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <Field.HelperText className={page.settingsHelp}>
                 Requires <strong>Account Analytics: Read</strong> permissions. For security, this value is masked. Provide a new token only if you wish to overwrite the existing one.
-              </p>
-            </div>
-          </div>
-        </section>
+              </Field.HelperText>
+            </Field.Root>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
         {/* Security & Authentication */}
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200 bg-slate-50 p-4 flex items-center gap-3">
-            <Shield className="w-5 h-5 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">Security & Authentication</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            <p className="text-sm text-slate-500 mb-4">
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header>
+            <ParkCard.Title asChild><h2>Security & Authentication</h2></ParkCard.Title>
+          </ParkCard.Header>
+          <ParkCard.Body>
+            <p>
               Configure Cloudflare Turnstile to protect your Customer Portal from spam and bots.
             </p>
-            <div>
-              <label htmlFor="TURNSTILE_SITE_KEY" className="block text-sm font-medium text-slate-700 mb-1">
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="TURNSTILE_SITE_KEY">
                 Turnstile Site Key
-              </label>
-              <TocynInput
+              </Field.Label>
+              <ParkInput
+                disabled={saveDisabled}
                 type="text"
                 id="TURNSTILE_SITE_KEY"
                 name="TURNSTILE_SITE_KEY"
                 value={formData.TURNSTILE_SITE_KEY}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+               
                 placeholder="e.g. 1x00000000000000000000AA"
               />
-            </div>
-            <div>
-              <label htmlFor="TURNSTILE_SECRET_KEY" className="block text-sm font-medium text-slate-700 mb-1">
+            </Field.Root>
+            <Field.Root className={page.settingsField}>
+              <Field.Label htmlFor="TURNSTILE_SECRET_KEY">
                 Turnstile Secret Key
-              </label>
-              <TocynInput
+              </Field.Label>
+              <ParkInput
+                disabled={saveDisabled}
                 type="password"
                 id="TURNSTILE_SECRET_KEY"
                 name="TURNSTILE_SECRET_KEY"
                 value={formData.TURNSTILE_SECRET_KEY}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+               
                 placeholder="Enter your Turnstile secret key"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <Field.HelperText className={page.settingsHelp}>
                 For security, this value is masked. Provide a new key only if you wish to overwrite the existing one.
-              </p>
-            </div>
-          </div>
-        </section>
+              </Field.HelperText>
+            </Field.Root>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
       </div>
     </div>

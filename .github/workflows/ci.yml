@@ -30,7 +30,7 @@ jobs:
           - check: build
             command: npm run build --workspace=apps/dashboard && npm run build --workspace=apps/portal && npm run build --workspace=apps/widget
           - check: test
-            command: npm run test --workspace=apps/dashboard && npm run test --workspace=apps/portal && npm run test --workspace=apps/widget && npm run test --workspace=packages/ui && npm run test --workspace=apps/server
+            command: npm run test:icon-regression && npm run test --workspace=apps/dashboard && npm run test --workspace=apps/portal && npm run test --workspace=apps/widget && npm run test --workspace=packages/ui && npm run test --workspace=apps/server
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

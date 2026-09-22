@@ -9,7 +9,13 @@ const articles=[{id:'a',title:'Password guide'},{id:'b',title:'Billing guide'}] 
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 function show(){const insert=vi.fn();const view=render(<KnowledgeBrowser articles={articles} disabled={false} onInsert={insert}/>);return {insert,...view};}
 it('searches titles only on explicit submission and clears a no-match query',()=>{
- show();fireEvent.change(screen.getByLabelText('Search knowledge titles'),{target:{value:'PASSWORD'}});
+ show();
+ const search=screen.getByRole('textbox',{name:'Search knowledge titles'});
+ const field=search.closest('[data-scope="field"][data-part="root"]');
+ expect(field).toHaveClass('field__root');
+ expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent('Search knowledge titles');
+ expect(document.getElementById(search.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
+ fireEvent.change(search,{target:{value:'PASSWORD'}});
  expect(screen.queryByRole('status')).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Search titles'}));
  expect(screen.getByRole('status')).toHaveTextContent('1 matching');expect(screen.queryByRole('button',{name:'Preview Billing guide'})).not.toBeInTheDocument();
  fireEvent.change(screen.getByLabelText('Search knowledge titles'),{target:{value:'unknown'}});fireEvent.click(screen.getByRole('button',{name:'Search titles'}));expect(screen.getByText('No knowledge titles match this search.')).toBeInTheDocument();
@@ -17,13 +23,22 @@ it('searches titles only on explicit submission and clears a no-match query',()=
 });
 it('previews plain text with bounded display and returns focus without inserting',async()=>{
  let resolve!:(v:{content:string})=>void;vi.mocked(dashboardApi.get).mockReturnValue(new Promise(r=>resolve=r));const f=show();const trigger=screen.getByRole('button',{name:'Preview Password guide'});fireEvent.click(trigger);
- expect(screen.getByText('Loading knowledge preview…')).toBeInTheDocument();expect(screen.getByRole('heading',{name:'Preview: Password guide'})).toHaveFocus();
+ const loading=screen.getByRole('status',{name:'Loading knowledge preview'});
+ expect(loading).toHaveAttribute('aria-busy','true');
+ expect(loading).toHaveTextContent('Loading knowledge preview…');
+ expect(loading.querySelectorAll('[class*="skeleton"]')).toHaveLength(3);
+ expect(screen.getByRole('heading',{name:'Preview: Password guide'})).toHaveFocus();
  await act(async()=>resolve({content:'<script>unsafe()</script>'+ 'x'.repeat(4000)}));expect(screen.getByText(/Preview shows the first/)).toBeInTheDocument();expect(screen.getByText(/<script>unsafe/).textContent).toHaveLength(4000);expect(document.querySelector('script')).toBeNull();expect(f.insert).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'Close preview'}));expect(trigger).toHaveFocus();
 });
 it('shows a retryable failure and discards earlier article and closed responses',async()=>{
- const pending:Array<(v:{content:string})=>void>=[];vi.mocked(dashboardApi.get).mockRejectedValueOnce(new Error('Unavailable'));const f=show();fireEvent.click(screen.getByRole('button',{name:'Preview Password guide'}));await screen.findByRole('alert');
- vi.mocked(dashboardApi.get).mockImplementation(()=>new Promise(r=>pending.push(r)));fireEvent.click(screen.getByRole('button',{name:'Retry preview'}));fireEvent.click(screen.getByRole('button',{name:'Preview Billing guide'}));
+ const pending:Array<(v:{content:string})=>void>=[];vi.mocked(dashboardApi.get).mockRejectedValueOnce(new Error('Unavailable'));const f=show();fireEvent.click(screen.getByRole('button',{name:'Preview Password guide'}));const error=await screen.findByRole('alert');
+ expect(error).toHaveClass('alert__root');
+ expect(error.querySelector('.alert__description')).toHaveTextContent('Your draft is unchanged');
+ vi.mocked(dashboardApi.get).mockImplementation(()=>new Promise(r=>pending.push(r)));fireEvent.click(screen.getByRole('button',{name:'Retry preview'}));
+ expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+ expect(screen.getByRole('status',{name:'Loading knowledge preview'})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Preview Billing guide'}));
  await act(async()=>pending[0]({content:'Stale text'}));expect(screen.queryByText('Stale text')).not.toBeInTheDocument();await act(async()=>pending[1]({content:'Current text'}));await screen.findByText('Current text');
  fireEvent.click(screen.getByRole('button',{name:'Preview Password guide'}));fireEvent.click(screen.getByRole('button',{name:'Close preview'}));await act(async()=>pending[2]({content:'Closed text'}));expect(screen.queryByText('Closed text')).not.toBeInTheDocument();expect(f.insert).not.toHaveBeenCalled();
 });

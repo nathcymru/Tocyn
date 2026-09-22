@@ -1,7 +1,10 @@
+import { p } from '../portalStyles';
 import { useCallback, useEffect, useState } from 'react';
 import { portalApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import type { SlaTargetProjection, TicketSlaProjection } from '../types';
+import { ParkButton, ParkCard, ParkEmptyState, ParkSkeleton, ParkVisuallyHidden } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 
 type ReadState = Readonly<{
   status: 'loading' | 'ready' | 'failed';
@@ -45,10 +48,10 @@ function dueLabel(target: SlaTargetProjection) {
 
 function Target({ name, target }: { name: string; target: SlaTargetProjection }) {
   const due = dueLabel(target);
-  return <li className="rounded border border-gray-200 bg-white p-3">
-    <p className="font-medium text-gray-900">{name}</p>
-    <p className="mt-1 text-sm text-gray-700">{targetLabel(target)}</p>
-    {due && <p className="mt-1 text-sm text-gray-600">Due {due}</p>}
+  return <li className={p.slaTarget}>
+    <p className={p.slaTargetName}>{name}</p>
+    <p className={p.slaTargetStatus}>{targetLabel(target)}</p>
+    {due && <p className={p.slaTargetDue}>Due {due}</p>}
   </li>;
 }
 
@@ -84,26 +87,29 @@ export function TicketSlaStatus({ ticketId }: { ticketId: string }) {
   const retry = useCallback(() => { setRetryGeneration(current => current + 1); }, []);
 
   if (read.status === 'loading' && !read.projection) {
-    return <section aria-labelledby="ticket-sla-heading" className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 id="ticket-sla-heading" className="font-semibold text-gray-900">Service status</h2>
-      <p role="status" className="mt-2 text-sm text-gray-700">Loading service status…</p>
-    </section>;
+    return <ParkCard.Root asChild variant="outline" className={p.slaCardInset}><section aria-labelledby="ticket-sla-heading">
+      <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
+      <div role="status" aria-label="Loading service status" aria-busy="true" className={[p.slaState, css({ display: 'grid', gap: '2' })].join(' ')}>
+        <ParkVisuallyHidden>Loading service status…</ParkVisuallyHidden>
+        <ParkSkeleton aria-hidden="true" height="4" width="70%" />
+        <ParkSkeleton aria-hidden="true" height="4" width="90%" />
+      </div>
+    </section></ParkCard.Root>;
   }
 
   if (read.status === 'failed' || !read.projection) {
-    return <section aria-labelledby="ticket-sla-heading" className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-      <h2 id="ticket-sla-heading" className="font-semibold text-gray-900">Service status</h2>
-      <p role="status" aria-live="polite" className="mt-2 text-sm text-gray-700">Service status is unavailable. Try again.</p>
-      <button type="button" onClick={retry} className="mt-3 rounded border border-gray-700 px-3 py-2 text-sm font-medium text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">Retry service status</button>
-    </section>;
+    return <ParkCard.Root asChild variant="outline" className={p.slaCardInset}><section aria-labelledby="ticket-sla-heading">
+      <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
+      <ParkEmptyState role="status" aria-live="polite" headingLevel={false} title="Service status is unavailable. Try again." className={p.slaState} action={<ParkButton type="button" onClick={retry}>Retry service status</ParkButton>} />
+    </section></ParkCard.Root>;
   }
 
-  return <section aria-labelledby="ticket-sla-heading" className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-    <h2 id="ticket-sla-heading" className="font-semibold text-gray-900">Service status</h2>
-    <p className="mt-2 text-sm text-gray-700">Responsible handler: {read.projection.handlerName ?? 'Unavailable'}</p>
-    <ul className="mt-3 grid gap-3 sm:grid-cols-2" aria-label="Service targets">
+  return <ParkCard.Root asChild variant="outline" className={p.slaCardInset}><section aria-labelledby="ticket-sla-heading">
+    <h2 id="ticket-sla-heading" className={p.slaHeading}>Service status</h2>
+    <p className={p.slaStatus}>Responsible handler: {read.projection.handlerName ?? 'Unavailable'}</p>
+    <ul className={p.slaTargets} aria-label="Service targets">
       <Target name="Response target" target={read.projection.response} />
       <Target name="Resolution target" target={read.projection.resolution} />
     </ul>
-  </section>;
+  </section></ParkCard.Root>;
 }

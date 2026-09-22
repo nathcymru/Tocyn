@@ -1,4 +1,6 @@
-import { TocynButton } from '@luminatick/ui/primitives';
+import { p } from '../portalStyles';
+import { ParkAlert, ParkButton, ParkEmptyState, ParkProgress } from '@luminatick/ui/park';
+import { Link as ParkLink } from '@luminatick/ui/components';
 import { useCallback, useEffect, useState } from 'react';
 
 type CaptureMessage = {
@@ -13,20 +15,38 @@ type CaptureMessage = {
 };
 
 const capturePath = '/__local/auth-capture';
+const localPortalOrigins = new Set(['http://localhost:5174', 'http://127.0.0.1:5174']);
+
+function capturedLoginHref(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return localPortalOrigins.has(url.origin) && !url.username && !url.password && url.pathname === '/verify' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 export function LocalAuthCapturePage() {
   const [messages, setMessages] = useState<CaptureMessage[]>([]);
-  const [status, setStatus] = useState('Loading captured messages…');
+  const [status, setStatus] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [failure, setFailure] = useState<'fetch' | 'reset' | null>(null);
 
   const refresh = useCallback(async () => {
+    setLoaded(false);
+    setFailure(null);
+    setStatus('');
     try {
       const response = await fetch(`${capturePath}/messages`, { cache: 'no-store' });
       if (!response.ok) throw new Error(`Capture request failed (${response.status})`);
       const values = await response.json() as CaptureMessage[];
       setMessages(values);
       setStatus(values.length ? `${values.length} captured message${values.length === 1 ? '' : 's'}` : 'No captured messages.');
+      setLoaded(true);
     } catch {
-      setStatus('Capture messages are unavailable. Start the local Worker on port 8787.');
+      setFailure('fetch');
+      setLoaded(true);
     }
   }, []);
 
@@ -36,31 +56,44 @@ export function LocalAuthCapturePage() {
   }, [refresh]);
 
   const reset = async () => {
+    setFailure(null);
+    setStatus('Clearing captured messages…');
     try {
       const response = await fetch(`${capturePath}/reset`, { method: 'POST', credentials: 'same-origin' });
       if (!response.ok) throw new Error(`Capture reset failed (${response.status})`);
       await refresh();
     } catch {
-      setStatus('Captured messages could not be cleared.');
+      setFailure('reset');
+      setStatus('');
     }
   };
 
-  return <main className="mx-auto max-w-3xl p-6">
-    <h1 className="text-2xl font-bold">Local authentication capture</h1>
-    <p className="mt-2 text-gray-700">Synthetic messages stay in this local Worker for at most 15 minutes.</p>
-    <div className="mt-4 flex gap-3">
-      <TocynButton type="button" onClick={() => void refresh()} className="rounded bg-brand-600 px-4 py-2 text-white">Refresh messages</TocynButton>
-      <TocynButton type="button" onClick={() => void reset()} className="rounded border border-gray-400 px-4 py-2">Clear captured messages</TocynButton>
+  return <main className={p.localCapture}>
+    <h1 className={p.localCaptureTitle}>Local authentication capture</h1>
+    <p className={p.localCaptureIntro}>Synthetic messages stay in this local Worker for at most 15 minutes.</p>
+    <div className={p.localCaptureActions}>
+      <ParkButton type="button" onClick={() => void refresh()}>Refresh messages</ParkButton>
+      <ParkButton type="button" onClick={() => void reset()}>Clear captured messages</ParkButton>
     </div>
-    <p className="mt-3" role="status" aria-live="polite">{status}</p>
-    <section className="mt-6" aria-labelledby="captured-messages">
-      <h2 id="captured-messages" className="text-lg font-semibold">Captured messages</h2>
-      {messages.map(message => <article key={message.id} className="mt-4 rounded border border-gray-300 p-4">
-        <h3 className="font-medium">{message.subject}</h3>
-        <p className="text-sm text-gray-700">To: {message.to}</p>
-        {message.loginLink && <a className="mt-2 inline-block text-blue-700 underline" href={message.loginLink}>Open captured login link</a>}
-        <pre className="mt-3 overflow-auto whitespace-pre-wrap text-sm">{JSON.stringify(message, null, 2)}</pre>
-      </article>)}
+    {status && <p className={p.localCaptureStatus} role="status" aria-live="polite">{status}</p>}
+    {failure && <ParkAlert.Root role="alert" status="error" variant="surface">
+      <ParkAlert.Content>
+        <ParkAlert.Description>{failure === 'fetch' ? 'Capture messages are unavailable. Start the local Worker on port 8787.' : 'Captured messages could not be cleared.'}</ParkAlert.Description>
+        <ParkButton type="button" onClick={() => void (failure === 'fetch' ? refresh() : reset())}>
+          {failure === 'fetch' ? 'Retry loading messages' : 'Retry clearing messages'}
+        </ParkButton>
+      </ParkAlert.Content>
+    </ParkAlert.Root>}
+    <section className={p.localCaptureSection} aria-labelledby="captured-messages">
+      <h2 id="captured-messages" className={p.localCaptureHeading}>Captured messages</h2>
+      {!loaded ? <ParkProgress value={null} label="Loading captured messages…" /> : messages.length === 0 ? failure ? null : <ParkEmptyState title="No captured messages." description="Captured local authentication messages will appear here." headingLevel={false} className={p.localCaptureEmpty} /> : messages.map(message => {
+        const href = capturedLoginHref(message.loginLink);
+        return <article key={message.id} className={p.localCaptureMessage}>
+        <h3 className={p.localCaptureMessageTitle}>{message.subject}</h3>
+        <p className={p.localCaptureMessageMeta}>To: {message.to}</p>
+        {href && <ParkLink href={href}>Open captured login link</ParkLink>}
+        <pre className={p.localCapturePayload}>{JSON.stringify(message, null, 2)}</pre>
+      </article>})}
     </section>
   </main>;
 }

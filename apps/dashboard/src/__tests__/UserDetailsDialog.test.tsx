@@ -7,12 +7,20 @@ beforeEach(()=>{
   vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){return (this.isConnected && !this.closest('[hidden]')?[new DOMRect(0,0,100,44)]:[]) as unknown as DOMRectList;});
 });
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
-it.each([['Edit Profile','Edit User Profile'],['View Activity','User Activity Log']])('opens %s with a named modal and returns focus on Escape',async(triggerName,title)=>{
+it.each([['Profile details','User Profile'],['View Activity','User Activity Log']])('opens %s with a named modal and returns focus on Escape',async(triggerName,title)=>{
   render(<UsersPage/>);
   const opener=screen.getByRole('button',{name:triggerName});opener.focus();fireEvent.click(opener);
   const dialog=await screen.findByRole('dialog',{name:title});
   expect(dialog).toHaveAttribute('aria-modal','true');
+  expect(dialog).toHaveClass('dialog__content');
+  expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+  expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent(title);
+  expect(dialog.querySelector('.dialog__body')).toBeInTheDocument();
+  expect(dialog.querySelector('.dialog__footer')).toContainElement(within(dialog).getByRole('button',{name:'Close'}));
+  expect(within(dialog).getByRole('button',{name:'Close user details'})).toHaveClass('button', 'button--variant_plain');
   await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Close user details'})).toHaveFocus());
+  fireEvent.pointerDown(document.body);fireEvent.click(document.body);
+  expect(dialog).toBeInTheDocument();
   fireEvent.keyDown(document.activeElement!,{key:'Escape'});
   await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(()=>expect(opener).toHaveFocus());

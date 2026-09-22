@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import AiChat from '../components/AiChat';
 vi.mock('../api', () => ({ BASE_URL: '/local-widget', widgetHeaders: () => new Headers({ Authorization: 'Bearer synthetic-token' }) }));
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+  vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} });
+});
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 function question() {
   render(<AiChat config={{ primaryColor: '#123456', welcomeMessage: 'Welcome' }} />);
@@ -15,10 +19,17 @@ it('names controls, prevents concurrent sends and retains the authenticated hist
   const request = vi.fn((_url: string, _options: RequestInit) => new Promise<Response>(resolve => { finish = resolve; }));
   vi.stubGlobal('fetch', request);
   const form = question();
+  const log = screen.getByRole('log', { name: 'AI conversation' });
+  expect(log).toHaveClass('scroll-area__viewport');
+  expect(log.closest('.scroll-area__root')).toBeInTheDocument();
+  expect(log).toHaveAttribute('tabindex', '0');
+  log.focus(); expect(log).toHaveFocus();
   fireEvent.submit(form); fireEvent.submit(form);
   expect(request).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('textbox', { name: 'Your question' })).toBeDisabled();
-  expect(screen.getByRole('status', { name: 'Waiting for AI response' })).toBeInTheDocument();
+  const waiting = screen.getByRole('status', { name: 'Waiting for AI response' });
+  expect(waiting).toHaveTextContent('Waiting for AI response…');
+  expect(waiting.querySelectorAll('.skeleton')).toHaveLength(2);
   expect(form).toHaveAttribute('aria-busy', 'true');
   const [url, options] = request.mock.calls[0];
   expect(url).toBe('/local-widget/chat'); expect(options.credentials).toBe('omit');
@@ -36,7 +47,9 @@ it('names controls, prevents concurrent sends and retains the authenticated hist
 it.each([403, 200])('retains the failed question and focus for explicit retry after status %s or malformed response', async status => {
   const request = vi.fn().mockResolvedValueOnce(new Response('{}', { status })).mockResolvedValueOnce(new Response(JSON.stringify({ response: 'Recovered' })));
   vi.stubGlobal('fetch', request); const form = question(); fireEvent.submit(form);
-  expect(await screen.findByRole('alert')).toHaveTextContent('could not be confirmed');
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('could not be confirmed');
   const input = screen.getByRole('textbox', { name: 'Your question' });
   await waitFor(() => expect(input).toHaveFocus()); expect(input).toHaveValue('Synthetic question');
   expect(screen.getByRole('log')).not.toHaveTextContent('could not be confirmed');

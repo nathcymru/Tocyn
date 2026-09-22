@@ -32,7 +32,7 @@ function forwardedHeaders(request: IncomingMessage): Record<string, string> {
 }
 
 async function staticResponse(pathname: string, response: ServerResponse): Promise<void> {
-  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') ? 'index.html' : pathname.slice(1);
+  const candidate = pathname === '/' || pathname === '/inbox' || pathname.startsWith('/inbox/') ? 'index.html' : pathname.slice(1);
   const path = resolve(dashboardRoot, normalize(candidate));
   if (!path.startsWith(dashboardRoot + sep) && path !== dashboardRoot) { response.writeHead(403).end(); return; }
   try {
@@ -118,7 +118,7 @@ test('production dashboard browser proves guarded combined stale review, manual 
       });
       const page = await context.newPage();
       await page.addInitScript(({ token, user }) => localStorage.setItem('lumina-auth', JSON.stringify({ state: { token, user, mfaRequired: false }, version: 0 })), session);
-      const navigation = await page.goto(`${loopback.origin}/tickets/fixture-ticket`);
+      const navigation = await page.goto(`${loopback.origin}/inbox/all/fixture-ticket`);
       assert.equal(navigation?.headers()['content-security-policy'], csp);
       const message = page.getByRole('textbox', { name: 'Reply message' });
       await message.waitFor();

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { LoginPage } from '../pages/LoginPage';
 import { MemoryRouter } from 'react-router-dom';
 import { portalApi } from '../api/client';
@@ -54,6 +55,26 @@ describe('LoginPage', () => {
     });
 
     expect(screen.getByText('Check your email')).toBeInTheDocument();
+    const success = screen.getByRole('status');
+    expect(success).toHaveClass('alert__root', 'alert__root--status_info');
+    expect(success.querySelector('.alert__indicator')).toBeInTheDocument();
+    expect(success.querySelector('.alert__title')).toHaveTextContent('Check your email');
+    expect(success.querySelector('.alert__description')).toHaveTextContent('We sent a magic link to test@example.com.');
+  });
+
+  it('keeps a long recipient address readable inside the Park success alert', async () => {
+    vi.mocked(portalApi.post).mockResolvedValueOnce({});
+    const email = 'averylongunbrokenlocalpartwithmanycharactersabcdefghijklmnopqrstuvwxyz0123456789@example.invalid';
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: email } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send Magic Link' }));
+
+    const alert = (await screen.findByRole('heading', { name: 'Check your email' })).closest('[role="status"]');
+    if (!alert) throw new Error('The Park success alert was not rendered.');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('strong')).toHaveTextContent(email);
+    expect(alert.querySelector('strong')).toHaveClass('ov-wrap_anywhere');
   });
 });
 
@@ -63,11 +84,11 @@ it('keeps OTP verification in the login page, retains the challenge and permits 
     .mockRejectedValueOnce(new Error('Wrong code'));
   render(<MemoryRouter initialEntries={['/login']}><LoginPage /></MemoryRouter>);
   fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'test@example.invalid' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Code (OTP)' }));
+  await userEvent.click(screen.getByText('Code (OTP)'));
   fireEvent.click(screen.getByRole('button', { name: 'Send Code' }));
   const input = await screen.findByLabelText('Authentication Code');
   expect(input).toHaveFocus();
-  fireEvent.change(input, { target: { value: '123456' } });
+  await userEvent.type(input, '123456');
   fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Wrong code');
   expect(portalApi.post).toHaveBeenLastCalledWith('/auth/verify', { token: '123456', challengeId: 'synthetic-challenge' });
@@ -81,7 +102,7 @@ it('restores an OTP challenge from login history after reload', async () => {
   render(<MemoryRouter initialEntries={[{ pathname: '/login', search: '?key=synthetic-public-key', state: {
     authStep: 'verify', challenge: { email: 'test@example.invalid', challengeId: 'restored-challenge' }
   } }]}><LoginPage /></MemoryRouter>);
-  fireEvent.change(await screen.findByLabelText('Authentication Code'), { target: { value: '123456' } });
+  await userEvent.type(await screen.findByLabelText('Authentication Code'), '123456');
   fireEvent.click(screen.getByRole('button', { name: 'Verify Code' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Retry code');
   expect(portalApi.post).toHaveBeenLastCalledWith('/auth/verify', { token: '123456', challengeId: 'restored-challenge' });

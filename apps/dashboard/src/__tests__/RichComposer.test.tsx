@@ -1,12 +1,27 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
-import { expect, it, vi } from 'vitest';
-import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, insertMarkdownAtCursor, RichComposer, SafeMarkdown } from '../components/RichComposer';
+import { afterEach, expect, it, vi } from 'vitest';
+import { acceptedComposerImages, COMPOSER_MAX_IMAGE_BYTES, RichComposer, SafeMarkdown, TIPTAP_MARKDOWN_CONTRACT } from '../components/RichComposer';
+import { MarkdownManager } from '@tiptap/markdown';
+import { tocynMarkdownExtensions } from '../components/tiptap-markdown';
 
-it('inserts bounded composer content at the selected range', () => {
-  expect(insertMarkdownAtCursor('Hello customer', 'team ', 6, 6)).toBe('Hello team customer');
-  expect(insertMarkdownAtCursor('Hello customer', 'operator', 6, 14)).toBe('Hello operator');
-});
+afterEach(() => vi.restoreAllMocks());
+
+function editorFor(name = 'Reply message') {
+  return screen.getByRole('textbox', { name: name }) as HTMLElement;
+}
+
+/** Enter draft text through ProseMirror's contenteditable keyboard path. */
+async function setEditorText(editor: HTMLElement, value: string) {
+  editor.focus();
+  await userEvent.clear(editor);
+  await userEvent.type(editor, value, { skipClick: true });
+}
+
+function expectEditorText(editor: HTMLElement, value: string) {
+  expect(editor).toHaveTextContent(value);
+}
 
 it('accepts only the image types and size accepted by the authenticated upload route', () => {
   const accepted = { type: 'image/png', size: COMPOSER_MAX_IMAGE_BYTES } as File;
@@ -25,10 +40,27 @@ it('renders Markdown without executing HTML, unsafe links, or remote images', ()
   expect(document.querySelector('pre code')).toHaveTextContent('const safe = true;');
 });
 
+it('round-trips the supported markdown-v1 nodes and marks without changing meaning', () => {
+  expect(TIPTAP_MARKDOWN_CONTRACT.nodes).toContain('taskList');
+  expect(TIPTAP_MARKDOWN_CONTRACT.marks).toEqual(['bold', 'italic', 'strike', 'code', 'link']);
+  const markdown = '# Title\n\n**bold** and *italic* ~~strike~~ with `code`\n\n- one\n- two\n\n> quote\n\n```\nconst value = true\n```';
+  const manager = new MarkdownManager({ extensions: tocynMarkdownExtensions });
+  const roundTrip = manager.serialize(manager.parse(markdown));
+  expect(roundTrip).toContain('# Title');
+  expect(roundTrip).toContain('**bold**');
+  expect(roundTrip).toContain('*italic*');
+  expect(roundTrip).toContain('~~strike~~');
+  expect(roundTrip).toContain('`code`');
+  expect(roundTrip).toContain('- one');
+  expect(roundTrip).toContain('> quote');
+  expect(roundTrip).toContain('const value = true');
+});
+
 it('highlights supported fenced code after sanitization and leaves code HTML as text', () => {
   const { container } = render(<SafeMarkdown>{'```ts\nconst safe = true;\n```\n\n```not-a-language\n<img src="https://tracker.invalid/pixel" onerror="alert(1)">\n```'}</SafeMarkdown>);
   const highlighted = container.querySelector('code.language-ts');
-  expect(highlighted).toHaveClass('code-highlight', 'tocyn-markdown-code-block');
+  expect(highlighted).toHaveClass('code-highlight');
+  expect(highlighted?.className).not.toContain('tocyn-');
   expect(highlighted?.querySelector('.token.keyword')).toHaveTextContent('const');
   const fallback = container.querySelector('code.language-not-a-language');
   expect(fallback).toHaveTextContent('<img src="https://tracker.invalid/pixel" onerror="alert(1)">');
@@ -43,24 +75,97 @@ it('keeps approved HTTP links readable and isolated from the opener', () => {
   expect(link).toHaveAttribute('href', 'https://example.invalid/help');
   expect(link).toHaveAttribute('target', '_blank');
   expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  expect(link).toHaveClass('link', 'link--variant_underline');
 });
 
-it('autocompletes bounded slash commands and emoji with keyboard controls', () => {
+it('keeps unsupported preview links as text without making them actionable', () => {
+  render(<SafeMarkdown children={'[relative](/help) [credentials](https://user:secret@example.invalid/help)'} />);
+  expect(screen.queryByRole('link', { name: 'relative' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'credentials' })).not.toBeInTheDocument();
+  expect(screen.getByText('relative')).toBeInTheDocument();
+  expect(screen.getByText('credentials')).toBeInTheDocument();
+});
+
+it('uses the Park link dialog and rejects unsafe URLs without changing the draft', async () => {
+  // Ark's focus trap uses visibility checks; JSDOM has no layout rectangles.
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (this: HTMLElement) {
+    return (this.isConnected ? [new DOMRect(0, 0, 100, 40)] : []) as unknown as DOMRectList;
+  });
+  const onChange = vi.fn();
+  const prompt = vi.spyOn(window, 'prompt');
+  render(<RichComposer id="link-dialog" value="Link text" onChange={onChange} onImageFiles={() => undefined}
+    onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />);
+  const editor = editorFor();
+  editor.focus();
+  onChange.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Insert link' });
+  const input = screen.getByRole('textbox', { name: 'Link URL' });
+  expect(input.closest('[data-scope="field"][data-part="root"]')).toHaveClass('field__root');
+  expect(input.closest('[data-scope="field"][data-part="root"]')?.querySelector('[data-part="label"]')).toHaveClass('field__label');
+  await waitFor(() => expect(input).toHaveFocus());
+  fireEvent.change(input, { target: { value: 'javascript:alert(1)' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Apply link' }));
+  const linkFailure = screen.getByRole('alert');
+  expect(linkFailure).toHaveClass('alert__root');
+  expect(linkFailure).toHaveTextContent('Enter a valid HTTP or HTTPS link.');
+  expect(input).toHaveAttribute('aria-describedby');
+  expect(document.getElementById(input.getAttribute('aria-describedby')!)).toHaveTextContent('Enter a valid HTTP or HTTPS link.');
+  expect(dialog).toBeInTheDocument();
+  expect(editor).toHaveTextContent('Link text');
+  expect(onChange).not.toHaveBeenCalled();
+  expect(prompt).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Insert link' })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Add link' })).toHaveFocus());
+  prompt.mockRestore();
+});
+
+it('applies and removes an HTTP link on the selected editor text', async () => {
+  function ControlledComposer() {
+    const [value, setValue] = useState('Link text');
+    return <RichComposer id="link-edit" value={value} onChange={setValue} onImageFiles={() => undefined}
+      onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />;
+  }
+  render(<ControlledComposer />);
+  const editor = editorFor();
+  editor.focus();
+  const range = document.createRange();
+  range.selectNodeContents(editor.querySelector('p')!);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+  fireEvent(document, new Event('selectionchange'));
+  fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+  const input = await screen.findByRole('textbox', { name: 'Link URL' });
+  fireEvent.change(input, { target: { value: 'https://example.invalid/help' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Apply link' }));
+  await waitFor(() => expect(editor.querySelector('a')).toHaveAttribute('href', 'https://example.invalid/help'));
+  await waitFor(() => expect(editor).toHaveFocus());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+  await screen.findByRole('dialog', { name: 'Insert link' });
+  expect(screen.getByRole('textbox', { name: 'Link URL' })).toHaveValue('https://example.invalid/help');
+  fireEvent.click(screen.getByRole('button', { name: 'Remove link' }));
+  await waitFor(() => expect(editor.querySelector('a')).toBeNull());
+  expect(editor).toHaveTextContent('Link text');
+});
+
+it('autocompletes bounded slash commands and emoji with keyboard controls', async () => {
   function ControlledComposer() {
     const [value, setValue] = useState('');
     return <RichComposer id="rich-composer-test" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />;
   }
   render(<ControlledComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' }) as HTMLTextAreaElement;
-  fireEvent.change(textarea, { target: { value: '/g', selectionStart: 2, selectionEnd: 2 } });
+  const editor = editorFor();
+  await setEditorText(editor, '/g');
   expect(screen.getByRole('listbox', { name: 'Slash command suggestions' })).toBeInTheDocument();
-  expect(textarea).toHaveAttribute('aria-activedescendant');
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('Hello,\n\n');
-  fireEvent.change(textarea, { target: { value: ':ch', selectionStart: 3, selectionEnd: 3 } });
+  expect(editor).toHaveAttribute('aria-activedescendant');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, 'Hello,');
+  await setEditorText(editor, ':ch');
   expect(screen.getByRole('listbox', { name: 'Emoji suggestions' })).toBeInTheDocument();
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('✅');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, '✅');
 });
 
 it('moves an autocomplete suggestion with arrows and closes it with Escape without losing focus', async () => {
@@ -69,80 +174,124 @@ it('moves an autocomplete suggestion with arrows and closes it with Escape witho
     return <RichComposer id="escape-test" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />;
   }
   render(<ControlledComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' }) as HTMLTextAreaElement;
-  textarea.focus();
-  fireEvent.change(textarea, { target: { value: '/', selectionStart: 1, selectionEnd: 1 } });
+  const editor = editorFor();
+  await setEditorText(editor, '/');
   await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2));
-  const firstId = textarea.getAttribute('aria-activedescendant');
-  fireEvent.keyDown(textarea, { key: 'ArrowDown' });
-  expect(textarea.getAttribute('aria-activedescendant')).not.toBe(firstId);
-  fireEvent.keyDown(textarea, { key: 'Escape' });
+  const firstId = editor.getAttribute('aria-activedescendant');
+  fireEvent.keyDown(editor, { key: 'ArrowDown' });
+  expect(editor.getAttribute('aria-activedescendant')).not.toBe(firstId);
+  fireEvent.keyDown(editor, { key: 'Escape' });
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-  expect(textarea).toHaveFocus();
+  expect(editor).toHaveFocus();
 });
 
-it('inserts caller-supplied knowledge and saved-response entries and reports their typed callbacks', () => {
+it('inserts caller-supplied knowledge and saved-response entries and reports their typed callbacks', async () => {
   const onKnowledgeInserted = vi.fn();
   const onSavedResponseInserted = vi.fn();
   const knowledge = { id: 'kb-reset', label: 'Reset password', markdown: 'Use the reset link.' };
   const savedResponse = { id: 'saved-hours', label: 'Support hours', markdown: 'We are available Monday to Friday.' };
   function ControlledComposer() {
     const [value, setValue] = useState('');
-    return <RichComposer id="insertion-hooks" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public"
-      knowledge={[knowledge]} savedResponses={[savedResponse]} onKnowledgeInserted={onKnowledgeInserted} onSavedResponseInserted={onSavedResponseInserted} />;
+    return <><output data-testid="stored-markdown">{value}</output><RichComposer id="insertion-hooks" value={value} onChange={setValue} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public"
+      knowledge={[knowledge]} savedResponses={[savedResponse]} onKnowledgeInserted={onKnowledgeInserted} onSavedResponseInserted={onSavedResponseInserted} /></>;
   }
   render(<ControlledComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' }) as HTMLTextAreaElement;
-  fireEvent.change(textarea, { target: { value: '/reset', selectionStart: 6, selectionEnd: 6 } });
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('Use the reset link.');
+  const editor = editorFor();
+  await setEditorText(editor, '/reset');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, 'Use the reset link.');
+  expect(screen.getByTestId('stored-markdown').textContent).toBe('Use the reset link.');
   expect(onKnowledgeInserted).toHaveBeenCalledWith(knowledge);
-  fireEvent.change(textarea, { target: { value: '/hours', selectionStart: 6, selectionEnd: 6 } });
-  fireEvent.keyDown(textarea, { key: 'Enter' });
-  expect(textarea).toHaveValue('We are available Monday to Friday.');
+  await setEditorText(editor, '/hours');
+  fireEvent.keyDown(editor, { key: 'Enter' });
+  expectEditorText(editor, 'We are available Monday to Friday.');
+  expect(screen.getByTestId('stored-markdown').textContent).toBe('We are available Monday to Friday.');
   expect(onSavedResponseInserted).toHaveBeenCalledWith(savedResponse);
 });
 
-it('fences editor and already-open insert controls when composition becomes read-only', () => {
+it('fences editor and already-open insert controls when composition becomes read-only', async () => {
   const onChange = vi.fn();
   function ControlledReadOnlyComposer() {
     const [readOnly, setReadOnly] = useState(false);
     return <><button type="button" onClick={() => setReadOnly(true)}>Lock composer</button><RichComposer id="readonly-test" value="draft" onChange={onChange} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={readOnly} mode="public" /></>;
   }
   render(<ControlledReadOnlyComposer />);
-  const textarea = screen.getByRole('textbox', { name: 'Reply message' });
-  fireEvent.change(textarea, { target: { value: '/', selectionStart: 1, selectionEnd: 1 } });
+  const editor = editorFor();
+  await setEditorText(editor, '/');
   expect(screen.getByRole('listbox')).toBeInTheDocument();
   onChange.mockClear();
   fireEvent.click(screen.getByRole('button', { name: 'Lock composer' }));
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add link' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Add bold text (ctrl + b)' }));
-  expect(textarea).toHaveValue('draft');
-  fireEvent.change(textarea, { target: { value: 'changed after lock' } });
+  expectEditorText(editor, 'draft');
+  editor.focus();
+  await userEvent.keyboard('changed after lock');
   expect(onChange).not.toHaveBeenCalled();
 });
 
-it('keeps cursor insertion scoped to its own composer instance', () => {
+it('keeps cursor insertion scoped to its own composer instance', async () => {
   function TwoComposers() {
     const [first, setFirst] = useState('first'); const [second, setSecond] = useState('second');
     return <><RichComposer id="first-composer" value={first} onChange={setFirst} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" /><RichComposer id="second-composer" value={second} onChange={setSecond} onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" /></>;
   }
   render(<TwoComposers />);
-  const first = screen.getAllByRole('textbox', { name: 'Reply message' })[0] as HTMLTextAreaElement;
-  fireEvent.change(first, { target: { value: ':chfirst', selectionStart: 3, selectionEnd: 3 } });
+  const first = screen.getAllByRole('textbox', { name: 'Reply message' })[0] as HTMLElement;
+  await setEditorText(first, ':ch');
   fireEvent.keyDown(first, { key: 'Enter' });
-  expect(first).toHaveValue('✅first');
-  expect(screen.getAllByRole('textbox', { name: 'Reply message' })[1]).toHaveValue('second');
+  expectEditorText(first, '✅');
+  expectEditorText(screen.getAllByRole('textbox', { name: 'Reply message' })[1] as HTMLElement, 'second');
 });
 
 
 it('keeps a declared plain draft literal and offers no Markdown toolbar or autocomplete', () => {
   render(<RichComposer id="plain-draft" value="**literal** /code" format="plain" onChange={() => undefined}
     onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public" />);
-  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('**literal** /code');
+  expectEditorText(screen.getByRole('textbox', { name: 'Reply message' }), '**literal** /code');
   expect(screen.queryByRole('button', { name: /bold/i })).toBeNull();
   expect(screen.queryByRole('listbox')).toBeNull();
   expect(screen.getByText('**literal** /code', { selector: 'div' }).querySelector('strong')).toBeNull();
+});
+
+it('restores a saved Markdown draft when the same composer switches tickets', async () => {
+  function TicketDrafts() {
+    const [ticket, setTicket] = useState<'first' | 'second'>('first');
+    const [bodies, setBodies] = useState({ first: '', second: 'Plain second ticket draft' });
+    return <>
+      <button type="button" onClick={() => setTicket('first')}>First ticket</button>
+      <button type="button" onClick={() => setTicket('second')}>Second ticket</button>
+      <output data-testid="saved-first">{bodies.first}</output>
+      <RichComposer id="reply-message" value={bodies[ticket]} onChange={body => setBodies(current => ({ ...current, [ticket]: body }))}
+        onImageFiles={() => undefined} onRejectedImageFiles={() => undefined} readOnly={false} mode="public"
+        format={ticket === 'first' ? 'markdown-v1' : 'plain'} />
+    </>;
+  }
+  render(<TicketDrafts />);
+  await setEditorText(editorFor(), 'Synthetic acceptance draft — do not send.');
+  await waitFor(() => expect(screen.getByTestId('saved-first')).toHaveTextContent('Synthetic acceptance draft — do not send.'));
+  fireEvent.click(screen.getByRole('button', { name: 'Second ticket' }));
+  expect(editorFor()).toHaveValue('Plain second ticket draft');
+  fireEvent.click(screen.getByRole('button', { name: 'First ticket' }));
+  await waitFor(() => expectEditorText(editorFor(), 'Synthetic acceptance draft — do not send.'));
+  expect(screen.getByTestId('saved-first')).toHaveTextContent('Synthetic acceptance draft — do not send.');
+});
+
+it('shows a saved plain draft when its format changes to Markdown', async () => {
+  function FormatDraft() {
+    const [format, setFormat] = useState<'plain' | 'markdown-v1'>('plain');
+    const [body, setBody] = useState('Plain acceptance draft 001');
+    return <>
+      <button type="button" onClick={() => setFormat('markdown-v1')}>Use Markdown</button>
+      <output data-testid="stored-draft">{body}</output>
+      <RichComposer id="reply-message" value={body} onChange={setBody} onImageFiles={() => undefined}
+        onRejectedImageFiles={() => undefined} readOnly={false} mode="public" format={format} />
+    </>;
+  }
+  render(<FormatDraft />);
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Plain acceptance draft 001');
+  fireEvent.click(screen.getByRole('button', { name: 'Use Markdown' }));
+  await waitFor(() => expectEditorText(editorFor(), 'Plain acceptance draft 001'));
+  expect(screen.getByTestId('stored-draft')).toHaveTextContent('Plain acceptance draft 001');
 });
 
 
@@ -152,5 +301,6 @@ it('keeps the safe preview as the only available preview mode', () => {
   const editor = screen.getByRole('textbox', { name: 'Reply message' });
   fireEvent.keyDown(editor, { key: '8', code: 'Digit8', ctrlKey: true });
   expect(document.querySelector('img')).not.toBeInTheDocument();
-  expect(screen.getByText('[Image omitted: remote]')).toBeInTheDocument();
+  expect(editor.querySelector('[data-tocyn-image]')).toHaveTextContent('[Image omitted: remote]');
+  expect(screen.getAllByText('[Image omitted: remote]')).toHaveLength(2);
 });

@@ -1,6 +1,10 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { css } from '@luminatick/ui/styled-system/css';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkSkeleton, ParkSwitch } from '@luminatick/ui/park';
 import React, { useEffect, useState, useRef } from 'react';
-import { AlertCircle, Loader2, Save, Shield } from 'lucide-react';
+import {
+  IconFloppyDisk,
+  IconShieldHalved
+} from '@luminatick/ui/icons';
 import { dashboardApi } from '../api/client';
 
 type Capability = {
@@ -23,6 +27,7 @@ export function AgentPermissionsPage() {
   const [policies, setPolicies] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [writeDisabled, setWriteDisabled] = useState(false);
   const savingGuard = useRef(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -51,12 +56,12 @@ export function AgentPermissionsPage() {
   useEffect(() => { void loadPermissions(); }, []);
 
   const handleToggle = (capability: Capability) => {
-    if (savingGuard.current || loading || revision === null || !capability.ownerAllowed || !capability.roleAllowed || capability.key === capability.capability) return;
+    if (savingGuard.current || loading || writeDisabled || revision === null || !capability.ownerAllowed || !capability.roleAllowed || capability.key === capability.capability) return;
     setPolicies(current => ({ ...current, [capability.key]: !current[capability.key] }));
   };
 
   const handleSave = async () => {
-    if (revision === null || savingGuard.current || loading) return;
+    if (revision === null || savingGuard.current || loading || writeDisabled) return;
     savingGuard.current = true;
     try {
       setSaving(true);
@@ -68,8 +73,17 @@ export function AgentPermissionsPage() {
         ? "Permissions saved. Agent sessions have been revoked."
         : "Permissions saved, but the current policy could not be loaded. Reload permissions before making further changes.");
     } catch (err: any) {
-      setError(err.message || 'Failed to save permissions');
-      setStatus('Permissions were not saved. Reload the current policy before retrying a conflict.');
+      if (err?.code === 'feature_disabled') {
+        setWriteDisabled(true);
+        setPolicies(Object.fromEntries(capabilities
+          .filter(capability => capability.key !== capability.capability)
+          .map(capability => [capability.key, capability.tenantAllowed])));
+        setStatus('Permission changes are unavailable in this local review. The saved policy is shown below.');
+        setError(null);
+      } else {
+        setError(err.message || 'Failed to save permissions');
+        setStatus('Permissions were not saved. Reload the current policy before retrying a conflict.');
+      }
     } finally {
       savingGuard.current = false;
       setSaving(false);
@@ -79,42 +93,50 @@ export function AgentPermissionsPage() {
 
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8 flex items-center justify-between gap-4">
+    <div className={css({ display: 'grid', gap: '5', maxW: '6xl', mx: 'auto', px: { base: '4', md: '6' }, py: '6' })}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Shield className="w-6 h-6 text-brand-600" /> Agent permissions</h1>
-          <p className="text-slate-500 mt-1">Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
+          <h1 className={css({ m: '0', display: 'flex', alignItems: 'center', gap: '2', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}><IconShieldHalved aria-hidden="true" className={css({ w: '5', h: '5', flexShrink: 0 })} /> Agent permissions</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Choose the delegated capabilities available to agents in this tenant. Deployment-owner and role limits cannot be changed here.</p>
         </div>
-        <TocynButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} className="min-h-11 flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors aria-disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save changes
-        </TocynButton>
+        {!writeDisabled && <ParkButton type="button" onClick={handleSave} aria-disabled={saving || loading || revision === null} loading={saving} loadingText="Saving permissions…">
+          <IconFloppyDisk aria-hidden="true" className={css({ w: '4', h: '4', flexShrink: 0 })} /> Save changes
+        </ParkButton>}
       </div>
 
-      <p role="status" aria-live="polite" className="mb-4 text-sm text-slate-700">{loading ? 'Loading permissions…' : status}</p>
-      {error && <div role="alert" className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-3"><AlertCircle className="w-5 h-5 shrink-0" /><p className="text-sm font-medium">{error}</p><TocynButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()} className="min-h-11 rounded px-3 underline focus-visible:outline focus-visible:outline-2">Reload permissions</TocynButton></div>}
+      {loading ? <section role="status" aria-label="Loading permissions" aria-busy="true" className={css({ display: 'grid', gap: '3' })}>
+        <span className={css({ srOnly: true })}>Loading permissions…</span>
+        <ParkSkeleton aria-hidden="true" className={css({ h: '20', w: 'full' })} />
+        <ParkSkeleton aria-hidden="true" className={css({ h: '20', w: 'full' })} />
+      </section> : status && <ParkAlert.Root role="status" aria-live="polite" status={status.startsWith('Permissions saved.') ? 'success' : status.startsWith('Saving') ? 'info' : 'warning'}><ParkAlert.Content><ParkAlert.Description>{status}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      {error && capabilities.length === 0 ? <ParkEmptyState role="alert" title="Permissions could not be loaded" description={error} action={<ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>} /> : error && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description>
+        {revision === null && <ParkAlert.Description>Last confirmed permissions are shown below. Changes are unavailable until the current policy is reloaded.</ParkAlert.Description>}
+        <ParkButton type="button" disabled={loading || saving} onClick={() => void loadPermissions()}>Reload permissions</ParkButton>
+      </ParkAlert.Content></ParkAlert.Root>}
 
-      <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-200">
-        {capabilities.map(capability => {
+      {!loading && <div className={css({"display":"grid","gap":"3"})}>
+        {capabilities.length === 0 && !loading && !error ? <ParkEmptyState title="No permission capabilities found." description="Permission capabilities are unavailable for this tenant." headingLevel={false} className={css({"py":"6"})} action={<ParkButton type="button" onClick={() => void loadPermissions()}>Reload permissions</ParkButton>} /> : capabilities.map(capability => {
           const tenantManaged = capability.key !== capability.capability;
           const available = capability.ownerAllowed && capability.roleAllowed && tenantManaged;
           const checked = policies[capability.key] ?? false;
           const descriptionId = `capability-${capability.capability}-description`;
           return (
-            <div key={capability.capability} className="p-6 flex items-center justify-between gap-6">
-              <div>
-                <h2 className="text-sm font-medium text-slate-900">{capability.label}</h2>
-                <p id={descriptionId} className="text-sm text-slate-500 mt-1">{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
-                {!available && <p className="text-sm text-slate-600 mt-1">Managed by the deployment owner; this tenant cannot enable it.</p>}
+            <ParkCard.Root key={capability.capability} variant="outline"><ParkCard.Body className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4', flexWrap: 'wrap' })}>
+              <div className={css({ minW: '0', flex: '1' })}>
+                <h2 className={css({ m: '0', fontWeight: 'medium', color: 'fg.default', textStyle: 'sm' })}>{capability.label}</h2>
+                <p id={descriptionId} className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>{capability.resource} · {capability.action} · {capability.risk.replaceAll('_', ' ').toLowerCase()}</p>
+                {!available && <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Managed by the deployment owner; this tenant cannot enable it.</p>}
               </div>
-              <label className={`relative inline-flex min-h-11 min-w-11 items-center ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
-                <span className="sr-only">Allow agents to use {capability.label}</span>
-                <TocynInput type="checkbox" className="sr-only peer" checked={checked} disabled={!available} aria-disabled={!available || saving || loading || revision === null} aria-describedby={descriptionId} onChange={() => handleToggle(capability)} />
-                <span aria-hidden="true" className="relative block w-11 h-6 bg-slate-500 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-blue-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
-              </label>
-            </div>
+              <ParkSwitch.Root checked={checked} disabled={!available || saving || loading || revision === null || writeDisabled}
+                onCheckedChange={() => handleToggle(capability)} className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}>
+                <ParkSwitch.Control />
+                <ParkSwitch.HiddenInput aria-describedby={descriptionId} />
+                <ParkSwitch.Label>Allow agents to use {capability.label}</ParkSwitch.Label>
+              </ParkSwitch.Root>
+            </ParkCard.Body></ParkCard.Root>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }

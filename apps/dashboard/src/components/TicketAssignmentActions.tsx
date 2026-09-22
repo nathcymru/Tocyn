@@ -1,8 +1,16 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynSelect, TocynTextarea } from '@luminatick/ui/primitives';
+import { ParkAlert, ParkButton, ParkDialog, ParkTextarea } from '@luminatick/ui/park';
+import { Field as ParkField } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useTicketAssignment } from '../hooks/useTicketAssignment';
 import { useAuthStore } from '../store/authStore';
+import { DashboardSelect } from './DashboardSelect';
+
+const assignmentStyles = {
+  panel: css({ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }),
+  dialogBody: css({ width: '100%', display: 'grid', gap: '0.75rem' }),
+  note: css({ margin: '0', color: 'text.muted' }),
+};
 
 type Props = {
   ticketId: string; ownerId: string | null; fresh: boolean; disabled: boolean;
@@ -25,36 +33,51 @@ function AssignmentPanel({ ticketId, ownerId, fresh, disabled, agents, refreshTi
   useEffect(() => { onBlocked(action.blocked); return () => onBlocked(false); }, [action.blocked, onBlocked]);
   const reasonValid = Boolean(reason.trim()) && new TextEncoder().encode(reason.trim()).length <= 512;
   const unavailable = disabled || !fresh || action.blocked;
+  const actionFailed = ['uncertain', 'denied', 'refresh-error'].includes(action.phase);
   const status = <>
-    {action.message && <p role={['uncertain', 'denied', 'refresh-error'].includes(action.phase) ? 'alert' : 'status'}>{action.message}</p>}
-    {action.phase === 'uncertain' && <TocynButton className="rounded border border-slate-300 px-3 py-2 font-medium disabled:opacity-50 aria-disabled:opacity-50" type="button" onClick={action.retry}>Retry same assignment</TocynButton>}
-    {['refresh-error', 'denied'].includes(action.phase) && <TocynButton className="rounded border border-slate-300 px-3 py-2 font-medium disabled:opacity-50 aria-disabled:opacity-50" type="button" onClick={action.refresh}>Refresh current ownership</TocynButton>}
+    {actionFailed ? <ParkAlert.Root role="alert" status="error" variant="surface">
+      <ParkAlert.Content>
+        {action.message && <ParkAlert.Description>{action.message}</ParkAlert.Description>}
+        {action.phase === 'uncertain' && <ParkButton type="button" onClick={action.retry}>Retry same assignment</ParkButton>}
+        {['refresh-error', 'denied'].includes(action.phase) && <ParkButton type="button" onClick={action.refresh}>Refresh current ownership</ParkButton>}
+      </ParkAlert.Content>
+    </ParkAlert.Root> : action.message && <p role="status">{action.message}</p>}
   </>;
-  return <div className="mt-3 space-y-2 text-sm">
-    <TocynButton className="rounded border border-slate-300 px-3 py-2 font-medium disabled:opacity-50 aria-disabled:opacity-50" type="button" disabled={unavailable || ownerId !== null} onClick={action.balance}>Balance assignment</TocynButton>
+  return <div className={assignmentStyles.panel}>
+    <ParkButton type="button" disabled={unavailable || ownerId !== null} onClick={action.balance}>Balance assignment</ParkButton>
     {!fresh && <p role="status">Refresh current ticket details before assigning.</p>}
-    {admin && <TocynButton className="rounded border border-slate-300 px-3 py-2 font-medium disabled:opacity-50 aria-disabled:opacity-50" ref={trigger} type="button" aria-disabled={unavailable} onClick={() => { if (!unavailable) setOpen(true); }}>Override assignment capacity</TocynButton>}
+    {admin && <ParkButton ref={trigger} type="button" aria-disabled={unavailable} onClick={() => { if (!unavailable) setOpen(true); }}>Override assignment capacity</ParkButton>}
     {!open && status}
-    <TocynDialog open={open} onOpenChange={setOpen} labelledBy={titleId}
-      initialFocusEl={() => close.current} finalFocusEl={() => trigger.current}>
-      <div className="w-full max-w-lg rounded-xl border bg-white p-6 text-slate-900 shadow-xl">
-        <h2 id={titleId} className="text-xl font-bold">Override assignment capacity</h2>
-        <TocynButton className="rounded border border-slate-300 px-3 py-2 font-medium disabled:opacity-50 aria-disabled:opacity-50" ref={close} type="button" onClick={() => setOpen(false)}>Close assignment override</TocynButton>
-        <p className="my-3">Administrators can explicitly override availability or the assignment ceiling. Current access rules still apply. The reason is recorded in the internal audit.</p>
-        <p>Current owner: {ownerId === null ? 'Unassigned' : agents.find(agent => agent.id === ownerId)?.full_name || 'Assigned operator'}</p>
-        <label htmlFor={ownerIdInput}>Assign to operator</label>
-        <TocynSelect className="mb-3 block w-full rounded border border-slate-300 px-3 py-2" id={ownerIdInput} value={selected} disabled={action.blocked} onChange={event => setSelected(event.target.value)}>
-          <option value="">Choose an operator</option>
-          {agents.map(agent => <option key={agent.id} value={agent.id}>{agent.full_name || agent.email}</option>)}
-        </TocynSelect>
-        <label htmlFor={reasonId}>Override reason</label>
-        <TocynTextarea className="block w-full rounded border border-slate-300 px-3 py-2" id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
-        <p>A reason is required. Keep it brief.</p>
-        {reason.trim() && !reasonValid && <p role="alert">The reason is too long. Shorten it before assigning.</p>}
-        <TocynButton className="rounded border border-slate-300 px-3 py-2 font-medium disabled:opacity-50 aria-disabled:opacity-50" type="button" disabled={!fresh || disabled || action.blocked || !selected || !reasonValid}
-          onClick={() => action.override(selected, ownerId, reason)}>Assign with audited override</TocynButton>
-        {status}
-      </div>
-    </TocynDialog>
+    <ParkDialog.Root open={open} onOpenChange={({ open: next }) => setOpen(next)}
+      initialFocusEl={() => close.current} finalFocusEl={() => trigger.current}
+      closeOnInteractOutside={false} lazyMount unmountOnExit size="lg">
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={titleId}>
+          <ParkDialog.Header>
+            <ParkDialog.Title id={titleId}>Override assignment capacity</ParkDialog.Title>
+            <ParkButton ref={close} type="button" variant="plain" onClick={() => setOpen(false)}>Close assignment override</ParkButton>
+          </ParkDialog.Header>
+          <ParkDialog.Body className={assignmentStyles.dialogBody}>
+            <p className={assignmentStyles.note}>Administrators can explicitly override availability or the assignment ceiling. Current access rules still apply. The reason is recorded in the internal audit.</p>
+            <p>Current owner: {ownerId === null ? 'Unassigned' : agents.find(agent => agent.id === ownerId)?.full_name || 'Assigned operator'}</p>
+            <DashboardSelect id={ownerIdInput} label="Assign to operator" value={selected} disabled={action.blocked} onValueChange={setSelected} options={[{ value: '', label: 'Choose an operator' }, ...agents.map(agent => ({ value: agent.id, label: agent.full_name || agent.email }))]} />
+            <ParkField.Root>
+              <ParkField.Label htmlFor={reasonId}>Override reason</ParkField.Label>
+              <ParkTextarea id={reasonId} value={reason} disabled={action.blocked} onChange={event => setReason(event.target.value)} />
+              <ParkField.HelperText>A reason is required. Keep it brief.</ParkField.HelperText>
+            </ParkField.Root>
+            {reason.trim() && !reasonValid && <ParkAlert.Root role="alert" status="error" variant="surface">
+              <ParkAlert.Content><ParkAlert.Description>The reason is too long. Shorten it before assigning.</ParkAlert.Description></ParkAlert.Content>
+            </ParkAlert.Root>}
+            {status}
+          </ParkDialog.Body>
+          <ParkDialog.Footer>
+            <ParkButton type="button" disabled={!fresh || disabled || action.blocked || !selected || !reasonValid}
+              onClick={() => action.override(selected, ownerId, reason)}>Assign with audited override</ParkButton>
+          </ParkDialog.Footer>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>
   </div>;
 }

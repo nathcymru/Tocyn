@@ -20,9 +20,34 @@ it('preserves unsaved choices across a background settings update',async()=>{
  const {chat}=await open();expect(chat).toHaveAccessibleDescription('Allow customers to chat with the AI support agent.');fireEvent.click(chat);
  await act(async()=>{client.setQueryData(['settings'],{...initial,unrelated:'new'});});expect(chat).not.toBeChecked();expect(api.put).not.toHaveBeenCalled();
 });
+it('keeps cached controls and unsaved choices visible after a background refresh fails, then retries',async()=>{
+ const {chat,save}=await open();
+ fireEvent.click(chat);expect(chat).not.toBeChecked();
+ api.get.mockRejectedValueOnce(new Error('synthetic background failure')).mockResolvedValueOnce(initial);
+ await act(async()=>{await client.invalidateQueries({queryKey:['settings']});});
+ const alert=await screen.findByRole('alert');
+ expect(alert).toHaveClass('alert__root');
+ expect(alert.querySelector('.alert__description')).toHaveTextContent('Widget settings could not be refreshed. Your choices are kept');
+ expect(screen.getByRole('checkbox',{name:'Chat Enabled'})).not.toBeChecked();
+ expect(screen.getByRole('checkbox',{name:'Web Form Enabled'})).toBeChecked();
+ expect(screen.queryByText('Widget settings could not be loaded')).not.toBeInTheDocument();
+ expect(save).toBeDisabled();expect(api.put).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Retry widget settings'}));
+ await waitFor(()=>expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+ expect(chat).not.toBeChecked();expect(save).toBeEnabled();
+ expect(api.get).toHaveBeenCalledTimes(3);
+});
 it('blocks saving unavailable settings instead of writing defaults',async()=>{
  api.get.mockRejectedValue(new Error('synthetic unavailable'));render(<QueryClientProvider client={client}><WidgetChannelPage/></QueryClientProvider>);
  expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded');expect(screen.getByRole('button',{name:'Save Changes'})).toBeDisabled();expect(api.put).not.toHaveBeenCalled();
+});
+it('offers a retry after settings fail to load and restores the feature controls',async()=>{
+ api.get.mockRejectedValueOnce(new Error('synthetic unavailable')).mockResolvedValueOnce(initial);
+ render(<QueryClientProvider client={client}><WidgetChannelPage/></QueryClientProvider>);
+ fireEvent.click(await screen.findByRole('button',{name:'Retry widget settings'}));
+ expect(await screen.findByRole('checkbox',{name:'Chat Enabled'})).toBeChecked();
+ expect(screen.getByRole('button',{name:'Save Changes'})).toBeEnabled();
+ expect(api.get).toHaveBeenCalledTimes(2);
 });
 it('waits for clipboard success and recovers from failure without claiming an installed widget',async()=>{
  let finish!:()=>void;const write=vi.fn().mockRejectedValueOnce(new Error('synthetic clipboard failure')).mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve;}));Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:write}});

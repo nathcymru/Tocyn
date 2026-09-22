@@ -1,13 +1,24 @@
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { ParkButton, ParkEmptyState, ParkInput, ParkKnowledgeEditor, ParkSkeleton } from '@luminatick/ui/park';
+import { Field } from '@luminatick/ui/components';
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { dashboardApi } from '../api/client';
 import { KnowledgeCategory } from '../types';
-import MDEditor from '@uiw/react-md-editor';
-import rehypeSanitize from 'rehype-sanitize';
-import { ArrowLeft, Save } from 'lucide-react';
+import { TiptapMarkdownField } from '../components/RichComposer';
+import { DashboardSelect } from '../components/DashboardSelect';
+import { ArrowLeft, FloppyDisk, SpinnerGap } from '@phosphor-icons/react';
+
+type EditorError = { source: 'article-load' | 'category-load' | 'validation' | 'save'; message: string };
+
+const errorTitles: Record<EditorError['source'], string> = {
+  'article-load': 'Article could not be loaded',
+  'category-load': 'Categories could not be loaded',
+  validation: 'Article needs a title',
+  save: 'Article could not be saved',
+};
 
 export const KnowledgeEditorPage: React.FC = () => {
+  const styles = ParkKnowledgeEditor();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -16,6 +27,7 @@ export const KnowledgeEditorPage: React.FC = () => {
   const tierId = useId();
   const contentId = useId();
   const errorId = useId();
+  const categoryErrorId = useId();
   const routeKey = id ?? '__new__';
   const savingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -32,7 +44,13 @@ export const KnowledgeEditorPage: React.FC = () => {
 
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [articleError, setArticleError] = useState<EditorError | null>(null);
+  const [categoryError, setCategoryError] = useState<EditorError | null>(null);
+  const [formError, setFormError] = useState<EditorError | null>(null);
+  const [articleLoadAttempt, setArticleLoadAttempt] = useState(0);
+  const [categoryLoadAttempt, setCategoryLoadAttempt] = useState(0);
+  const error = articleError ?? formError ?? categoryError;
+  const secondaryCategoryError = formError !== null && articleError === null ? categoryError : null;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -45,7 +63,8 @@ export const KnowledgeEditorPage: React.FC = () => {
     savingRef.current = false;
     setIsSaving(false);
     setLoadedRouteKey(null);
-    setError(null);
+    setArticleError(null);
+    setFormError(null);
     setTitle('');
     setCategoryId(searchParams.get('categoryId') || '');
     setTier('answer');
@@ -58,18 +77,19 @@ export const KnowledgeEditorPage: React.FC = () => {
     const fetchCategories = async () => {
       try {
         const cats = await dashboardApi.get<KnowledgeCategory[]>('/knowledge/categories');
-        if (current) setCategories(cats);
+        if (current) { setCategories(cats); setCategoryError(null); }
       } catch (err: any) {
-        if (current) setError(err.message);
+        if (current) setCategoryError({ source: 'category-load', message: err.message });
       }
     };
     fetchCategories();
     return () => { current = false; };
-  }, []);
+  }, [categoryLoadAttempt]);
 
   useEffect(() => {
     let current = true;
     if (id) {
+      setLoadedRouteKey(null);
       const fetchArticle = async () => {
         try {
           const [doc, articleContent] = await Promise.all([
@@ -82,19 +102,20 @@ export const KnowledgeEditorPage: React.FC = () => {
           setTier(doc.tier || 'answer');
           setContent(articleContent.content || articleContent || '');
           setLoadedRouteKey(routeKey);
+          setArticleError(null);
         } catch (err: any) {
-          if (current) setError(err.message);
+          if (current) setArticleError({ source: 'article-load', message: err.message });
         }
       };
       fetchArticle();
     }
     return () => { current = false; };
-  }, [id, routeKey]);
+  }, [id, routeKey, articleLoadAttempt]);
 
   const handleSave = async () => {
     if (savingRef.current || !editorReady) return;
     if (!title.trim()) {
-      setError('Title is required');
+      setFormError({ source: 'validation', message: 'Title is required' });
       return;
     }
 
@@ -103,7 +124,7 @@ export const KnowledgeEditorPage: React.FC = () => {
     saveRequestRef.current = request;
     savingRef.current = true;
     setIsSaving(true);
-    setError(null);
+    setFormError(null);
     try {
       if (id) {
         await dashboardApi.put(`/knowledge/articles/${id}`, {
@@ -122,7 +143,7 @@ export const KnowledgeEditorPage: React.FC = () => {
       }
       if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) navigate('/knowledge');
     } catch (err: any) {
-      if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) setError(err.message);
+      if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) setFormError({ source: 'save', message: err.message });
     } finally {
       if (mountedRef.current && saveRequestRef.current === request && routeRef.current === saveRoute) {
         savingRef.current = false;
@@ -131,127 +152,131 @@ export const KnowledgeEditorPage: React.FC = () => {
     }
   };
 
-  const renderCategoryOptions = (cats: KnowledgeCategory[], parentId: string | null = null, depth = 0): React.ReactNode[] => {
+  const renderCategoryOptions = (cats: KnowledgeCategory[], parentId: string | null = null, depth = 0): { value: string; label: string }[] => {
     const children = cats.filter(c => c.parent_id === parentId);
-    let options: React.ReactNode[] = [];
+    let options: { value: string; label: string }[] = [];
 
     for (const child of children) {
       const prefix = '\u00A0\u00A0'.repeat(depth * 2);
-      options.push(
-        <option key={child.id} value={child.id}>
-          {prefix}{child.name}
-        </option>
-      );
+      options.push({ value: child.id, label: `${prefix}${child.name}` });
       options = options.concat(renderCategoryOptions(cats, child.id, depth + 1));
     }
     return options;
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className={styles.root}>
       {/* Header */}
-      <div className="flex-none px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <TocynButton
+      <div className={styles.header}>
+        <div className={styles.heading}>
+          <ParkButton
             onClick={() => navigate('/knowledge')}
             aria-label="Back to knowledge base"
             disabled={isSaving || !editorReady}
-            className="text-gray-500 hover:text-gray-700"
+            className={styles.back}
           >
-            <ArrowLeft size={20} />
-          </TocynButton>
-          <h1 className="text-xl font-bold text-gray-900">
+            <ArrowLeft size={20} weight="duotone" aria-hidden="true" />
+          </ParkButton>
+          <h1 className={styles.title}>
             {id ? 'Edit Article' : 'New Article'}
           </h1>
         </div>
 
-        <TocynButton
+        <ParkButton
           onClick={handleSave}
           disabled={isSaving || !editorReady}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+          className={styles.save}
         >
           {isSaving ? (
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <SpinnerGap className={styles.spinner} size={18} weight="duotone" aria-hidden="true" />
           ) : (
-            <Save size={16} className="mr-2" />
+            <FloppyDisk size={16} weight="duotone" aria-hidden="true" />
           )}
           {isSaving ? 'Processing...' : 'Save Article'}
-        </TocynButton>
+        </ParkButton>
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <div className={styles.content}>
+        <div className={styles.stack}>
           {error && (
-            <div id={errorId} role="alert" className="bg-red-50 text-red-700 p-4 rounded-md">
-              {error}
-            </div>
+            <ParkEmptyState
+              id={errorId}
+              role="alert"
+              title={errorTitles[error.source]}
+              description={error.message}
+              action={error.source === 'article-load'
+                ? <ParkButton onClick={() => { setArticleError(null); setArticleLoadAttempt(attempt => attempt + 1); }}>Retry article</ParkButton>
+                : error.source === 'category-load'
+                  ? <ParkButton onClick={() => { setCategoryError(null); setCategoryLoadAttempt(attempt => attempt + 1); }}>Retry categories</ParkButton>
+                  : undefined}
+              headingLevel={false}
+              className={styles.error}
+            />
           )}
 
-          <div className="bg-white shadow rounded-lg p-6 border border-gray-200 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label htmlFor={titleId} className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                <TocynInput
+          {secondaryCategoryError && <ParkEmptyState
+            id={categoryErrorId}
+            role="alert"
+            title={errorTitles['category-load']}
+            description={secondaryCategoryError.message}
+            action={<ParkButton onClick={() => { setCategoryError(null); setCategoryLoadAttempt(attempt => attempt + 1); }}>Retry categories</ParkButton>}
+            headingLevel={false}
+            className={styles.error}
+          />}
+
+          {!editorReady && !articleError && <div role="status" aria-label="Loading article" className={styles.card}>
+            <ParkSkeleton height="8" width="full" />
+            <ParkSkeleton height="8" width="full" />
+          </div>}
+
+          <div className={styles.card}>
+            <div className={styles.fields}>
+              <Field.Root required className={styles.field}>
+                <Field.Label htmlFor={titleId}>Title <Field.RequiredIndicator> *</Field.RequiredIndicator></Field.Label>
+                <ParkInput
                   id={titleId}
                   type="text"
                   value={title}
                   disabled={isSaving || !editorReady}
                   onChange={e => setTitle(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className={styles.control}
                   placeholder="e.g., How to reset your password"
                   required
                 />
-              </div>
+              </Field.Root>
 
-              <div>
-                <label htmlFor={categoryIdInput} className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <TocynSelect
+              <div className={styles.field}>
+                <DashboardSelect
                   id={categoryIdInput}
+                  label="Category"
                   value={categoryId}
                   disabled={isSaving || !editorReady}
-                  onChange={e => setCategoryId(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="">No Category (Root)</option>
-                  {renderCategoryOptions(categories)}
-                </TocynSelect>
+                  onValueChange={setCategoryId}
+                  className={styles.control}
+                  options={[{ value: '', label: 'No Category (Root)' }, ...renderCategoryOptions(categories)]}
+                />
               </div>
 
-              <div>
-                <label htmlFor={tierId} className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
-                <TocynSelect
+              <div className={styles.field}>
+                <DashboardSelect
                   id={tierId}
+                  label="Tier"
                   value={tier}
                   disabled={isSaving || !editorReady}
-                  onChange={e => setTier(e.target.value as 'answer' | 'sop')}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="answer">Customer Facing Answer</option>
-                  <option value="sop">Internal SOP (Standard Operating Procedure)</option>
-                </TocynSelect>
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor={contentId} className="block text-sm font-medium text-gray-700 mb-1">Content (Markdown)</label>
-              <div data-color-mode="light" aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
-                <MDEditor
-                  value={content}
-                  onChange={val => { if (!savingRef.current && editorReady) setContent(val || ''); }}
-                  height={500}
-                  preview="edit"
-                  className="w-full"
-                  textareaProps={{ id: contentId, readOnly: isSaving || !editorReady, 'aria-describedby': error ? errorId : undefined }}
-                  previewOptions={{
-                    rehypePlugins: [[rehypeSanitize]]
-                  }}
+                  onValueChange={value => setTier(value as 'answer' | 'sop')}
+                  className={styles.control}
+                  options={[{ value: 'answer', label: 'Customer Facing Answer' }, { value: 'sop', label: 'Internal SOP (Standard Operating Procedure)' }]}
                 />
               </div>
             </div>
+
+            <Field.Root className={styles.field}>
+              <Field.Label id={`${contentId}-label`} htmlFor={contentId}>Content (Markdown)</Field.Label>
+              <div className={styles.tiptap} aria-busy={isSaving} aria-disabled={isSaving || !editorReady} onClickCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined} onKeyDownCapture={isSaving || !editorReady ? event => event.preventDefault() : undefined}>
+                <TiptapMarkdownField key={`${routeKey}-${editorReady ? 'ready' : 'loading'}`} id={contentId} value={content} readOnly={isSaving || !editorReady} ariaLabelledBy={`${contentId}-label`} ariaDescribedBy={error ? errorId : undefined} onChange={value => { if (!savingRef.current && editorReady) setContent(value); }} />
+              </div>
+            </Field.Root>
           </div>
         </div>
       </div>

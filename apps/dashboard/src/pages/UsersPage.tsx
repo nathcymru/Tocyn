@@ -1,11 +1,12 @@
+import { css } from '@luminatick/ui/styled-system/css';
 import { OperatorCapacityPanel } from '../components/capacity/OperatorCapacityPanel';
 import { useAuthStore } from '../store/authStore';
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton } from '@luminatick/ui/primitives';
+import { Badge, IconButton } from '@luminatick/ui/components';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { User } from '../types';
-import { User as UserIcon, Shield, Mail, Calendar, ShieldCheck, X, Settings } from 'lucide-react';
+import { Shield, Calendar, ShieldCheck, X } from '../components/icons';
 
 export const UsersPage: React.FC = () => {
   const { data: users = [], isLoading, error, refetch, isFetching } = useUsers();
@@ -24,144 +25,120 @@ export const UsersPage: React.FC = () => {
   const opener = React.useRef<HTMLButtonElement | null>(null);
   const closeDialog = () => { setSelectedUser(null); setModalType(null); };
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500 italic">Loading team members...</div>;
+  if (isLoading) return <section role="status" aria-label="Loading team members" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}>
+    <span className={css({ srOnly: true })}>Loading team members…</span>
+    <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} />
+    <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
+  </section>;
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
-          <p className="text-slate-500 mt-1">Manage agents, admins, and their access levels.</p>
+          <h1 className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Team Management</h1>
+          <p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Manage agents, admins, and their access levels.</p>
         </div>
-        <TocynButton className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm">
-          Invite New User
-        </TocynButton>
       </div>
 
-      {error && (
-        <div role="alert" className="bg-red-50 text-red-700 p-4 rounded-lg mb-6 border border-red-100">
-          {error.message}
-          <TocynButton type="button" disabled={isFetching} onClick={() => void refetch()} className="ml-3 rounded border px-3 py-2">Retry team members</TocynButton>
-        </div>
+      {error && (users.length === 0
+        ? <ParkEmptyState role="alert" title="Team members are unavailable" description={error.message}
+            action={<ParkButton type="button" loading={isFetching} loadingText="Retrying team members…" onClick={() => void refetch()}>Retry team members</ParkButton>} />
+        : <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+            <ParkAlert.Title>Team members could not be refreshed</ParkAlert.Title>
+            <ParkAlert.Description>Showing the last loaded team members. {error.message}</ParkAlert.Description>
+            <ParkButton type="button" variant="outline" loading={isFetching} loadingText="Retrying team members…" onClick={() => void refetch()}>Retry team members</ParkButton>
+          </ParkAlert.Content></ParkAlert.Root>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className={css({"display":"grid","gap":"4","gridTemplateColumns":{"base":"1fr","md":"repeat(2,minmax(0,1fr))","xl":"repeat(3,minmax(0,1fr))"}})}>
         {users.map((user) => (
-          <div key={user.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 border border-brand-100">
-                <UserIcon className="w-6 h-6" />
+          <ParkCard.Root key={user.id} variant="outline">
+            <ParkCard.Header className={css({ flexDirection: 'row', alignItems: 'center', gap: '3' })}>
+              <ParkAvatar size="md"><ParkAvatarFallback name={user.full_name || user.email} /></ParkAvatar>
+              <div className={css({ minW: '0', flex: '1' })}>
+                <ParkCard.Title>{user.full_name || 'Unnamed User'}</ParkCard.Title>
+                <ParkCard.Description className={css({ overflowWrap: 'anywhere' })}>{user.email}</ParkCard.Description>
               </div>
-              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
-                user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                user.role === 'agent' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
-              }`}>
-                {user.role}
-              </span>
-            </div>
-
-            <h3 className="text-lg font-bold text-slate-900">{user.full_name || 'Unnamed User'}</h3>
-            <div className="space-y-2 mt-4">
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Mail className="w-4 h-4" />
-                {user.email}
-              </div>
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Calendar className="w-4 h-4" />
+              <Badge colorPalette={user.role === 'admin' ? 'blue' : 'gray'}>{user.role}</Badge>
+            </ParkCard.Header>
+            <ParkCard.Body className={css({ display: 'grid', gap: '4' })}>
+            <div className={css({"display":"grid","gap":"4"})}>
+              <div className={css({ display: 'flex', alignItems: 'center', gap: '2', color: 'fg.muted', textStyle: 'sm' })}>
+                <Calendar aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                 Joined {new Date(user.created_at).toLocaleDateString()}
               </div>
-              <div className="flex items-center gap-2 text-sm">
+              <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
                 {user.mfa_enabled ? (
-                  <span className="text-green-600 flex items-center gap-1.5 font-medium">
-                    <ShieldCheck className="w-4 h-4" />
+                  <span className={css({ minW: '0', color: 'fg.default', display: 'inline-flex', alignItems: 'center', gap: '2' })}>
+                    <ShieldCheck aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                     MFA Enabled
                   </span>
                 ) : (
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <Shield className="w-4 h-4" />
+                  <span className={css({ minW: '0', display: 'inline-flex', alignItems: 'center', gap: '2' })}>
+                    <Shield aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                     MFA Disabled
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-100 flex items-center gap-3">
-              {administrator&&['admin','agent'].includes(user.role)&&<TocynButton type="button" aria-haspopup="dialog"
+            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+              {administrator&&['admin','agent'].includes(user.role)&&<ParkButton type="button" variant="outline" aria-haspopup="dialog"
                 onClick={event=>{opener.current=event.currentTarget;setCapturedIdentity(selectionIdentity);setSelectedUser(user);setModalType('capacity');}}
-                className="rounded border px-3 py-2 text-xs font-bold">Capacity</TocynButton>}
-              <TocynButton
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Capacity</ParkButton>}
+              <ParkButton type="button" variant="outline"
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('edit'); }}
-                className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
-                Edit Profile
-              </TocynButton>
-              <TocynButton
+                Profile details
+              </ParkButton>
+              <ParkButton type="button" variant="outline"
                 aria-haspopup="dialog" onClick={event => { opener.current=event.currentTarget; setCapturedIdentity(selectionIdentity);setSelectedUser(user); setModalType('activity'); }}
-                className="flex-1 text-xs font-bold text-slate-600 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 View Activity
-              </TocynButton>
+              </ParkButton>
             </div>
-          </div>
+            </ParkCard.Body>
+          </ParkCard.Root>
         ))}
         {!error && users.length === 0 && (
-          <div className="col-span-full py-12 text-center bg-white rounded-xl border-2 border-dashed border-slate-200">
-            <UserIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900">No team members found</h3>
-            <p className="text-slate-500 mt-1">Start by inviting your first agent or admin.</p>
-          </div>
+          <ParkEmptyState className={css({ py: '6', gridColumn: '1 / -1' })} title="No team members found" description="No team members were returned for this workspace." action={<ParkButton type="button" onClick={() => void refetch()}>Refresh team members</ParkButton>} />
         )}
       </div>
 
-      <TocynDialog open={Boolean(selectedUser && modalType)} onOpenChange={open => { if (!open) closeDialog(); }}
-        labelledBy={dialogTitleId} initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}>
-        {selectedUser && (
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 id={dialogTitleId} className="text-xl font-bold text-slate-900">
-                {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'Edit User Profile' : 'User Activity Log'}
-              </h2>
-              <TocynButton type="button" ref={closeControl} aria-label="Close user details" onClick={closeDialog} className="text-slate-400 hover:text-slate-600">
-                <X className="w-6 h-6" />
-              </TocynButton>
-            </div>
-            <div className="p-8">
-              <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-lg border border-slate-100">
-                <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">
-                  {(selectedUser.full_name || selectedUser.email).charAt(0).toUpperCase()}
+      <ParkDialog.Root open={Boolean(selectedUser && modalType)} onOpenChange={({ open }) => { if (!open) closeDialog(); }}
+        initialFocusEl={() => closeControl.current} finalFocusEl={() => opener.current}
+        closeOnEscape closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={dialogTitleId}>
+            {selectedUser && <>
+              <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+                <ParkDialog.Title id={dialogTitleId}>
+                  {modalType === 'capacity' ? 'Operator capacity' : modalType === 'edit' ? 'User Profile' : 'User Activity Log'}
+                </ParkDialog.Title>
+                <IconButton type="button" variant="plain" ref={closeControl} aria-label="Close user details" onClick={closeDialog}>
+                  <X aria-hidden="true" className={css({ w: '4', h: '4' })} />
+                </IconButton>
+              </ParkDialog.Header>
+              <ParkDialog.Body className={css({ display: 'grid', gap: '4', minW: '0' })}>
+                <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: '0' })}>
+                  <ParkAvatar size="md"><ParkAvatarFallback name={selectedUser.full_name || selectedUser.email} /></ParkAvatar>
+                  <div className={css({ minW: '0' })}>
+                    <p className={css({ m: '0', fontWeight: 'semibold', color: 'fg.default' })}>{selectedUser.full_name || 'Unnamed User'}</p>
+                    <p className={css({ m: '0', color: 'fg.muted', overflowWrap: 'anywhere' })}>{selectedUser.email}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900">{selectedUser.full_name || 'Unnamed User'}</h3>
-                  <p className="text-sm text-slate-500">{selectedUser.email}</p>
-                </div>
-              </div>
-
-              {modalType === 'capacity' ? (
-                <OperatorCapacityPanel userId={selectedUser.id} editable={administrator}/>
-              ) : modalType === 'edit' ? (
-                <div className="text-center py-6">
-                  <Settings className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-600 font-medium">User profile editing is currently read-only.</p>
-                  <p className="text-sm text-slate-500 mt-1">In this version, users must update their own profiles via the security settings.</p>
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <p className="text-slate-600 font-medium">User activity is not available in this view yet.</p>
-                  <p className="text-sm text-slate-500 mt-1">No activity records have been loaded.</p>
-                </div>
-              )}
-            </div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <TocynButton
-                onClick={closeDialog}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                Close
-              </TocynButton>
-            </div>
-          </div>
-        )}
-      </TocynDialog>
+                {modalType === 'capacity' ? <OperatorCapacityPanel userId={selectedUser.id} editable={administrator} />
+                  : modalType === 'edit' ? <ParkEmptyState headingLevel={false} title="Profile editing is unavailable" description="Users can update their own security profile. This directory view is read-only." />
+                  : <ParkEmptyState headingLevel={false} title="User activity is unavailable" description="No activity records have been loaded." />}
+              </ParkDialog.Body>
+              <ParkDialog.Footer><ParkButton type="button" variant="outline" onClick={closeDialog}>Close</ParkButton></ParkDialog.Footer>
+            </>}
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 };

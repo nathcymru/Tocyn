@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TicketActionBar } from '../components/TicketActionBar';
 import { parseTicketUtilityActions } from '../hooks/useTicketUtilityActions';
+import { ticketReference } from '../utils/ticket-reference';
 
 const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 
@@ -39,7 +40,10 @@ it('keeps the command and More actions keyboard-accessible, with dialog focus re
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(opener).toHaveFocus());
   const link = screen.getByRole('link', { name: 'Open action safety guidance' });
+  expect(link).toHaveClass('link', 'link--variant_plain');
+  expect(link).toHaveAttribute('target', '_blank');
   expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  link.focus();expect(link).toHaveFocus();
 });
 
 it('renders denied server actions disabled with their reason and refuses broadened links', () => {
@@ -54,6 +58,16 @@ it('renders denied server actions disabled with their reason and refuses broaden
   expect(() => parseTicketUtilityActions(unsafe, 'ticket-1')).toThrow('Ticket actions are unavailable.');
 });
 
+it('uses a Park alert for unavailable actions and preserves the explicit retry', async () => {
+  const retry = vi.fn();
+  render(<TicketActionBar reference="#42" actions={[]} loading={false} error retry={retry} />);
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('Ticket actions are unavailable.');
+  await userEvent.click(within(alert).getByRole('button', { name: 'Retry ticket actions' }));
+  expect(retry).toHaveBeenCalledTimes(1);
+});
+
 it('offers a selectable reference fallback when clipboard support is missing', async () => {
   const user = userEvent.setup();
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
@@ -63,6 +77,33 @@ it('offers a selectable reference fallback when clipboard support is missing', a
   await user.click(screen.getByText('More ticket actions'));
   await user.click(screen.getByRole('button', { name: 'View ticket reference' }));
   expect(within(screen.getByRole('dialog')).getByText('#42')).toBeVisible();
+});
+
+it.each([null, 62])('copies the actual ticket reference when its allocated number is %s', async number => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  const reference = ticketReference({ id: 'ticket-1', ticket_no: number }, '#');
+  render(<TicketActionBar reference={reference} actions={parseTicketUtilityActions(manifest(), 'ticket-1').actions} loading={false} error={false} retry={() => {}} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Copy ticket reference' }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(number === null ? 'ticket-1' : '#62'));
+  await userEvent.click(screen.getByText('More ticket actions'));
+  await userEvent.click(screen.getByRole('button', { name: 'View ticket reference' }));
+  expect(within(screen.getByRole('dialog', { name: 'Ticket reference' })).getByText(reference)).toBeVisible();
+});
+
+it('keeps copy focus and an available reference after the clipboard rejects the write', async () => {
+  const writeText = vi.fn().mockRejectedValue(new Error('Clipboard denied'));
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  render(<TicketActionBar reference="#42" actions={parseTicketUtilityActions(manifest(), 'ticket-1').actions} loading={false} error={false} retry={() => {}} />);
+  const copy = screen.getByRole('button', { name: 'Copy ticket reference' });
+  copy.focus();
+  await userEvent.click(copy);
+  expect(await screen.findByRole('status')).toHaveTextContent('The ticket reference could not be copied. Select it in More ticket actions instead.');
+  expect(copy).toHaveFocus();
+  await userEvent.click(screen.getByText('More ticket actions'));
+  await userEvent.click(screen.getByRole('button', { name: 'View ticket reference' }));
+  expect(within(screen.getByRole('dialog', { name: 'Ticket reference' })).getByText('#42')).toBeVisible();
+  expect(writeText).toHaveBeenCalledTimes(1);
 });
 
 it('clears the old ticket dialog and ignores a late clipboard result after switching tickets', async () => {

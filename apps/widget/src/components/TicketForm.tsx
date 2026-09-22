@@ -1,24 +1,25 @@
-import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
+import { w } from '../widgetStyles';
+import { ParkAlert, ParkButton, ParkField, ParkInput, ParkProgress, ParkTextarea } from '@luminatick/ui/park';
+import { IconCircleCheck } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState } from 'react';
 
 interface Props {
-  config: any;
+  config?: unknown;
   userEmail: string;
 }
 
-const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
+const TicketForm: React.FC<Props> = ({ userEmail }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: userEmail,
     subject: '',
     message: ''
   });
-  const formId = React.useId();
   const submitting = React.useRef(false);
   const nameInput = React.useRef<HTMLInputElement>(null);
   const successHeading = React.useRef<HTMLHeadingElement>(null);
-  const errorMessage = React.useRef<HTMLParagraphElement>(null);
+  const errorMessage = React.useRef<HTMLDivElement>(null);
   const focusNewDraft = React.useRef(false);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
@@ -52,84 +53,81 @@ const TicketForm: React.FC<Props> = ({ config, userEmail }) => {
 
   if (status === 'success') {
     return (
-      <div className="text-center py-8">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h3 ref={successHeading} tabIndex={-1} className="text-lg font-bold text-gray-900 mb-2">Ticket Submitted!</h3>
-        <p role="status" className="text-gray-600 mb-6">We've received your request and will get back to you soon.</p>
-        <TocynButton
-          onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
-          className="text-blue-600 font-medium hover:underline"
-        >
-          Submit another ticket
-        </TocynButton>
-      </div>
+      <ParkAlert.Root role="status" aria-live="polite" aria-atomic="true" aria-labelledby="widget-ticket-success-title" status="success" variant="surface">
+        <ParkAlert.Indicator aria-hidden="true"><IconCircleCheck aria-hidden="true" /></ParkAlert.Indicator>
+        <ParkAlert.Content>
+          <ParkAlert.Title id="widget-ticket-success-title" ref={successHeading} tabIndex={-1}>Ticket Submitted!</ParkAlert.Title>
+          <ParkAlert.Description>We've received your request and will get back to you soon.</ParkAlert.Description>
+          <ParkButton
+            onClick={() => { focusNewDraft.current = true; setStatus('idle'); }}
+            variant="outline"
+            className={w.successAction}
+          >
+            Submit another ticket
+          </ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} aria-label="Submit a support ticket" aria-busy={status === 'submitting'} className="space-y-4">
-      <fieldset disabled={status === 'submitting'} className="space-y-4">
-      <div>
-        <label htmlFor={`${formId}-name`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Your Name</label>
-        <TocynInput
+    <form onSubmit={handleSubmit} aria-label="Submit a support ticket" aria-busy={status === 'submitting'} className={w.form}>
+      <fieldset disabled={status === 'submitting'} className={w.form}>
+      <ParkField label="Your Name">
+        <ParkInput
           type="text"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className={w.formControl}
           placeholder="John Doe"
-          id={`${formId}-name`} ref={nameInput} value={formData.name}
+          ref={nameInput} value={formData.name}
           onChange={e => setFormData({ ...formData, name: e.target.value })}
         />
-      </div>
-      <div>
-        <label htmlFor={`${formId}-email`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Email Address</label>
-        <TocynInput
+      </ParkField>
+      <ParkField label="Email Address">
+        <ParkInput
           type="email"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className={w.formControl}
           placeholder="john@example.com"
-          id={`${formId}-email`} value={formData.email}
+          value={formData.email}
           readOnly
         />
-      </div>
-      <div>
-        <label htmlFor={`${formId}-subject`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Subject</label>
-        <TocynInput
+      </ParkField>
+      <ParkField label="Subject">
+        <ParkInput
           type="text"
           required
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className={w.formControl}
           placeholder="How can we help?"
-          id={`${formId}-subject`} value={formData.subject}
+          value={formData.subject}
           onChange={e => setFormData({ ...formData, subject: e.target.value })}
         />
-      </div>
-      <div>
-        <label htmlFor={`${formId}-message`} className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Message</label>
-        <TocynTextarea
+      </ParkField>
+      <ParkField label="Message">
+        <ParkTextarea
           required
           rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 resize-none"
+          className={[w.formControl, w.textarea].join(' ')}
           placeholder="Tell us more about your issue..."
-          id={`${formId}-message`} value={formData.message}
+          value={formData.message}
           onChange={e => setFormData({ ...formData, message: e.target.value })}
         />
-      </div>
+      </ParkField>
       </fieldset>
-      {status === 'submitting' && <p role="status">Submitting your ticket...</p>}
+      {status === 'submitting' && <div role="status"><ParkProgress value={null} label="Submitting your ticket…" /></div>}
       {status === 'error' && (
-        <p ref={errorMessage} tabIndex={-1} role="alert" className="text-red-700 text-sm">Submission could not be confirmed. Your message has been kept; try again.</p>
+        <ParkAlert.Root ref={errorMessage} tabIndex={-1} role="alert" status="error" variant="surface">
+          <ParkAlert.Content><ParkAlert.Description>Submission could not be confirmed. Your message has been kept; try again.</ParkAlert.Description></ParkAlert.Content>
+        </ParkAlert.Root>
       )}
-      <TocynButton
+      <ParkButton
         type="submit"
         disabled={status === 'submitting'}
-        className="w-full py-2 px-4 rounded font-bold text-white transition-opacity disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
-        style={{ backgroundColor: config.primaryColor }}
+        variant="solid"
+        className={w.submit}
       >
         {status === 'submitting' ? 'Submitting...' : 'Send Message'}
-      </TocynButton>
+      </ParkButton>
     </form>
   );
 };

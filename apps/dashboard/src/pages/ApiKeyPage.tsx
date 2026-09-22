@@ -1,14 +1,23 @@
+import { css } from '@luminatick/ui/styled-system/css';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
-import { TocynConfirmDialog, TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { ParkAlert, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkField, ParkInput, ParkSkeleton, ParkTable } from '@luminatick/ui/park';
+import { IconButton as ParkIconButton } from '@luminatick/ui/components';
 import React, { useEffect, useState } from 'react';
-import { Key, Plus, Trash2, Copy, Check, ShieldAlert, Clock } from 'lucide-react';
+import {
+  IconPlus,
+  IconTrash,
+  IconCopy,
+  IconCheck,
+  IconShieldHalved,
+  IconClock
+} from '@luminatick/ui/icons';
 import { dashboardApi } from '../api/client';
 import { ApiKey, ApiKeyCreatedResponse } from '@luminatick/shared';
 
 export function ApiKeyPage() {
   const heading = React.useRef<HTMLHeadingElement>(null);
   const revokeOpener = React.useRef<HTMLButtonElement | null>(null);
+  const revokeCancel = React.useRef<HTMLButtonElement>(null);
   const revokeGuard = React.useRef(false);
   const revokedIds = React.useRef(new Set<string>());
   const revokeSucceeded = React.useRef(false);
@@ -19,6 +28,7 @@ export function ApiKeyPage() {
   const [revokeStatus, setRevokeStatus] = useState('');
   const [listError, setListError] = useState('');
   const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [hasLoadedKeys, setHasLoadedKeys] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const createOpener = React.useRef<HTMLButtonElement>(null);
   const keyNameInput = React.useRef<HTMLInputElement>(null);
@@ -29,6 +39,8 @@ export function ApiKeyPage() {
   const createSucceeded = React.useRef(false);
   const createIntent = React.useRef<{ name: string; key: string } | null>(null);
   const createTitleId = React.useId();
+  const revokeTitleId = React.useId();
+  const revokeDescriptionId = React.useId();
   const [creating, setCreating] = useState(false);
   const [createUnresolved, setCreateUnresolved] = useState(false);
   const [createError, setCreateError] = useState('');
@@ -47,13 +59,16 @@ export function ApiKeyPage() {
     copyGeneration.current++; copyGuard.current = false; setCopying(false); setCopied(false); setCopyError('');
     return () => { copyGeneration.current++; if (copyTimer.current) clearTimeout(copyTimer.current); };
   }, [createdKey?.id]);
+  useEffect(() => {
+    if (uncertainKey) uncertainHeading.current?.focus();
+  }, [uncertainKey]);
 
   const fetchKeys = async () => {
     try {
       const data = await dashboardApi.get<ApiKey[]>('/api-keys');
-      setKeys(data.filter(key => !revokedIds.current.has(key.id))); setListError('');
+      setKeys(data.filter(key => !revokedIds.current.has(key.id))); setHasLoadedKeys(true); setListError('');
     } catch {
-      setListError('The API key list could not be refreshed. Reload this page before relying on the list.');
+      setListError('The API key list could not be loaded. Retry loading keys before relying on the list.');
     } finally {
       setIsLoading(false);
     }
@@ -130,169 +145,215 @@ export function ApiKeyPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">API Keys</h1>
-          <p className="text-slate-500 text-sm">Manage external access to the {PRODUCT_BRAND.name} API.</p>
+          <h1 ref={heading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>API Keys</h1>
+          <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>Manage external access to the {PRODUCT_BRAND.name} API.</p>
         </div>
-        <TocynButton
+        <ParkButton
           disabled={Boolean(uncertainKey)}
           ref={createOpener} onClick={() => {
             createSucceeded.current = false; setCreateError(''); setCreatedKey(null);
             setIsCreating(true);
           }}
-          className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
+          variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
         >
-          <Plus className="w-4 h-4" />
+          <IconPlus className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
           Create New Key
-        </TocynButton>
+        </ParkButton>
       </div>
 
-      <TocynDialog open={isCreating} busy={creating} labelledBy={createTitleId} initialFocusEl={() => createUnresolved ? retryCreateButton.current : keyNameInput.current}
-        finalFocusEl={() => uncertainHeading.current ?? (createSucceeded.current ? createdHeading.current : createOpener.current)} onOpenChange={next => { if (!next) closeCreate(); }}>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4">
-          <h2 id={createTitleId} className="text-lg font-semibold mb-4">Create New API Key</h2>
+      <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!open) closeCreate(); }}
+        initialFocusEl={() => createUnresolved ? retryCreateButton.current : keyNameInput.current}
+        finalFocusEl={() => uncertainHeading.current ?? (createSucceeded.current ? createdHeading.current : createOpener.current)}
+        closeOnEscape={!creating} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={createTitleId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={createTitleId}>Create New API Key</ParkDialog.Title>
+            </ParkDialog.Header>
           <form onSubmit={handleCreate} aria-labelledby={createTitleId}>
-            {createError && <p role="alert" className="mb-4 text-red-700">{createError}</p>}
-            <fieldset disabled={creating} className="space-y-4">
-            <div>
-              <label htmlFor={`${createTitleId}-name`} className="block text-sm font-medium text-slate-700 mb-1">
-                Key Name
-              </label>
-              <TocynInput
-                type="text" required maxLength={120} disabled={createUnresolved} id={`${createTitleId}-name`} ref={keyNameInput}
-                placeholder="e.g. CRM Integration"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-3">
-              <TocynButton
+            <fieldset disabled={creating} className={css({"display":"grid","gap":"4"})}>
+              <ParkDialog.Body className={css({ gap: '3' })}>
+                {createError && <ParkAlert.Root role="alert" status="error" variant="surface">
+                  <ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content>
+                </ParkAlert.Root>}
+                <ParkField label="Key Name" className={css({ w: 'full' })}>
+                  <ParkInput
+                    type="text" required maxLength={120} disabled={createUnresolved} ref={keyNameInput}
+                    placeholder="e.g. CRM Integration"
+                    className={css({"w":"full"})}
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                  />
+                </ParkField>
+              </ParkDialog.Body>
+              <ParkDialog.Footer>
+              <ParkButton
                 type="submit" ref={retryCreateButton}
-                className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
+                variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
+                loading={creating} loadingText="Generating key…"
               >
-                {creating ? 'Generating...' : createUnresolved ? 'Retry creation' : 'Generate Key'}
-              </TocynButton>
-              <TocynButton
+                {createUnresolved ? 'Retry creation' : 'Generate Key'}
+              </ParkButton>
+              <ParkButton
                 type="button"
                 onClick={closeCreate}
-                className="text-slate-600 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
                 Cancel
-              </TocynButton>
-            </div>
+              </ParkButton>
+              </ParkDialog.Footer>
             </fieldset>
           </form>
-        </div>
-      </TocynDialog>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
 
       {createdKey && (
-        <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl animate-in fade-in zoom-in">
-          <div className="flex items-start gap-3 mb-4">
-            <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0" />
+        <div className={css({"minW":0})}>
+          <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+            <IconShieldHalved className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
             <div>
-              <h3 ref={createdHeading} tabIndex={-1} className="font-semibold text-amber-900 text-lg">New API Key Generated</h3>
-              <p className="text-amber-700 text-sm">
+              <h3 ref={createdHeading} tabIndex={-1} className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"text.primary"})}>New API Key Generated</h3>
+              <p className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                 Copy this key now. For security reasons, it will <strong>never</strong> be shown again.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-amber-300 font-mono text-sm break-all">
-            <span className="flex-1">{createdKey.apiKey}</span>
-            <TocynButton
-              disabled={copying} aria-label="Copy API key" onClick={() => copyToClipboard(createdKey.apiKey)}
-              className="p-2 hover:bg-slate-100 rounded-md transition-colors shrink-0"
+          <div className={css({ display: 'flex', minW: 0, alignItems: 'center', gap: '2' })}>
+            <code className={css({ display: 'block', minW: 0, flex: '1', overflowWrap: 'anywhere', borderRadius: 'l2', bg: 'bg.subtle', p: '3', fontFamily: 'tabular', fontFeatureSettings: '"tnum" 1, "cv01" 1', fontVariantNumeric: 'tabular-nums', fontSize: 'sm', userSelect: 'all' })}>{createdKey.apiKey}</code>
+            <ParkIconButton
+              type="button" variant="plain" disabled={copying} aria-label="Copy API key" onClick={() => copyToClipboard(createdKey.apiKey)}
               title="Copy to clipboard"
             >
-              {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-slate-500" />}
-            </TocynButton>
+              {copied ? <IconCheck className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" /> : <IconCopy className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />}
+            </ParkIconButton>
           </div>
 
-          {copyError && <p role="alert">{copyError}</p>}
-          {copied && <p role="status">API key copied.</p>}
-          <TocynButton
+          {copyError && <ParkAlert.Root role="alert" status="error" variant="surface">
+            <ParkAlert.Content><ParkAlert.Description>{copyError}</ParkAlert.Description></ParkAlert.Content>
+          </ParkAlert.Root>}
+          {copied && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>API key copied.</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          <ParkButton
             onClick={() => { setCreatedKey(null); createOpener.current?.focus(); }}
-            className="mt-4 text-amber-800 text-sm font-medium hover:underline"
+            className={css({"minW":0})}
           >
             I've saved my key
-          </TocynButton>
+          </ParkButton>
         </div>
       )}
 
       {uncertainKey && (
-        <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl" role="alert">
-          <h2 ref={uncertainHeading} tabIndex={-1} className="font-semibold text-amber-900">API key created; plaintext unavailable</h2>
-          <p className="mt-1 text-sm text-amber-800">
-            The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
-            but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
-          </p>
-          <TocynButton className="mt-4 text-red-700 underline" onClick={event => {
-            revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(uncertainKey);
-            setRevokeError(''); setRevokeOpen(true);
-          }}>Revoke unavailable key</TocynButton>
-        </div>
+        <ParkAlert.Root role="alert" status="warning" variant="surface">
+          <ParkAlert.Content>
+            <ParkAlert.Title asChild><h2 ref={uncertainHeading} tabIndex={-1}>API key created; plaintext unavailable</h2></ParkAlert.Title>
+            <ParkAlert.Description>
+              The server recorded <strong>{uncertainKey.name}</strong> with prefix <code>{uncertainKey.prefix}</code>,
+              but the one-time secret cannot be shown after an uncertain response. Revoke it before creating a replacement.
+            </ParkAlert.Description>
+            <ParkButton onClick={event => {
+              revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(uncertainKey);
+              setRevokeError(''); setRevokeOpen(true);
+            }}>Revoke unavailable key</ParkButton>
+          </ParkAlert.Content>
+        </ParkAlert.Root>
       )}
 
-      {listError && <p role="alert">{listError}</p>}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <th className="px-6 py-4">Name</th>
-                <th className="px-6 py-4">Prefix</th>
-                <th className="px-6 py-4">Created</th>
-                <th className="px-6 py-4">Last Used</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">Loading keys...</td>
-                </tr>
-              ) : keys.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">{listError ? 'API key list unavailable.' : 'No API keys found.'}</td>
-                </tr>
-              ) : (
-                keys.map((key) => (
-                  <tr key={key.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-900">{key.name}</td>
-                    <td className="px-6 py-4 font-mono text-sm text-slate-500">{key.prefix}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
+      {listError && hasLoadedKeys && <ParkAlert.Root role="alert" status="error" variant="surface">
+        <ParkAlert.Content>
+          <ParkAlert.Description>The API key list could not be refreshed. Showing the last confirmed list. Retry loading keys before relying on it.</ParkAlert.Description>
+          <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton>
+        </ParkAlert.Content>
+      </ParkAlert.Root>}
+      <ParkCard.Root variant="outline" className={css({ minW: 0 })}>
+        <ParkCard.Body className={keys.length > 0
+          ? css({ minW: 0, overflowX: 'auto' })
+          : css({ minW: 0, overflowX: 'visible' })}>
+          {isLoading ? (
+            <div role="status" aria-label="Loading API keys" aria-live="polite" aria-busy="true" className={css({ display: 'grid', gap: '2' })}>
+              <span className={css({ srOnly: true })}>Loading API keys…</span>
+              <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
+              <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: 'full' })} />
+            </div>
+          ) : keys.length === 0 ? (
+            <ParkEmptyState
+              role={listError && !hasLoadedKeys ? 'alert' : undefined}
+              title={listError && !hasLoadedKeys ? 'API key list unavailable.' : 'No API keys found.'}
+              description={listError && !hasLoadedKeys ? listError : listError ? 'The last confirmed list is empty.' : 'Create a key when an integration requires external API access.'}
+              headingLevel={false}
+              className={css({ minW: 0 })}
+              action={listError && !hasLoadedKeys ? <ParkButton type="button" onClick={() => void fetchKeys()}>Retry loading keys</ParkButton> : undefined}
+            />
+          ) : (
+            <ParkTable.Root className={css({"w":"full","borderCollapse":"collapse"})}>
+            <ParkTable.Head>
+              <ParkTable.Row className={css({"borderBottomWidth":"1px","borderColor":"border.default"})}>
+                <ParkTable.Header>Name</ParkTable.Header>
+                <ParkTable.Header>Prefix</ParkTable.Header>
+                <ParkTable.Header>Created</ParkTable.Header>
+                <ParkTable.Header>Last Used</ParkTable.Header>
+                <ParkTable.Header className={css({ textAlign: 'right' })}>Actions</ParkTable.Header>
+              </ParkTable.Row>
+            </ParkTable.Head>
+            <ParkTable.Body className={css({"minW":0})}>
+              {keys.map((key) => (
+                <ParkTable.Row key={key.id}>
+                    <ParkTable.Cell className={css({"fontWeight":"medium","color":"text.primary"})}>{key.name}</ParkTable.Cell>
+                    <ParkTable.Cell className={css({"minW":0})}>{key.prefix}</ParkTable.Cell>
+                    <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
                       {new Date(key.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-4 h-4 text-slate-400" />
+                    </ParkTable.Cell>
+                    <ParkTable.Cell className={css({"color":"text.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                      <div className={css({"minW":0})}>
+                        <IconClock className={css({"minW":0})} aria-hidden="true" />
                         {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <TocynButton
+                    </ParkTable.Cell>
+                    <ParkTable.Cell>
+                      <ParkIconButton
+                        type="button" variant="plain"
                         aria-label={`Revoke ${key.name}`} onClick={event => { revokeOpener.current = event.currentTarget; revokeSucceeded.current = false; setRevocation(key); setRevokeError(''); setRevokeOpen(true); }}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         title="Revoke Key"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </TocynButton>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      {revokeStatus && <p role="status">{revokeStatus}</p>}
-      <TocynConfirmDialog open={revokeOpen} busy={revoking} title={`Revoke API key: ${revocation?.name ?? ''}`}
-        description="Revoke this API key? This action cannot be undone." confirmLabel={revoking ? 'Revoking...' : 'Revoke key'} error={revokeError}
-        onConfirm={handleDelete} onOpenChange={next => { if (!next && !revokeGuard.current) setRevokeOpen(false); }}
-        finalFocusEl={() => revokeSucceeded.current ? heading.current : revokeOpener.current} />
+                        <IconTrash className={css({"w":"4","h":"4","flexShrink":0})} aria-hidden="true" />
+                      </ParkIconButton>
+                    </ParkTable.Cell>
+                </ParkTable.Row>
+              ))}
+            </ParkTable.Body>
+            </ParkTable.Root>
+          )}
+        </ParkCard.Body>
+      </ParkCard.Root>
+      {revokeStatus && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{revokeStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      <ParkDialog.Root open={revokeOpen}
+        onOpenChange={({ open }) => { if (!open && !revokeGuard.current) setRevokeOpen(false); }}
+        initialFocusEl={() => revokeCancel.current}
+        finalFocusEl={() => revokeSucceeded.current ? heading.current : revokeOpener.current}
+        closeOnEscape={!revoking} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={revokeTitleId} aria-describedby={revokeDescriptionId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={revokeTitleId}>{`Revoke API key: ${revocation?.name ?? ''}`}</ParkDialog.Title>
+              <ParkDialog.Description id={revokeDescriptionId}>Revoke this API key? This action cannot be undone.</ParkDialog.Description>
+            </ParkDialog.Header>
+            {revokeError && <ParkDialog.Body>
+              <ParkAlert.Root role="alert" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{revokeError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>
+            </ParkDialog.Body>}
+            <ParkDialog.Footer>
+              <ParkButton type="button" ref={revokeCancel} variant="outline" disabled={revoking} onClick={() => { if (!revokeGuard.current) setRevokeOpen(false); }}>Cancel</ParkButton>
+              <ParkButton type="button" variant="outline" colorPalette="red" disabled={revoking} onClick={handleDelete}>{revoking ? 'Revoking...' : 'Revoke key'}</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 }

@@ -1,13 +1,22 @@
-import { TocynConfirmDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
+import { DashboardSelect } from '../components/DashboardSelect';
+import { css } from '@luminatick/ui/styled-system/css';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
+import { Badge, Field, IconButton as ParkIconButton } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '../api/client';
 import { useGroups } from '../hooks/useGroups';
-import { Mail, Plus, Trash2, Check, AlertCircle } from 'lucide-react';
-import { clsx } from 'clsx';
+import {
+  IconEnvelope,
+  IconPlus,
+  IconTrash,
+  IconCheck
+} from '@luminatick/ui/icons';
 
-import { Settings, Save } from 'lucide-react';
+import {
+  IconGear,
+  IconFloppyDisk
+} from '@luminatick/ui/icons';
 
 
 interface SupportEmail {
@@ -23,6 +32,9 @@ export function EmailChannelPage() {
   const queryClient = useQueryClient();
   const heading = React.useRef<HTMLHeadingElement>(null);
   const removalOpener = React.useRef<HTMLButtonElement | null>(null);
+  const removalCancel = React.useRef<HTMLButtonElement | null>(null);
+  const removalTitleId = React.useId();
+  const removalDescriptionId = React.useId();
   const removalGuard = React.useRef(false);
   const removalSucceeded = React.useRef(false);
   const [removal, setRemoval] = useState<SupportEmail | null>(null);
@@ -57,10 +69,12 @@ export function EmailChannelPage() {
   const [savingResend, setSavingResend] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
 
-  const { data: settings, isLoading: settingsLoading, isError: settingsFailed, refetch: reloadSettings } = useQuery({
+  const { data: settings, isLoading: settingsLoading, isError: settingsFailed, isFetching: settingsFetching, refetch: reloadSettings } = useQuery({
     queryKey: ['settings'],
     queryFn: () => dashboardApi.get<Record<string, string>>('/settings'),
   });
+
+  const settingsUnavailable = settingsFailed && settings === undefined;
 
   React.useEffect(() => {
     if (settings && !providerDirty.current) {
@@ -94,10 +108,11 @@ export function EmailChannelPage() {
     }
   };
 
-  const { data: emails, isLoading, isError: emailsFailed, refetch: reloadEmails } = useQuery({
+  const { data: emails, isLoading, isError: emailsFailed, isFetching: emailsFetching, refetch: reloadEmails } = useQuery({
     queryKey: ['support_emails'],
     queryFn: () => dashboardApi.get<SupportEmail[]>('/channels/emails'),
   });
+  const emailsUnavailable = emailsFailed && emails === undefined;
 
   const createEmail = useMutation({
     mutationFn: (data: typeof formData) =>
@@ -142,208 +157,169 @@ export function EmailChannelPage() {
   };
 
   return (
-    <div className="max-w-5xl">
-      <div className="mb-8 flex items-center justify-between">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Email Channels</h1>
-          <p className="text-slate-500 mt-1">Manage inbound support email addresses</p>
+          <h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Email Channels</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm' })}>Manage inbound support email addresses</p>
         </div>
         {!isAdding && (
-          <TocynButton
+          <ParkButton type="button"
             ref={addOpener}
             onClick={() => { setIsAdding(true); setError(null); setAddStatus(''); }}
-            className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors"
+            className={css({"minW":0})}
           >
-            <Plus className="w-4 h-4" />
+            <IconPlus aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
             Add Email
-          </TocynButton>
+          </ParkButton>
         )}
       </div>
 
 
       {addStatus && <p role="status">{addStatus}</p>}
-      <form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-brand-50 text-brand-600 rounded-lg">
-            <Settings className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Resend Integration</h2>
-            <p className="text-sm text-slate-500">Configure your Resend API credentials for outbound emails.</p>
-          </div>
-        </div>
+      <ParkCard.Root variant="outline">
+        <ParkCard.Header><ParkCard.Title asChild><h2 className={css({ display: 'flex', alignItems: 'center', gap: '2' })}><IconGear aria-hidden="true" className={css({ w: '5', h: '5' })} /> Resend Integration</h2></ParkCard.Title>
+          <ParkCard.Description>Configure your Resend API credentials for outbound emails.</ParkCard.Description></ParkCard.Header>
+        <ParkCard.Body><form aria-label="Outbound email configuration" aria-busy={savingResend} onSubmit={saveResendSettings} className={css({ display: 'grid', gap: '4' })}>
 
-        {settingsLoading && <p role="status">Loading configuration…</p>}
-        {settingsFailed && <div role="alert">Configuration could not be loaded. <TocynButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</TocynButton></div>}
-        {providerError && <p role="alert">{providerError}</p>}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label htmlFor="resend-api-key" className="block text-sm font-medium text-slate-700 mb-1">
-              Resend API Key
-            </label>
-            <TocynInput
-              id="resend-api-key" type="password" autoComplete="off" disabled={savingResend || settingsLoading || settingsFailed}
+        {settingsLoading && <div role="status" aria-label="Loading email configuration" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading configuration…</span><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /></div>}
+        {settingsUnavailable && <ParkEmptyState role="alert" headingLevel={false} title="Configuration could not be loaded." action={<ParkButton type="button" onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton>} className={css({"minW":0})} />}
+        {settingsFailed && settings !== undefined && <ParkAlert.Root role="alert" status="warning" variant="surface"><ParkAlert.Content><ParkAlert.Title>Configuration refresh failed</ParkAlert.Title><ParkAlert.Description>Last loaded settings and your edits remain available.</ParkAlert.Description><ParkButton type="button" variant="outline" disabled={settingsFetching} onClick={() => { void reloadSettings(); }}>Retry configuration</ParkButton></ParkAlert.Content></ParkAlert.Root>}
+        {providerError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{providerError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+        <div className={css({"display":"grid","gap":"4"})}>
+          <Field.Root className={css({ w: 'full' })}>
+            <Field.Label htmlFor="resend-api-key">Resend API Key</Field.Label>
+            <ParkInput
+              id="resend-api-key" type="password" autoComplete="off" aria-describedby="resend-api-key-help" disabled={savingResend || settingsLoading || settingsUnavailable}
               placeholder="re_xxxxxxxxxxxxxxxxx"
               value={resendApiKey}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendApiKey(e.target.value); }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono text-sm"
+              className={css({"w":"full"})}
             />
-            <p className="text-xs text-slate-500 mt-1">Required to send outbound email replies.</p>
-          </div>
-          <div>
-            <label htmlFor="resend-from-email" className="block text-sm font-medium text-slate-700 mb-1">
-              Default From Email
-            </label>
-            <TocynInput
-              id="resend-from-email" type="email" required disabled={savingResend || settingsLoading || settingsFailed}
+            <Field.HelperText id="resend-api-key-help">Required to send outbound email replies.</Field.HelperText>
+          </Field.Root>
+          <Field.Root required className={css({ w: 'full' })}>
+            <Field.Label htmlFor="resend-from-email">Default From Email</Field.Label>
+            <ParkInput
+              id="resend-from-email" type="email" required aria-describedby="resend-from-email-help" disabled={savingResend || settingsLoading || settingsUnavailable}
               placeholder="support@yourdomain.com"
               value={resendFromEmail}
               onChange={e => { providerDirty.current = true; setResendSuccess(false); setResendFromEmail(e.target.value); }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-mono text-sm"
+              className={css({"w":"full"})}
             />
-            <p className="text-xs text-slate-500 mt-1">Fallback email if a group email is not configured.</p>
-          </div>
+            <Field.HelperText id="resend-from-email-help">Fallback email if a group email is not configured.</Field.HelperText>
+          </Field.Root>
         </div>
-        <div className="mt-4 flex items-center justify-end gap-3">
-          {resendSuccess && <span role="status" className="text-sm text-green-600 flex items-center gap-1"><Check className="w-4 h-4"/> Configuration saved; delivery has not been verified.</span>}
-          <TocynButton
+        <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+          {resendSuccess && <span role="status" className={css({ color: 'fg.default' })}><IconCheck aria-hidden="true" className={css({ w: '4', h: '4' })} /> Configuration saved; delivery has not been verified.</span>}
+          <ParkButton
             type="submit"
-            disabled={savingResend || settingsLoading || settingsFailed || !resendApiKey || !resendFromEmail}
-            className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+            disabled={settingsLoading || settingsFailed || !resendApiKey || !resendFromEmail} loading={savingResend} loadingText="Saving configuration…"
+            className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            <Save className="w-4 h-4" />
-            {savingResend ? 'Saving...' : 'Save Configuration'}
-          </TocynButton>
+            <IconFloppyDisk aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
+            Save Configuration
+          </ParkButton>
         </div>
-      </form>
+      </form></ParkCard.Body></ParkCard.Root>
 
       {isAdding && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Add Support Email</h2>
-            <TocynButton
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+            <ParkCard.Title asChild><h2>Add Support Email</h2></ParkCard.Title>
+            <ParkButton type="button" variant="outline"
               disabled={createEmail.isPending}
               onClick={() => { setIsAdding(false); setError(null); requestAnimationFrame(() => addOpener.current?.focus()); }}
-              className="text-slate-400 hover:text-slate-600"
+              className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
               Cancel
-            </TocynButton>
-          </div>
+            </ParkButton>
+          </ParkCard.Header>
 
           {error && (
-            <div role="alert" ref={addError} tabIndex={-1} className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg flex items-center gap-2 text-sm">
-              <AlertCircle className="w-4 h-4" />
-              {error}
-            </div>
+            <ParkAlert.Root role="alert" status="error" ref={addError} tabIndex={-1}><ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>
           )}
 
-          <form aria-label="Add support email" aria-busy={createEmail.isPending} onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="support-email-address" className="block text-sm font-medium text-slate-700 mb-1">
-                  Email Address *
-                </label>
-                <TocynInput
+          <ParkCard.Body><form aria-label="Add support email" aria-busy={createEmail.isPending} onSubmit={handleSubmit} className={css({ display: 'grid', gap: '4' })}>
+            <div className={css({"display":"grid","gap":"4"})}>
+              <Field.Root required className={css({ w: 'full' })}>
+                <Field.Label htmlFor="support-email-address">Email Address <Field.RequiredIndicator> *</Field.RequiredIndicator></Field.Label>
+                <ParkInput
                   id="support-email-address" ref={emailInput} disabled={createEmail.isPending} type="email"
                   required
                   placeholder="support@yourdomain.com"
                   value={formData.email_address}
                   onChange={e => setFormData({ ...formData, email_address: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  className={css({"w":"full"})}
                 />
-              </div>
-              <div>
-                <label htmlFor="support-email-name" className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Name
-                </label>
-                <TocynInput
+              </Field.Root>
+              <Field.Root className={css({ w: 'full' })}>
+                <Field.Label htmlFor="support-email-name">Display Name</Field.Label>
+                <ParkInput
                   id="support-email-name" disabled={createEmail.isPending} type="text"
                   placeholder="Support Team"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  className={css({"w":"full"})}
                 />
-              </div>
+              </Field.Root>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="support-email-group" className="block text-sm font-medium text-slate-700 mb-1">
-                  Assign to Group
-                </label>
-                <TocynSelect id="support-email-group" disabled={createEmail.isPending}
-                  value={formData.group_id}
-                  onChange={e => setFormData({ ...formData, group_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                >
-                  <option value="">(No specific group)</option>
-                  {groups?.map(g => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))}
-                </TocynSelect>
-                <p className="text-xs text-slate-500 mt-1">
+            <div className={css({"display":"grid","gap":"4"})}>
+              <Field.Root className={css({ w: 'full' })}>
+                <DashboardSelect id="support-email-group" label="Assign to Group" aria-describedby="support-email-group-help" disabled={createEmail.isPending} value={formData.group_id} onValueChange={value => setFormData({ ...formData, group_id: value })} options={[{ value: '', label: '(No specific group)' }, ...(groups ?? []).map(group => ({ value: group.id, label: group.name }))]} />
+                <Field.HelperText id="support-email-group-help">
                   Tickets from this email will be automatically assigned to this group.
-                </p>
-              </div>
+                </Field.HelperText>
+              </Field.Root>
             </div>
 
-            <div className="flex items-center gap-2 mt-2">
-              <TocynInput
-                type="checkbox"
-                id="is_default" disabled={createEmail.isPending}
-                checked={formData.is_default}
-                onChange={e => setFormData({ ...formData, is_default: e.target.checked })}
-                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-              />
-              <label htmlFor="is_default" className="text-sm text-slate-700">
-                Set as default outbound email
-              </label>
+            <div className={css({"minW":0})}>
+              <ParkCheckbox.Root checked={formData.is_default} disabled={createEmail.isPending}
+                onCheckedChange={({ checked }) => setFormData({ ...formData, is_default: checked === true })}>
+                <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+                <ParkCheckbox.HiddenInput id="is_default" />
+                <ParkCheckbox.Label>Set as default outbound email</ParkCheckbox.Label>
+              </ParkCheckbox.Root>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-slate-100">
-              <TocynButton
+            <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+              <ParkButton
                 type="submit"
-                disabled={createEmail.isPending}
-                className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors disabled:opacity-50"
+                loading={createEmail.isPending} loadingText="Saving email…"
+                className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
               >
-                {createEmail.isPending ? 'Saving...' : 'Save Email'}
-              </TocynButton>
+                Save Email
+              </ParkButton>
             </div>
-          </form>
-        </div>
+          </form></ParkCard.Body>
+        </ParkCard.Root>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <ParkCard.Root variant="outline"><ParkCard.Body>
+        {emailsFailed && emails !== undefined && <ParkAlert.Root role="alert" status="warning" variant="surface"><ParkAlert.Content><ParkAlert.Title>Channel refresh failed</ParkAlert.Title><ParkAlert.Description>Last loaded email channels remain visible.</ParkAlert.Description><ParkButton type="button" variant="outline" disabled={emailsFetching} onClick={() => { void reloadEmails(); }}>Retry channels</ParkButton></ParkAlert.Content></ParkAlert.Root>}
         {isLoading ? (
-          <div role="status" className="p-8 text-center text-slate-500">Loading emails...</div>
-        ) : emailsFailed ? (
-          <div role="alert">Email channels could not be loaded. <TocynButton onClick={() => { void reloadEmails(); }}>Retry channels</TocynButton></div>
+          <div role="status" aria-label="Loading email channels" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading emails...</span><ParkSkeleton aria-hidden="true" className={css({ h: '16', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '16', w: 'full' })} /></div>
+        ) : emailsUnavailable ? (
+          <ParkEmptyState role="alert" title="Email channels could not be loaded." description="Retry to check the configured support addresses again." action={<ParkButton onClick={() => { void reloadEmails(); }}>Retry channels</ParkButton>} className={css({"minW":0})} />
         ) : emails?.length === 0 ? (
-          <div className="p-12 text-center">
-            <Mail className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-1">No email channels</h3>
-            <p className="text-slate-500">No addresses are configured here. Receiving email also requires the separately configured inbound provider.</p>
-          </div>
+          <ParkEmptyState title="No email channels" description="No addresses are configured here. Receiving email also requires the separately configured inbound provider." className={css({"minW":0})} />
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className={css({"display":"grid","gap":"4"})}>
             {emails?.map((email) => (
-              <div key={email.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                    <Mail className="w-5 h-5" />
-                  </div>
+              <div key={email.id} className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4', flexWrap: 'wrap', py: '3' })}>
+                <div className={css({ display: 'flex', alignItems: 'center', gap: '3', minW: '0' })}>
+                  <IconEnvelope aria-hidden="true" className={css({ w: '5', h: '5', flexShrink: 0, color: 'fg.muted' })} />
                   <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-slate-900">{email.email_address}</p>
+                    <div className={css({ display: 'flex', alignItems: 'center', gap: '2', flexWrap: 'wrap' })}>
+                      <p className={css({ m: '0', fontWeight: 'semibold', color: 'fg.default', overflowWrap: 'anywhere' })}>{email.email_address}</p>
                       {email.is_default && (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Default
-                        </span>
+                        <Badge colorPalette="green"><IconCheck aria-hidden="true" className={css({ w: '4', h: '4' })} /> Default</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
+                    <div className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>
                       {email.name && <span>{email.name}</span>}
-                      {email.name && <span className="text-slate-300">•</span>}
+                      {email.name && <span className={css({"minW":0})}>•</span>}
                       {email.group_id && groups ? (
                         <span>Group: {groups.find(g => g.id === email.group_id)?.name || 'Unknown'}</span>
                       ) : (
@@ -353,26 +329,44 @@ export function EmailChannelPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <TocynButton
+                <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                  <ParkIconButton type="button" variant="plain"
                     aria-label={`Remove ${email.email_address}`} onClick={event => { removalOpener.current = event.currentTarget; removalSucceeded.current = false; setRemoval(email); setRemoveError(''); setRemoveOpen(true); }}
                     disabled={deleteEmail.isPending}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     title="Remove email"
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </TocynButton>
+                    <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
+                  </ParkIconButton>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </ParkCard.Body></ParkCard.Root>
       {removeStatus && <p role="status">{removeStatus}</p>}
-      <TocynConfirmDialog open={removeOpen} busy={removing} title={`Remove email channel: ${removal?.email_address ?? ''}`}
-        description="Remove this configured email channel?" confirmLabel={removing ? 'Removing...' : 'Remove channel'} error={removeError}
-        onConfirm={handleRemove} onOpenChange={next => { if (!next && !removalGuard.current) setRemoveOpen(false); }}
-        finalFocusEl={() => removalSucceeded.current ? heading.current : removalOpener.current} />
+      <ParkDialog.Root open={removeOpen} onOpenChange={({ open }) => { if (!open && !removing && !removalGuard.current) setRemoveOpen(false); }}
+        initialFocusEl={() => removalCancel.current}
+        finalFocusEl={() => removalSucceeded.current ? heading.current : removalOpener.current}
+        closeOnEscape={!removing} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={removalTitleId} aria-describedby={removalDescriptionId}>
+            <ParkDialog.Header>
+              <ParkDialog.Title id={removalTitleId}>{`Remove email channel: ${removal?.email_address ?? ''}`}</ParkDialog.Title>
+            </ParkDialog.Header>
+            <ParkDialog.Body>
+              <ParkDialog.Description id={removalDescriptionId}>Remove this configured email channel?</ParkDialog.Description>
+              {removeError && <ParkAlert.Root role="alert" aria-atomic="true" status="error" variant="surface">
+                <ParkAlert.Content><ParkAlert.Description>{removeError}</ParkAlert.Description></ParkAlert.Content>
+              </ParkAlert.Root>}
+            </ParkDialog.Body>
+            <ParkDialog.Footer>
+              <ParkButton ref={removalCancel} type="button" disabled={removing} onClick={() => setRemoveOpen(false)}>Cancel</ParkButton>
+              <ParkButton type="button" disabled={removing} onClick={handleRemove}>{removing ? 'Removing...' : 'Remove channel'}</ParkButton>
+            </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
     </div>
   );
 }

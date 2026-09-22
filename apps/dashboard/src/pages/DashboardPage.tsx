@@ -1,141 +1,157 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { ParkAlert, ParkButton, ParkCard, ParkEmptyState, ParkPage, ParkProgress, ParkSkeleton } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useStats } from '../hooks/useStats';
-import { 
-  BarChart3, 
-  Users, 
-  Ticket, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle,
-  Users2
-} from 'lucide-react';
+import { IconChartBar, IconUsers, IconTicket, IconCircleCheck, IconClock, IconCircleExclamation } from '@luminatick/ui/icons';
 
 export const DashboardPage: React.FC = () => {
-  const { data: stats, isLoading } = useStats();
+  const navigate = useNavigate();
+  const { data: stats, isLoading, isError, isFetching, refetch } = useStats();
+  const page = ParkPage('dashboard');
+  const header = <header className={page.header}>
+    <div className={page.dashboardHeading}>
+      <h1>Dashboard</h1>
+      <p>A quick overview of the support workload.</p>
+    </div>
+    <ParkButton type="button" variant="solid" className={page.dashboardAction} onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>
+  </header>;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-slate-500 font-medium italic">
-        Loading dashboard metrics...
-      </div>
-    );
-  }
+  if (isLoading && !stats) return <div className={[page.root, page.content].join(' ')}>
+    {header}
+    <div role="status" aria-label="Loading dashboard metrics" aria-busy="true">
+      <div className={page.metricStrip}>{Array.from({ length: 4 }, (_, index) => <ParkCard.Root key={index} variant="outline" className={page.metricCard}>
+        <ParkCard.Body><ParkSkeleton height="4" width="60%" /><ParkSkeleton height="8" width="35%" /></ParkCard.Body>
+      </ParkCard.Root>)}</div>
+      <div className={page.panels}>{Array.from({ length: 2 }, (_, index) => <ParkCard.Root key={index} variant="outline">
+        <ParkCard.Body><ParkSkeleton height="4" width="45%" /><ParkSkeleton height="8" width="full" /><ParkSkeleton height="8" width="full" /></ParkCard.Body>
+      </ParkCard.Root>)}</div>
+    </div>
+  </div>;
 
-  const getStatusCount = (status: string) => 
-    stats?.ticketsByStatus.find(s => s.status === status)?.count || 0;
+  if (!stats) return <div className={[page.root, page.content].join(' ')}>
+    {header}
+    <ParkEmptyState role="alert" title="Dashboard metrics unavailable" description="The support workload could not be loaded."
+      action={<ParkButton type="button" disabled={isFetching} onClick={() => void refetch()}>Retry dashboard metrics</ParkButton>} />
+  </div>;
 
-  const totalTickets = stats?.ticketsByStatus.reduce((acc, curr) => acc + curr.count, 0) || 0;
+  const getStatusCount = (status: string) =>
+    stats.ticketsByStatus.find(s => s.status === status)?.count || 0;
+
+  const totalTickets = stats.ticketsByStatus.reduce((acc, curr) => acc + curr.count, 0);
 
   const cards = [
     {
       label: 'Total Tickets',
       value: totalTickets,
-      icon: Ticket,
-      color: 'bg-blue-50 text-blue-600',
+      icon: IconTicket,
+      tone: 'blue',
     },
     {
       label: 'Open Tickets',
       value: getStatusCount('open'),
-      icon: AlertCircle,
-      color: 'bg-emerald-50 text-emerald-600',
+      icon: IconCircleExclamation,
+      tone: 'green',
     },
     {
       label: 'Pending Tickets',
       value: getStatusCount('pending'),
-      icon: Clock,
-      color: 'bg-amber-50 text-amber-600',
+      icon: IconClock,
+      tone: 'amber',
     },
     {
       label: 'Resolved Tickets',
       value: getStatusCount('resolved') + getStatusCount('closed'),
-      icon: CheckCircle2,
-      color: 'bg-slate-50 text-slate-600',
+      icon: IconCircleCheck,
+      tone: 'neutral',
     },
   ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 text-sm">A quick overview of the support workload.</p>
-        <Link to="/inbox" className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-sm font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Open Inbox</Link>
-      </div>
+    <div className={[page.root, page.content].join(' ')}>
+      {header}
+      {isError && <ParkAlert.Root role="alert" status="warning"><ParkAlert.Content>
+        <ParkAlert.Description>Dashboard metrics could not be refreshed. Showing the last loaded values.</ParkAlert.Description>
+        <ParkButton type="button" variant="plain" disabled={isFetching} onClick={() => void refetch()}>Retry dashboard metrics</ParkButton>
+      </ParkAlert.Content></ParkAlert.Root>}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {cards.map((card, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${card.color}`}>
-                <card.icon className="w-5 h-5" />
+      <div className={page.metricStrip}>
+        {cards.map(card => (
+          <ParkCard.Root key={card.label} variant="outline" className={page.metricCard}>
+            <ParkCard.Header className={page.metricCardHeader}>
+              <div className={page.metricIcon} data-tone={card.tone} aria-hidden="true">
+                <card.icon aria-hidden="true" />
               </div>
-              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Metrics</span>
-            </div>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                <h3 className="text-3xl font-bold text-slate-900 mt-1">{card.value}</h3>
-              </div>
-            </div>
-          </div>
+              <ParkCard.Title className={page.metricLabel}>{card.label}</ParkCard.Title>
+            </ParkCard.Header>
+            <ParkCard.Body className={page.metricCardBody}>
+              <p className={page.metricValue} data-tabular>{card.value}</p>
+            </ParkCard.Body>
+          </ParkCard.Root>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-6">
-            <BarChart3 className="w-5 h-5 text-slate-400" />
-            <h3 className="font-bold text-slate-900">Tickets by Priority</h3>
-          </div>
-          <div className="space-y-4">
-            {['urgent', 'high', 'normal', 'low'].map((priority) => {
-              const count = stats?.ticketsByPriority.find(p => p.priority === priority)?.count || 0;
+      <div className={page.panels}>
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header className={page.panelHeader}>
+            <IconChartBar className={page.panelIcon} aria-hidden="true" />
+            <ParkCard.Title className={page.panelTitle}>Tickets by Priority</ParkCard.Title>
+          </ParkCard.Header>
+          <ParkCard.Body className={page.priorityList}>
+            {totalTickets === 0 ? <ParkEmptyState title="No ticket activity yet" description="Tickets will appear here when the first conversation arrives." headingLevel={false}
+              action={<ParkButton type="button" onClick={() => navigate('/inbox')}>Open Inbox</ParkButton>} /> : ['urgent', 'high', 'normal', 'low'].map((priority) => {
+              const count = stats.ticketsByPriority.find(p => p.priority === priority)?.count || 0;
               const percentage = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
               return (
-                <div key={priority} className="space-y-1.5">
-                  <div className="flex justify-between text-sm">
-                    <span className="capitalize text-slate-600 font-medium">{priority}</span>
-                    <span className="text-slate-900 font-bold">{count}</span>
+                <div key={priority} className={page.priorityRow}>
+                  <div>
+                    <span>{priority}</span>
+                    <span>{count}</span>
                   </div>
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${
-                        priority === 'urgent' ? 'bg-red-500' :
-                        priority === 'high' ? 'bg-orange-500' :
-                        priority === 'normal' ? 'bg-blue-500' : 'bg-slate-400'
-                      }`}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
+                  <ParkProgress
+                    value={percentage}
+                    className={css({ w: 'full' })}
+                    label={
+                      <span className={css({ position: 'absolute', w: '1px', h: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' })}>
+                        {priority} tickets: {count} of {totalTickets} ({percentage.toFixed(1)}%)
+                      </span>
+                    }
+                  />
                 </div>
               );
             })}
-          </div>
-        </div>
+          </ParkCard.Body>
+        </ParkCard.Root>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 mb-6">
-            <Users2 className="w-5 h-5 text-slate-400" />
-            <h3 className="font-bold text-slate-900">System Overview</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="w-4 h-4 text-brand-600" />
-                <span className="text-sm font-medium text-slate-600">Total Users</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-900">{stats?.totalUsers || 0}</p>
+        <ParkCard.Root variant="outline">
+          <ParkCard.Header className={page.panelHeader}>
+            <IconUsers className={page.panelIcon} aria-hidden="true" />
+            <ParkCard.Title className={page.panelTitle}>System Overview</ParkCard.Title>
+          </ParkCard.Header>
+          <ParkCard.Body>
+            <div className={page.overviewGrid}>
+              <ParkCard.Root variant="subtle" className={page.overviewCard}>
+                <ParkCard.Body className={page.overviewCardBody}>
+                  <div className={page.overviewCardLabel}>
+                    <IconUsers aria-hidden="true" />
+                    <span>Total Users</span>
+                  </div>
+                  <p className={page.overviewCardValue} data-tabular>{stats.totalUsers}</p>
+                </ParkCard.Body>
+              </ParkCard.Root>
+              <ParkCard.Root variant="subtle" className={page.overviewCard}>
+                <ParkCard.Body className={page.overviewCardBody}>
+                  <div className={page.overviewCardLabel}>
+                    <IconUsers aria-hidden="true" />
+                    <span>Active Groups</span>
+                  </div>
+                  <p className={page.overviewCardValue} data-tabular>{stats.totalGroups}</p>
+                </ParkCard.Body>
+              </ParkCard.Root>
             </div>
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-              <div className="flex items-center gap-3 mb-2">
-                <Users2 className="w-4 h-4 text-brand-600" />
-                <span className="text-sm font-medium text-slate-600">Active Groups</span>
-              </div>
-              <p className="text-2xl font-bold text-slate-900">{stats?.totalGroups || 0}</p>
-            </div>
-          </div>
-          <p className="mt-8 border-t border-slate-100 pt-6 text-sm text-slate-600">Use Inbox to keep the conversation list in place while reviewing and replying.</p>
-        </div>
+            <p className={page.overviewFooter}>Use Inbox to keep the conversation list in place while reviewing and replying.</p>
+          </ParkCard.Body>
+        </ParkCard.Root>
       </div>
     </div>
   );

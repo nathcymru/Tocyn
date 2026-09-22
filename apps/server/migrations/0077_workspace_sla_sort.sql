@@ -12,6 +12,7 @@ CREATE TABLE operator_workspace_state_sla (
   list_anchor TEXT NOT NULL CHECK (length(CAST(list_anchor AS BLOB)) <= 512),
   selected_ticket_id TEXT,
   panel TEXT NOT NULL CHECK (panel IN ('conversation','details')),
+  splitter_ratio INTEGER NOT NULL DEFAULT 32 CHECK (splitter_ratio BETWEEN 24 AND 50),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   PRIMARY KEY (tenant_id, user_id),
@@ -19,8 +20,8 @@ CREATE TABLE operator_workspace_state_sla (
 );
 
 INSERT INTO operator_workspace_state_sla
-  (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,created_at,updated_at)
-SELECT tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,created_at,updated_at
+  (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,splitter_ratio,created_at,updated_at)
+SELECT tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,splitter_ratio,created_at,updated_at
 FROM operator_workspace_state;
 DROP TABLE operator_workspace_state;
 ALTER TABLE operator_workspace_state_sla RENAME TO operator_workspace_state;

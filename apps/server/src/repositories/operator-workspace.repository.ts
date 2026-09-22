@@ -40,11 +40,11 @@ type DraftRow = {
 };
 type StateRow = {
   revision: number; view_key: OperatorWorkspaceView; sort_key: OperatorWorkspaceSort; filters: string;
-  list_query: string; list_anchor: string; selected_ticket_id: string | null; panel: 'conversation' | 'details'; updated_at: string;
+  list_query: string; list_anchor: string; selected_ticket_id: string | null; panel: 'conversation' | 'details'; splitter_ratio: number; updated_at: string;
 };
 
 const draftColumns = 'ticket_id,generation,revision,mode,body,body_format,attachments,mentioned_user_ids,base_conversation_revision,expires_at,updated_at';
-const stateColumns = 'revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,updated_at';
+const stateColumns = 'revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,splitter_ratio,updated_at';
 
 function draftFromRow(row: DraftRow): OperatorDraft {
   return {
@@ -57,7 +57,7 @@ function draftFromRow(row: DraftRow): OperatorDraft {
 function stateFromRow(row: StateRow): OperatorWorkspaceState {
   return {
     revision: row.revision, view: row.view_key, sort: row.sort_key, filters: JSON.parse(row.filters) as OperatorWorkspaceFilters,
-    listQuery: row.list_query, listAnchor: row.list_anchor, selectedTicketId: row.selected_ticket_id, panel: row.panel, updatedAt: row.updated_at,
+    listQuery: row.list_query, listAnchor: row.list_anchor, selectedTicketId: row.selected_ticket_id, panel: row.panel, splitterRatio: row.splitter_ratio, updatedAt: row.updated_at,
   };
 }
 
@@ -70,7 +70,7 @@ export type DraftSaveInput = Readonly<{
 }>;
 export type WorkspaceStateSaveInput = Readonly<{
   expectedRevision: number; view: OperatorWorkspaceView; sort: OperatorWorkspaceSort;
-  filters: OperatorWorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: 'conversation' | 'details';
+  filters: OperatorWorkspaceFilters; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: 'conversation' | 'details'; splitterRatio: number;
 }>;
 export type DraftRebaseInput = Readonly<{
   ticketId: string; expectedGeneration: string; expectedRevision: number; expectedReviewedConversationRevision: number;
@@ -384,17 +384,17 @@ export class OperatorWorkspaceRepository {
   async saveWorkspaceState(input: WorkspaceStateSaveInput, commit?: OperatorWorkspaceCommit): Promise<OperatorWorkspaceState | null> {
     const serializedFilters = JSON.stringify(input.filters);
     const statement = this.db.prepare(`INSERT INTO operator_workspace_state
-      (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,created_at,updated_at)
-      SELECT ?,?,1,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      (tenant_id,user_id,revision,view_key,sort_key,filters,list_query,list_anchor,selected_ticket_id,panel,splitter_ratio,created_at,updated_at)
+      SELECT ?,?,1,?,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now'),strftime('%Y-%m-%dT%H:%M:%fZ','now')
       WHERE ?=0 OR EXISTS (SELECT 1 FROM operator_workspace_state WHERE tenant_id=? AND user_id=?)
       ON CONFLICT(tenant_id,user_id) DO UPDATE SET revision=operator_workspace_state.revision+1,
         view_key=excluded.view_key,sort_key=excluded.sort_key,filters=excluded.filters,
-        list_query=excluded.list_query,list_anchor=excluded.list_anchor,selected_ticket_id=excluded.selected_ticket_id,panel=excluded.panel,updated_at=excluded.updated_at
+        list_query=excluded.list_query,list_anchor=excluded.list_anchor,selected_ticket_id=excluded.selected_ticket_id,panel=excluded.panel,splitter_ratio=excluded.splitter_ratio,updated_at=excluded.updated_at
       WHERE operator_workspace_state.revision=?
       RETURNING ${stateColumns}`)
       .bind(
         this.scope.tenantId, this.scope.actorId, input.view, input.sort, serializedFilters, input.listQuery, input.listAnchor,
-        input.selectedTicketId, input.panel, input.expectedRevision, this.scope.tenantId, this.scope.actorId, input.expectedRevision,
+        input.selectedTicketId, input.panel, input.splitterRatio, input.expectedRevision, this.scope.tenantId, this.scope.actorId, input.expectedRevision,
       );
     const condition: MutationCondition = {
       sql: `(?=0 AND NOT EXISTS (SELECT 1 FROM operator_workspace_state WHERE tenant_id=? AND user_id=?))

@@ -9,7 +9,10 @@ it('announces pending route code and then renders it',async()=>{
   let finish!:(module:{default:()=>React.JSX.Element})=>void;
   const Page=lazy(()=>new Promise<{default:()=>React.JSX.Element}>(resolve=>{finish=resolve;}));
   render(<MemoryRouter><RouteContent><Page/></RouteContent></MemoryRouter>);
-  expect(screen.getByRole('status')).toHaveTextContent('Loading page');
+  const loading = screen.getByRole('status', { name: 'Loading page…' });
+  expect(loading).toHaveAttribute('aria-busy', 'true');
+  expect(loading.querySelectorAll('.skeleton')).toHaveLength(3);
+  expect(loading.querySelectorAll('[aria-hidden="true"] .skeleton')).toHaveLength(3);
   await act(async()=>finish({default:()=> <h1>Loaded ticket page</h1>}));
   expect(screen.getByRole('heading',{name:'Loaded ticket page'})).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
@@ -24,7 +27,10 @@ it('focuses a safe load-error message, offers a real reload and permits another 
   </Routes></MemoryRouter>);
   const heading=await screen.findByRole('heading',{name:'This page could not be loaded'});
   await waitFor(()=>expect(heading).toHaveFocus());
+  expect(heading).toHaveClass('emptyState__title');
+  expect(heading.closest('[role="alert"]')).toHaveClass('emptyState__root');
   expect(screen.getByRole('link',{name:'Reload this page'})).toHaveAttribute('href','/tickets?filter=open');
+  expect(screen.getByRole('link',{name:'Reload this page'})).toHaveClass('button--variant_outline');
   expect(screen.queryByText(/synthetic private module failure/)).not.toBeInTheDocument();
   expect(useAuthStore.getState()).toBe(before);
   fireEvent.click(screen.getByRole('link',{name:'Other page'}));

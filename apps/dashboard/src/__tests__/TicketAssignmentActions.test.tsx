@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -13,6 +13,19 @@ const props = { ticketId: 'ticket', ownerId: null as string | null, fresh: true,
   agents: [{ id: 'operator', email: 'operator@example.test', full_name: 'Synthetic operator' }], onBlocked };
 const show = (extra: Partial<typeof props> = {}, refresh = vi.fn().mockResolvedValue(undefined)) => render(
   <QueryClientProvider client={client}><TicketAssignmentActions {...props} {...extra} refreshTicket={refresh} /></QueryClientProvider>);
+async function selectOperator() {
+  await userEvent.click(screen.getByRole('combobox', { name: 'Assign to operator' }));
+  await userEvent.click(screen.getByRole('option', { name: 'Synthetic operator' }));
+  // Ark Select restores trigger focus on the next frame; finish that close
+  // before typing into the separate reason field.
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  const selection = screen.getByRole('combobox', { name: 'Assign to operator' });
+  expect(selection).toHaveAttribute('aria-expanded', 'false');
+  expect(selection).toHaveTextContent('Synthetic operator');
+  const reason = screen.getByLabelText('Override reason');
+  await userEvent.click(reason);
+  expect(reason).toHaveFocus();
+}
 beforeEach(() => {
   vi.resetAllMocks(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   useAuthStore.getState().setAuth('synthetic', { id: 'admin', tenant_id: 'a', role: 'admin', email: 'admin@example.test', full_name: 'Admin', mfa_enabled: true });
@@ -41,7 +54,16 @@ it('opens by keyboard with close focus and Escape returns to the override opener
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   show(); const opener = screen.getByRole('button', { name: 'Override assignment capacity' });
   opener.focus(); await userEvent.keyboard('{Enter}');
+  const dialog = await screen.findByRole('dialog', { name: 'Override assignment capacity' });
+  expect(dialog).toHaveClass('dialog__content');
+  expect(document.querySelector('.dialog__backdrop')).toBeInTheDocument();
+  expect(dialog.querySelector('.dialog__header .dialog__title')).toHaveTextContent('Override assignment capacity');
+  expect(dialog.querySelector('.dialog__body')).toContainElement(screen.getByRole('combobox', { name: 'Assign to operator' }));
+  expect(dialog.querySelector('.dialog__footer')).toContainElement(screen.getByRole('button', { name: 'Assign with audited override' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Close assignment override' })).toHaveFocus());
+  fireEvent.pointerDown(document.body);
+  fireEvent.click(document.body);
+  expect(dialog).toBeInTheDocument();
   await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
   await userEvent.tab({ shift: true }); expect(screen.getByLabelText('Override reason')).toHaveFocus();
   await userEvent.tab(); expect(screen.getByRole('button', { name: 'Close assignment override' })).toHaveFocus();
@@ -55,12 +77,19 @@ it('retains entered override values after conflict and submits a fresh explicit 
   vi.mocked(dashboardApi.patch).mockRejectedValueOnce(new ApiError('changed', 409)).mockResolvedValueOnce({ success: true, responsibleOwnerId: 'operator' });
   const view = show({}, refresh);
   await userEvent.click(screen.getByRole('button', { name: 'Override assignment capacity' }));
-  await userEvent.selectOptions(screen.getByLabelText('Assign to operator'), 'operator');
+  await selectOperator();
+  const reasonField = screen.getByRole('textbox', { name: 'Override reason' });
+  const fieldRoot = reasonField.closest('.field__root');
+  expect(fieldRoot).toBeInTheDocument();
+  expect(fieldRoot?.querySelector('.field__label')).toHaveTextContent('Override reason');
+  expect(fieldRoot?.querySelector('.field__helperText')).toHaveTextContent('A reason is required. Keep it brief.');
+  expect(reasonField).toHaveAccessibleDescription('A reason is required. Keep it brief.');
   await userEvent.type(screen.getByLabelText('Override reason'), 'Urgent approved exception');
+  expect(screen.getByLabelText('Override reason')).toHaveValue('Urgent approved exception');
   await userEvent.click(screen.getByRole('button', { name: 'Assign with audited override' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/entered values are retained/));
   expect(screen.getByLabelText('Override reason')).toHaveValue('Urgent approved exception');
-  expect(screen.getByLabelText('Assign to operator')).toHaveValue('operator');
+  expect(screen.getByRole('combobox', { name: 'Assign to operator' })).toHaveTextContent('Synthetic operator');
   expect(dashboardApi.patch).toHaveBeenCalledTimes(1);
   view.rerender(<QueryClientProvider client={client}><TicketAssignmentActions {...props} ownerId="new-owner" refreshTicket={refresh} /></QueryClientProvider>);
   await userEvent.click(screen.getByRole('button', { name: 'Assign with audited override' }));
@@ -70,13 +99,31 @@ it('retains entered override values after conflict and submits a fresh explicit 
 
 it('rejects an oversized multibyte reason and never exposes override controls to an agent', async () => {
   show(); await userEvent.click(screen.getByRole('button', { name: 'Override assignment capacity' }));
-  await userEvent.selectOptions(screen.getByLabelText('Assign to operator'), 'operator');
+  await selectOperator();
   await userEvent.type(screen.getByLabelText('Override reason'), 'é'.repeat(257));
+  expect(screen.getByLabelText('Override reason')).toHaveValue('é'.repeat(257));
   expect(screen.getByRole('button', { name: 'Assign with audited override' })).toBeDisabled();
-  expect(screen.getByRole('alert')).toHaveTextContent('reason is too long');
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('reason is too long');
   expect(dashboardApi.patch).not.toHaveBeenCalled();
   cleanup(); act(() => useAuthStore.getState().updateUser({ role: 'agent' })); show();
   expect(screen.queryByRole('button', { name: 'Override assignment capacity' })).not.toBeInTheDocument();
+});
+
+it('keeps the uncertain assignment retry inside a Park alert', async () => {
+  vi.mocked(dashboardApi.post)
+    .mockRejectedValueOnce(new Error('Synthetic lost response'))
+    .mockResolvedValueOnce({ outcome: 'assigned', ownerId: 'operator', replayed: false });
+  show();
+  await userEvent.click(screen.getByRole('button', { name: 'Balance assignment' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('could not be confirmed');
+  await userEvent.click(screen.getByRole('button', { name: 'Retry same assignment' }));
+  await waitFor(() => expect(dashboardApi.post).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(dashboardApi.post).mock.calls[1][2]).toEqual(vi.mocked(dashboardApi.post).mock.calls[0][2]);
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
 });
 
 

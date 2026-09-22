@@ -62,7 +62,9 @@ it('shows recoverable feedback for an invalid response and retries without accep
   vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
   render(preview());
   fireEvent.click(screen.getByRole('button', { name: 'Preview image diagram.png' }));
-  expect((await screen.findByRole('alert')).textContent).toContain('Image preview could not be loaded.');
+  const failure = await screen.findByRole('alert');
+  expect(failure).toHaveClass('alert__root');
+  expect(failure).toHaveTextContent('Image preview could not be loaded.');
   expect(createObjectURL).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry image preview diagram.png' }));
   await screen.findByRole('img', { name: 'Preview of diagram.png' });

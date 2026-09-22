@@ -9,7 +9,11 @@ export type OperatorMotion = 'system' | 'reduced' | 'full';
 export type OperatorPreferences = Readonly<{ version: typeof OPERATOR_PREFERENCES_VERSION; revision: number; density: OperatorDensity; fontScale: OperatorFontScale; focusMode: boolean; motion: OperatorMotion; navigation: 'compact'|'labelled'; contextDefault: 'remember'|'conversation'|'details'; shortcutsEnabled: boolean; interruptionLevel: 'standard'|'quiet'; advanceAfterResolve: boolean; updatedAt: string | null }>;
 export type OperatorPreferencesStatus = 'idle' | 'loading' | 'restored' | 'unsaved' | 'saving' | 'saved' | 'error' | 'conflict';
 export type OperatorPreferencesSnapshot = Readonly<OperatorPreferences & { status: OperatorPreferencesStatus; error: string | null; schemaUnavailable: boolean }>;
-const DEFAULT: OperatorPreferences = { version: OPERATOR_PREFERENCES_VERSION, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'compact', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, updatedAt: null };
+const DEFAULT: OperatorPreferences = { version: OPERATOR_PREFERENCES_VERSION, revision: 0, density: 'comfortable', fontScale: 'normal', focusMode: false, motion: 'system', navigation: 'labelled', contextDefault: 'remember', shortcutsEnabled: true, interruptionLevel: 'standard', advanceAfterResolve: false, updatedAt: null };
+// A schema failure must fall back to the narrow, low-risk shell so an unknown
+// preference cannot make the authenticated layout unusable. Valid restored
+// preferences, including labelled navigation, remain authoritative.
+const PROTECTED_DEFAULT: OperatorPreferences = { ...DEFAULT, navigation: 'compact' };
 const valid = (value: unknown): value is OperatorPreferences => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
@@ -21,6 +25,7 @@ const valid = (value: unknown): value is OperatorPreferences => {
 };
 const identityFor = (generation: number, tenantId?: string, userId?: string) => tenantId && userId ? `${generation}:${tenantId}:${userId}` : null;
 function empty(status: OperatorPreferencesStatus = 'idle', error: string | null = null): OperatorPreferencesSnapshot { return { ...DEFAULT, status, error, schemaUnavailable: false }; }
+function schemaUnavailable(error: string): OperatorPreferencesSnapshot { return { ...PROTECTED_DEFAULT, status: 'error', error, schemaUnavailable: true }; }
 
 function createController(identity: string | null) {
   let state = empty(identity ? 'loading' : 'idle'); let active = false; let denied = !identity; let epoch = 0; let dirty = false; let revisionKnown = false;
@@ -35,7 +40,7 @@ function createController(identity: string | null) {
     replace({ ...state, status: 'loading', error: null });
     const flight = dashboardApi.get<unknown>('/workspace/presentation-preference').then(response => {
       if (!current(requestEpoch)) return;
-      if (!valid(response)) { revisionKnown = false; dirty = false; replace({ ...empty('error', 'Workspace preferences response is invalid. Restore before saving.'), schemaUnavailable: true }); return; }
+      if (!valid(response)) { revisionKnown = false; dirty = false; replace(schemaUnavailable('Workspace preferences response is invalid. Restore before saving.')); return; }
       revisionKnown = true;
       if (preserveLocal) { replace({ ...state, revision: response.revision, updatedAt: response.updatedAt, status: 'unsaved', error: null, schemaUnavailable: false }); return; }
       dirty = false; replace({ ...response, status: 'restored', error: null, schemaUnavailable: false });
@@ -44,7 +49,7 @@ function createController(identity: string | null) {
       if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
       if (error instanceof ApiError && error.code === 'presentation_schema_unavailable') {
         revisionKnown = false; dirty = false;
-        replace({ ...empty('error', 'Workspace preferences schema is unavailable. Restore before saving.'), schemaUnavailable: true });
+        replace(schemaUnavailable('Workspace preferences schema is unavailable. Restore before saving.'));
       } else replace({ ...state, status: 'error', error: 'Workspace preferences could not be restored. Retry.' });
     }).finally(() => {
       if (restoreFlight !== flight) return;
@@ -68,7 +73,7 @@ function createController(identity: string | null) {
       if (error instanceof ApiError && error.status === 403) { clearUnauthorized(); return; }
       if (error instanceof ApiError && error.code === 'presentation_schema_unavailable') {
         revisionKnown = false; dirty = false;
-        replace({ ...empty('error', 'Workspace preferences schema is unavailable. Restore before saving.'), schemaUnavailable: true });
+        replace(schemaUnavailable('Workspace preferences schema is unavailable. Restore before saving.'));
         return;
       }
       const conflict = error instanceof ApiError && error.status === 409;

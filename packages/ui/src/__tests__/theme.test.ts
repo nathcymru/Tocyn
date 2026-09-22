@@ -26,9 +26,11 @@ describe('Tocyn theme contract', () => {
   it('resolves fallback, tenant, then instance values with a version', () => {
     const theme = resolveTocynTheme({ mode: 'dark', tenant: { targetMin: '48px' }, instance: { targetMin: '52px' } });
     expect(theme.version).toBe(TOCYN_THEME_CONTRACT_VERSION);
-    expect(theme.tokens.colorSelected).toBe('#1e3a8a');
-    expect(theme.tokens.colorText).toBe('#f8fafc');
-    expect(theme.variables['--tocyn-color-selected']).toBe('#1e3a8a');
+    expect(theme.tokens.colorSelected).toBe('#0d2847');
+    expect(theme.tokens.colorInverse).toBe('#edeef0');
+    expect(theme.tokens.colorText).toBe('#edeef0');
+    expect(theme.variables['--tocyn-color-selected']).toBe('#0d2847');
+    expect(theme.variables['--tocyn-color-inverse']).toBe('#edeef0');
     expect(theme.tokens.targetMin).toBe('52px');
     expect(resolveTocynTheme({ tenant: { targetMin: '48px' } }).tokens.targetMin).toBe('48px');
     expect(resolveTocynTheme().tokens.targetMin).toBe('44px');
@@ -60,5 +62,11 @@ describe('Tocyn theme contract', () => {
     const accessor = { get colorText(): string { throw new Error('Accessor must not run'); } };
     expect(() => resolveTocynTheme({ tenant: accessor })).toThrow(TypeError);
     expect(Object.isFrozen(resolveTocynTheme().variables)).toBe(true);
+  });
+
+  it('requires at least 4.5:1 text contrast on every content surface', () => {
+    // #6e6e6e reaches only 4.48:1 against the muted light surface.
+    expect(() => resolveTocynTheme({ tenant: { colorTextMuted: '#6e6e6e' } })).toThrow(TypeError);
+    expect(resolveTocynTheme({ tenant: { colorTextMuted: '#6d6d6d' } }).tokens.colorTextMuted).toBe('#6d6d6d');
   });
 });

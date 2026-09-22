@@ -1,13 +1,13 @@
 import { AuthLayout } from '@luminatick/ui/auth-layout';
+import { ParkButton, ParkEmptyState } from '@luminatick/ui/park';
 import React, { lazy } from 'react';
 import { RouteContent } from './components/RouteContent';
-import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Route, Navigate, Link, useLocation } from 'react-router-dom';
 const Layout = lazy(() => import('./components/layout/Layout').then(module => ({ default: module.Layout })));
 import { SettingsLayout } from './components/layout/SettingsLayout';
 import { LoginPage } from './pages/LoginPage';
 import { MfaPage } from './pages/MfaPage';
 const InboxWorkspacePage = lazy(() => import('./pages/InboxWorkspacePage').then(module => ({ default: module.InboxWorkspacePage })));
-const LegacyTicketsRedirect = lazy(() => import('./pages/LegacyTicketsRedirect').then(module => ({ default: module.LegacyTicketsRedirect })));
 const ApiKeyPage = lazy(() => import('./pages/ApiKeyPage').then(module => ({ default: module.ApiKeyPage })));
 const AutomationPage = lazy(() => import('./pages/AutomationPage').then(module => ({ default: module.AutomationPage })));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage').then(module => ({ default: module.KnowledgePage })));
@@ -22,6 +22,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage').then(module => 
 const TicketFieldsPage = lazy(() => import('./pages/TicketFieldsPage').then(module => ({ default: module.TicketFieldsPage })));
 const FiltersSettingsPage = lazy(() => import('./pages/FiltersSettingsPage').then(module => ({ default: module.FiltersSettingsPage })));
 const SecurityProfilePage = lazy(() => import('./pages/SecurityProfilePage').then(module => ({ default: module.SecurityProfilePage })));
+const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage').then(module => ({ default: module.AccountSettingsPage })));
 const UsagePage = lazy(() => import('./pages/UsagePage').then(module => ({ default: module.UsagePage })));
 const SupportStatesPage = lazy(() => import('./pages/SupportStatesPage').then(module => ({ default: module.SupportStatesPage })));
 const SlaSettingsPage = lazy(() => import('./pages/SlaSettingsPage').then(module => ({ default: module.SlaSettingsPage })));
@@ -53,7 +54,7 @@ function ProtectedRoute({ children, requireMfa = true }: { children: React.React
 export default function App() {
   const [router] = React.useState(() => createBrowserRouter(createRoutesFromElements(
       <>
-        <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
+        <Route path="/login" element={<AuthLayout showOuterLogo={false}><LoginPage /></AuthLayout>} />
         <Route
           path="/mfa"
           element={
@@ -73,8 +74,6 @@ export default function App() {
         >
           <Route index element={<RouteContent><DashboardPage /></RouteContent>} />
           <Route path="inbox/*" element={<RouteContent persistent><InboxWorkspacePage /></RouteContent>} />
-          <Route path="tickets" element={<RouteContent><LegacyTicketsRedirect /></RouteContent>} />
-          <Route path="tickets/:id" element={<RouteContent><LegacyTicketsRedirect /></RouteContent>} />
           <Route path="knowledge" element={<RouteContent><KnowledgePage /></RouteContent>} />
           <Route path="knowledge/new" element={<RouteContent><KnowledgeEditorPage /></RouteContent>} />
           <Route path="knowledge/edit/:id" element={<RouteContent><KnowledgeEditorPage /></RouteContent>} />
@@ -82,6 +81,7 @@ export default function App() {
 
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="general" replace />} />
+            <Route path="account" element={<RouteContent><AccountSettingsPage /></RouteContent>} />
             <Route path="general" element={<RouteContent><SettingsPage /></RouteContent>} />
             <Route path="support-states" element={<RouteContent><SupportStatesPage /></RouteContent>} />
             <Route path="sla" element={<RouteContent><SlaSettingsPage /></RouteContent>} />
@@ -96,6 +96,7 @@ export default function App() {
             <Route path="channels/email" element={<RouteContent><EmailChannelPage /></RouteContent>} />
             <Route path="channels/widget" element={<RouteContent><WidgetChannelPage /></RouteContent>} />
           </Route>
+          <Route path="*" element={<RouteContent><ParkEmptyState title="Page not found" description="This address is no longer available." action={<ParkButton asChild><Link to="/inbox/all">Open Inbox</Link></ParkButton>} /></RouteContent>} />
         </Route>
       </>
   )));

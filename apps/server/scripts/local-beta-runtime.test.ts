@@ -10,6 +10,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import * as OTPAuth from 'otpauth';
 import { createLocalFixtureBootstrap } from './local-tenant-fixture';
 import { openLocalBetaState } from './local-beta-state';
 import { LocalBetaOperator } from './local-beta-operator';
@@ -76,6 +77,12 @@ test('real local Wrangler observes operator revisions on warm connections and re
     setup(['d1','migrations','apply','tocyn-local','--local','--persist-to',state]);
     const bootstrap=await createLocalFixtureBootstrap(secrets);const seed=join(directory,'seed.sql');writeFileSync(seed,bootstrap.sql,{mode:0o600});setup(['d1','execute','tocyn-local','--local','--persist-to',state,'--file',seed]);rmSync(seed);
     const db=openLocalBetaState(state);
+    const countRows=(sql:string)=>(db.prepare(sql).get() as {count:number}|undefined)?.count;
+    assert.equal(countRows("SELECT count(*) AS count FROM ticket_sla_clocks WHERE tenant_id='fixture-tenant-a'"),20,'Real bootstrap must seed 20 tenant-A SLA presentations');
+    assert.equal(countRows("SELECT count(*) AS count FROM ticket_sla_clocks WHERE tenant_id='fixture-tenant-b'"),2,'Real bootstrap must seed only tenant-B clocks in tenant B');
+    assert.equal(countRows("SELECT count(*) AS count FROM tickets WHERE tenant_id='fixture-tenant-a'"),20,'Real bootstrap must seed 20 tenant-A conversations');
+    assert.equal(countRows("SELECT count(*) AS count FROM articles WHERE tenant_id='fixture-tenant-a'"),25,'Real bootstrap must seed multi-message timelines');
+    assert.equal(countRows('SELECT count(*) AS count FROM sla_policies'),2,'Real bootstrap must seed one synthetic policy per tenant');
     const invitations:{tenantId:string;kind:'customer'|'staff'|'api-key';id:string}[]=['fixture-tenant-a','fixture-tenant-b'].flatMap(tenantId=>[{tenantId,kind:'customer' as const,id:'fixture-customer'},{tenantId,kind:'staff' as const,id:'fixture-operator'}]);
     const keys: {apiKey:string;id:string}[]=[];
     for(const tenantId of ['fixture-tenant-a','fixture-tenant-b']) {
@@ -89,6 +96,44 @@ test('real local Wrangler observes operator revisions on warm connections and re
     const login=await request('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:customer.email,password:customer.password})});assert.equal(login.status,200);const token=(await login.json() as {token:string}).token;
     const headers={Authorization:`Bearer ${token}`};
     for(let n=0;n<5;n++){const res=await request('/api/auth/me',{headers});assert.equal(res.status,200);await res.body?.cancel();}
+    const operator=bootstrap.credentials.find(c=>c.email==='fixture.operator.a@example.test')!;
+    const operatorLogin=await request('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:operator.email,password:operator.password})});
+    assert.equal(operatorLogin.status,200);const operatorChallenge=await operatorLogin.json() as {token:string;mfa_required?:boolean};
+    assert.equal(operatorChallenge.mfa_required,true);
+    const authenticator=OTPAuth.URI.parse(operator.provisioningUri!) as OTPAuth.TOTP;
+    const operatorVerified=await request('/api/auth/mfa/verify',{method:'POST',headers:{'Authorization':`Bearer ${operatorChallenge.token}`,'Content-Type':'application/json'},body:JSON.stringify({code:authenticator.generate()})});
+    assert.equal(operatorVerified.status,200);const operatorSession=await operatorVerified.json() as {token:string};
+    const operatorTickets=await request('/api/tickets?limit=50',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(operatorTickets.status,200);const operatorTicketBody=await operatorTickets.json() as {data?:Array<{id:string;ticket_no?:number;snippet?:string|null;assigned_to?:string|null}>};
+    assert.ok(operatorTicketBody.data?.some(ticket=>ticket.id==='beta2-open-assigned'),'Real local-beta bootstrap must expose seeded tenant-A tickets to its operator');
+    assert.equal(operatorTicketBody.data?.filter(ticket=>ticket.id.startsWith('beta2-')).length,20,'Operator A must see 20 review conversations');
+    assert.ok(operatorTicketBody.data?.filter(ticket=>ticket.id.startsWith('beta2-')).every(ticket=>Number.isSafeInteger(ticket.ticket_no)&&Boolean(ticket.snippet?.trim())),'Every review row must have a reference and visible conversation preview');
+    assert.ok(operatorTicketBody.data?.some(ticket=>ticket.id==='beta2-email'),'Real local-beta bootstrap must expose seeded email ticket to its operator');
+    assert.ok(operatorTicketBody.data?.filter(ticket=>ticket.id.startsWith('beta2-')).every(ticket=>typeof ticket.snippet==='string'&&ticket.snippet.length>0),'Real local-beta ticket list must expose each seeded conversation preview');
+    assert.equal(operatorTicketBody.data?.find(ticket=>ticket.id==='beta2-email')?.snippet,'Hello support,\n\nCould you explain the additional line item on my invoice?\n\nThanks.');
+    assert.equal(operatorTicketBody.data?.find(ticket=>ticket.id==='beta2-internal-attachment')?.snippet,'Private handoff: verify the replacement address against the attached receipt.');
+    assert.ok(!operatorTicketBody.data?.some(ticket=>ticket.id==='beta2-b-email'),'Tenant-A operator must not receive tenant-B seeded tickets');
+    const onTrackSla=await request('/api/tickets/beta2-open-assigned/sla',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(onTrackSla.status,200);assert.equal((await onTrackSla.json() as {response:{state:string}}).response.state,'on-track');
+    const breachedSla=await request('/api/tickets/beta2-email/sla',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(breachedSla.status,200);assert.equal((await breachedSla.json() as {response:{state:string}}).response.state,'breached');
+    const unavailableSla=await request('/api/tickets/beta2-pending-unassigned/sla',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(unavailableSla.status,200);assert.equal((await unavailableSla.json() as {response:{state:string}}).response.state,'unavailable');
+    for(const id of ['beta2-breach-billing','beta2-breach-delivery']){
+      assert.equal(operatorTicketBody.data?.find(ticket=>ticket.id===id)?.assigned_to,null,'Breached alert rows must be unassigned in the real review Inbox');
+      const breachedUnassigned=await request(`/api/tickets/${id}/sla`,{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+      assert.equal(breachedUnassigned.status,200);assert.equal((await breachedUnassigned.json() as {response:{state:string}}).response.state,'breached');
+    }
+    const foreignSla=await request('/api/tickets/beta2-b-open-unassigned/sla',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(foreignSla.status,404);await foreignSla.body?.cancel();
+    const emailDetail=await request('/api/tickets/beta2-email',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(emailDetail.status,200);const emailBody=await emailDetail.json() as {articles?:Array<{intake_source?:string;raw_email_id?:string}>};
+    assert.ok(emailBody.articles?.some(article=>article.intake_source==='email'&&article.raw_email_id==='beta2-email-raw'),'Real bootstrap must expose seeded email article metadata');
+    const attachmentDetail=await request('/api/tickets/beta2-internal-attachment',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(attachmentDetail.status,200);const attachmentBody=await attachmentDetail.json() as {articles?:Array<{is_internal?:boolean;attachments?:Array<{filename?:string;contentType?:string}>}>};
+    assert.ok(attachmentBody.articles?.some(article=>article.is_internal===true&&article.attachments?.some(attachment=>attachment.filename==='order-summary.pdf'&&attachment.contentType==='application/pdf')),'Real bootstrap must expose seeded attachment metadata');
+    const foreignDetail=await request('/api/tickets/beta2-b-email',{headers:{Authorization:`Bearer ${operatorSession.token}`}});
+    assert.equal(foreignDetail.status,404,'Tenant-A operator must not read tenant-B seeded detail');
     const createTicket=(key:string,retry:string)=>request('/api/v1/tickets',{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':key,'Idempotency-Key':retry},body:JSON.stringify({subject:'Runtime bounded create',body:'Synthetic runtime message',customer_email:customer.email})});
     const accepted=await createTicket(keys[0].apiKey,'runtime-first');assert.equal(accepted.status,201);const acceptedBody=await accepted.json() as {id:string};
     const lastSlot=await Promise.all([createTicket(keys[0].apiKey,'runtime-a-last'),createTicket(keys[1].apiKey,'runtime-b-last')]);

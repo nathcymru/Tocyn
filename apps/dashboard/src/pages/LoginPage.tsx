@@ -1,19 +1,32 @@
 import { MfaPage } from './MfaPage';
 import { PRODUCT_BRAND } from '@luminatick/shared/product-brand';
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { AuthLogo } from '@luminatick/ui/auth-layout';
+import { ParkAlert, ParkButton, ParkField, ParkInput } from '@luminatick/ui/park';
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { dashboardApi } from '../api/client';
 import { AuthResponse } from '../types';
+import { authStyles } from './auth-styles';
 
 export function LoginPage() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const submitButton = React.useRef<HTMLButtonElement>(null);
+  const restoreSubmitFocus = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!loading && restoreSubmitFocus.current) {
+      restoreSubmitFocus.current = false;
+      submitButton.current?.focus();
+    }
+  }, [loading]);
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const logoutWarning = typeof location.state?.logoutWarning === 'string' ? location.state.logoutWarning : '';
   const mfaRequired = useAuthStore(state => state.mfaRequired);
   const enrolled = useAuthStore(state => state.user?.mfa_enabled);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -22,6 +35,7 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+    restoreSubmitFocus.current = document.activeElement === submitButton.current;
     setError('');
     setLoading(true);
 
@@ -48,60 +62,66 @@ export function LoginPage() {
   if (mfaRequired && enrolled) return <MfaPage />;
 
   return (
-    <div className="w-full">
-      <div className="w-full">
-        <div className="text-center mb-8">
+    <div className={authStyles.page}>
+      <div className={authStyles.card} data-auth-login-card>
+        <AuthLogo className={authStyles.cardLogo} />
+        <div className={authStyles.heading}>
 
-          <h1 className="text-2xl font-bold text-slate-900">Welcome Back</h1>
-          <p className="text-slate-500 mt-1">Sign in to your {PRODUCT_BRAND.name} account</p>
+          <h1>Welcome Back</h1>
+          <p>Sign in to your {PRODUCT_BRAND.name} account</p>
         </div>
 
-        {error && (
-          <div id="staff-login-error" role="alert" aria-atomic="true" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md">
-            {error}
-          </div>
+        {(error || logoutWarning) && (
+          <ParkAlert.Root id="staff-login-error" role="alert" aria-atomic="true" status="error">
+            <ParkAlert.Content><ParkAlert.Description>{error || logoutWarning}</ParkAlert.Description></ParkAlert.Content>
+          </ParkAlert.Root>
         )}
 
-        <form aria-busy={loading} onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="staff-login-email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-            <TocynInput
+        <form aria-busy={loading} onSubmit={handleSubmit} className={authStyles.form}>
+          <ParkField label="Email Address" required>
+            <ParkInput
               id="staff-login-email"
+              aria-label="Email Address"
               name="email"
               autoComplete="username"
               aria-describedby={error ? "staff-login-error" : undefined}
               type="email"
               required
-              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="agent@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-          </div>
-          <div>
-            <label htmlFor="staff-login-password" className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-            <TocynInput
+          </ParkField>
+          <ParkField label="Password" required>
+            <ParkInput
               id="staff-login-password"
+              aria-label="Password"
               name="password"
               autoComplete="current-password"
               aria-describedby={error ? "staff-login-error" : undefined}
               type="password"
               required
-              className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-          </div>
-          <TocynButton
+          </ParkField>
+          <ParkButton
+            ref={submitButton}
             type="submit"
-            aria-disabled={loading}
-            className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-50 bg-brand-500 text-white hover:bg-brand-600 w-full aria-disabled:bg-brand-700 aria-disabled:cursor-default h-11"
+            variant="solid"
+            disabled={loading}
+            className={authStyles.submit}
           >
             {loading ? 'Signing in...' : 'Sign In'}
-          </TocynButton>
+          </ParkButton>
+          <ParkAlert.Root status="info" variant="surface" role="note" aria-label="Authorised users notice">
+            <ParkAlert.Content>
+              <ParkAlert.Description>Authorised Users Only. Unauthorised access is strictly prohibited and subject to legal action under applicable local and international cybercrime laws. All system activity is monitored and logged.</ParkAlert.Description>
+            </ParkAlert.Content>
+          </ParkAlert.Root>
         </form>
-        <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700">{loading ? 'Signing in…' : ''}</p>
+        <p role="status" aria-live="polite" className={authStyles.status}>{loading ? 'Signing in…' : ''}</p>
       </div>
     </div>
   );

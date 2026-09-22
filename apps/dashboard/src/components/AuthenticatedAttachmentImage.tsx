@@ -1,4 +1,5 @@
-import { TocynButton } from '@luminatick/ui/primitives';
+import { ParkAlert, ParkButton } from '@luminatick/ui/park';
+import { css } from '@luminatick/ui/styled-system/css';
 import { useEffect, useRef, useState } from 'react';
 import { dashboardApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -126,11 +127,14 @@ export function AuthenticatedAttachmentImage({
     }
   };
 
-  return <div className="mt-2 space-y-2">
-    <TocynButton type="button" onClick={() => status === 'ready' ? hidePreview() : void preview()} aria-label={status === 'ready' ? `Hide image preview ${label}` : `Preview image ${label}`} aria-busy={status === 'loading'} disabled={status === 'loading'} className="min-h-11 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:cursor-wait">
+  return <div className={css({ display: 'grid', gap: '2', mt: '2' })}>
+    <ParkButton type="button" onClick={() => status === 'ready' ? hidePreview() : void preview()} aria-label={status === 'ready' ? `Hide image preview ${label}` : `Preview image ${label}`} aria-busy={status === 'loading'} disabled={status === 'loading'}>
       {status === 'ready' ? 'Hide image preview' : status === 'loading' ? 'Loading image preview…' : 'Preview image'}
-    </TocynButton>
-    {status === 'error' && <p role="alert" className="text-sm text-red-700">Image preview could not be loaded. <TocynButton type="button" onClick={() => void preview()} aria-label={`Retry image preview ${label}`} className="underline">Retry preview</TocynButton></p>}
-    {previewUrl && <img src={previewUrl} alt={`Preview of ${label}`} onError={previewError} className="max-h-80 max-w-full rounded border border-slate-200 object-contain" />}
+    </ParkButton>
+    {status === 'error' && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Description>Image preview could not be loaded.</ParkAlert.Description>
+      <ParkButton type="button" variant="plain" onClick={() => void preview()} aria-label={`Retry image preview ${label}`}>Retry preview</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
+    {previewUrl && <img src={previewUrl} alt={`Preview of ${label}`} onError={previewError} className={css({ display: 'block', maxW: 'full', maxH: '80', objectFit: 'contain', rounded: 'md', borderWidth: '1px', borderColor: 'border.default' })} />}
   </div>;
 }

@@ -1,16 +1,17 @@
-import { TocynDialog } from '@luminatick/ui/dialog';
-import { TocynButton, TocynInput, TocynTextarea } from '@luminatick/ui/primitives';
+import { css } from '@luminatick/ui/styled-system/css';
+import { ParkAlert, ParkAvatar, ParkAvatarFallback, ParkButton, ParkCard, ParkDialog, ParkEmptyState, ParkInput, ParkSkeleton, ParkTable, ParkTextarea } from '@luminatick/ui/park';
+import { Field as ParkField, IconButton, InputGroup } from '@luminatick/ui/components';
 import React, { useState } from 'react';
 import {
-  Users,
-  Plus,
-  Trash2,
-  UserPlus,
-  X,
-  Shield,
-  Mail,
-  Search
-} from 'lucide-react';
+  IconUsers,
+  IconPlus,
+  IconTrash,
+  IconUserPlus,
+  IconXmark,
+  IconShieldHalved,
+  IconEnvelope,
+  IconMagnifyingGlass
+} from '@luminatick/ui/icons';
 import {
   useGroups,
   useCreateGroup,
@@ -27,7 +28,7 @@ export const GroupsPage: React.FC = () => {
   const { user: currentUser } = useAuthStore();
   const isAdmin = currentUser?.role === 'admin';
 
-  const { data: groups, isLoading: isLoadingGroups } = useGroups();
+  const { data: groups, isLoading: isLoadingGroups, isError: groupsError, refetch: refetchGroups } = useGroups();
   const createGroupMutation = useCreateGroup();
   const deleteGroupMutation = useDeleteGroup();
 
@@ -50,6 +51,7 @@ export const GroupsPage: React.FC = () => {
   const [returnFocusToHeading, setReturnFocusToHeading] = useState(false);
   const [deleteGroup, setDeleteGroup] = useState<Group | null>(null);
   const [createError, setCreateError] = useState('');
+  const [createDisabled, setCreateDisabled] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [groupStatus, setGroupStatus] = useState('');
   const closeCreate = () => { if (!createGuard.current) setIsCreating(false); };
@@ -79,8 +81,15 @@ export const GroupsPage: React.FC = () => {
       setNewGroupDescription('');
       setIsCreating(false);
       setGroupStatus('Group created.');
-    } catch {
-      setCreateError('Group could not be created. Your draft has been kept; try again.');
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+      if (code === 'feature_disabled') {
+        setCreateDisabled(true);
+        setIsCreating(false);
+        setCreateError('');
+      } else {
+        setCreateError('Group could not be created. Your draft has been kept; try again.');
+      }
     } finally { createGuard.current = false; setCreating(false); }
   };
 
@@ -95,144 +104,159 @@ export const GroupsPage: React.FC = () => {
     } finally { deleteGuard.current = false; setDeleting(false); }
   };
 
-  if (isLoadingGroups) return <div className="p-8 text-center text-slate-500">Loading groups...</div>;
+  if (isLoadingGroups) return <section role="status" aria-label="Loading groups" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}>
+    <span className={css({ srOnly: true })}>Loading groups…</span>
+    <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} />
+    <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
+  </section>;
 
   const managingGroup = groups?.find(g => g.id === managingGroupId);
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap","mb":"6"})}>
         <div>
-          <h1 ref={pageHeading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Group Management</h1>
-          <p className="text-slate-500 mt-1">Organize agents into teams to handle specific ticket categories.</p>
+          <h1 ref={pageHeading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Group Management</h1>
+          <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Organize agents into teams to handle specific ticket categories.</p>
         </div>
-        {isAdmin && (
-          <TocynButton
+        {isAdmin && !createDisabled && (
+          <ParkButton
             ref={createOpener} onClick={() => { setCreateError(''); setIsCreating(true); }}
-            className="bg-brand-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors shadow-sm flex items-center gap-2"
+            className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            <Plus className="w-4 h-4" />
+            <IconPlus aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
             Create Group
-          </TocynButton>
+          </ParkButton>
         )}
       </div>
 
-      {groupStatus && <p role="status" className="mb-4">{groupStatus}</p>}
-      <TocynDialog open={isCreating} busy={creating} labelledBy={createTitle} initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current} onOpenChange={next => { if (!next) closeCreate(); }}>
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm mb-8 animate-in fade-in slide-in-from-top-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 id={createTitle} className="text-lg font-bold text-slate-900">New Support Group</h2>
-            <TocynButton aria-label="Close group editor" disabled={creating} onClick={closeCreate} className="text-slate-400 hover:text-slate-600">
-              <X size={20} />
-            </TocynButton>
-          </div>
-          <form onSubmit={handleCreateGroup} aria-labelledby={createTitle}>
-            {createError && <p role="alert" className="mb-4 text-red-700">{createError}</p>}
-            <fieldset disabled={creating} className="space-y-4">
-            <div>
-              <label htmlFor={`${createTitle}-name`} className="block text-sm font-semibold text-slate-700 mb-1">Group Name</label>
-              <TocynInput
-                type="text"
-                required
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
-                placeholder="e.g., Technical Support"
-                id={`${createTitle}-name`} ref={groupNameInput} value={newGroupName}
-                onChange={e => setNewGroupName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor={`${createTitle}-description`} className="block text-sm font-semibold text-slate-700 mb-1">Description (Optional)</label>
-              <TocynTextarea
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
-                placeholder="Briefly describe what this group handles..."
-                rows={2}
-                id={`${createTitle}-description`} value={newGroupDescription}
-                onChange={e => setNewGroupDescription(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-3">
-              <TocynButton
-                type="button"
-                onClick={closeCreate}
-                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </TocynButton>
-              <TocynButton
-                type="submit"
-                disabled={creating}
-                className="bg-brand-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-brand-700 transition-colors disabled:opacity-50"
-              >
-                {creating ? 'Creating...' : 'Create Group'}
-              </TocynButton>
-            </div>
-            </fieldset>
-          </form>
-        </div>
-      </TocynDialog>
-      <TocynDialog open={deleteOpen} busy={deleting} labelledBy={deleteTitle} initialFocusEl={() => deleteCancel.current}
-        finalFocusEl={() => deleteSucceeded.current ? pageHeading.current : deleteOpener.current}
-        onOpenChange={next => { if (!next) closeDelete(); }}>
-        <div className="bg-white rounded-xl p-6 space-y-4">
-          <h2 id={deleteTitle} className="text-lg font-bold">Delete group: {deleteGroup?.name}</h2>
+      {groupStatus && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{groupStatus}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+      {createDisabled && <ParkAlert.Root role="status" status="warning" variant="surface"><ParkAlert.Content>
+        <ParkAlert.Title>Group creation is unavailable in this local review</ParkAlert.Title>
+        <ParkAlert.Description>You can review existing groups, but this local beta does not allow new groups.</ParkAlert.Description>
+      </ParkAlert.Content></ParkAlert.Root>}
+      {groupsError && Boolean(groups?.length) && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>The group list could not be refreshed.</ParkAlert.Description><ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton></ParkAlert.Content></ParkAlert.Root>}
+      <ParkDialog.Root open={isCreating} onOpenChange={({ open }) => { if (!open && !creating) closeCreate(); }}
+        initialFocusEl={() => groupNameInput.current} finalFocusEl={() => createOpener.current ?? pageHeading.current}
+        closeOnEscape={!creating} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={createTitle}>
+            <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
+              <ParkDialog.Title id={createTitle}>New Support Group</ParkDialog.Title>
+              <IconButton type="button" variant="plain" aria-label="Close group editor" disabled={creating} onClick={closeCreate}>
+                <IconXmark aria-hidden="true" size={20} />
+              </IconButton>
+            </ParkDialog.Header>
+            <form onSubmit={handleCreateGroup} aria-labelledby={createTitle} className={css({ display: 'flex', flexDirection: 'column', gap: '4', w: 'full' })}>
+              <ParkDialog.Body>
+                {createError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{createError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+                <fieldset disabled={creating} className={css({ display: 'grid', gap: '4', w: 'full' })}>
+                  <ParkField.Root required className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
+                    <ParkField.Label htmlFor={`${createTitle}-name`}>Group Name</ParkField.Label>
+                    <ParkInput
+                      type="text"
+                      required
+                      className={css({ w: 'full' })}
+                      placeholder="e.g., Technical Support"
+                      id={`${createTitle}-name`} ref={groupNameInput} value={newGroupName}
+                      onChange={e => setNewGroupName(e.target.value)}
+                    />
+                    <ParkField.HelperText>Use a short, clear team name.</ParkField.HelperText>
+                  </ParkField.Root>
+                  <ParkField.Root className={css({ w: 'full', display: 'grid', gap: '1', fontSize: 'sm' })}>
+                    <ParkField.Label htmlFor={`${createTitle}-description`}>Description (Optional)</ParkField.Label>
+                    <ParkTextarea
+                      className={css({ w: 'full' })}
+                      placeholder="Briefly describe what this group handles..."
+                      rows={2}
+                      id={`${createTitle}-description`} value={newGroupDescription}
+                      onChange={e => setNewGroupDescription(e.target.value)}
+                    />
+                    <ParkField.HelperText>Summarise the tickets this team handles.</ParkField.HelperText>
+                  </ParkField.Root>
+                </fieldset>
+              </ParkDialog.Body>
+              <ParkDialog.Footer>
+                <ParkButton
+                  type="button" variant="outline" disabled={creating}
+                  onClick={closeCreate}
+                  className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}
+                >
+                  Cancel
+                </ParkButton>
+                <ParkButton
+                  type="submit"
+                  loading={creating} loadingText="Creating group…"
+                  className={css({ display: 'inline-flex', alignItems: 'center', gap: '2' })}
+                >
+                  Create Group
+                </ParkButton>
+              </ParkDialog.Footer>
+            </form>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
+      <ParkDialog.Root open={deleteOpen} onOpenChange={({ open }) => { if (!open && !deleting) closeDelete(); }}
+        initialFocusEl={() => deleteCancel.current} finalFocusEl={() => deleteSucceeded.current ? pageHeading.current : deleteOpener.current}
+        closeOnEscape={!deleting} closeOnInteractOutside={false} lazyMount unmountOnExit>
+        <ParkDialog.Backdrop />
+        <ParkDialog.Positioner>
+          <ParkDialog.Content aria-labelledby={deleteTitle}>
+          <ParkDialog.Header><ParkDialog.Title id={deleteTitle}>Delete group: {deleteGroup?.name}</ParkDialog.Title></ParkDialog.Header>
+          <ParkDialog.Body>
           <p>Delete this group? It must not have any active tickets. This action cannot be undone.</p>
-          {deleteError && <p role="alert" className="text-red-700">{deleteError}</p>}
-          <div className="flex gap-3 justify-end">
-            <TocynButton ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</TocynButton>
-            <TocynButton disabled={deleting} onClick={handleDeleteGroup}>{deleting ? 'Deleting...' : 'Delete group'}</TocynButton>
-          </div>
-        </div>
-      </TocynDialog>
+          {deleteError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{deleteError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          </ParkDialog.Body>
+          <ParkDialog.Footer>
+            <ParkButton type="button" variant="outline" ref={deleteCancel} disabled={deleting} onClick={closeDelete}>Cancel</ParkButton>
+            <ParkButton type="button" variant="outline" colorPalette="red" loading={deleting} loadingText="Deleting group…" onClick={handleDeleteGroup}>Delete group</ParkButton>
+          </ParkDialog.Footer>
+          </ParkDialog.Content>
+        </ParkDialog.Positioner>
+      </ParkDialog.Root>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-              <th className="px-6 py-4">Group Name</th>
-              <th className="px-6 py-4">Description</th>
-              <th className="px-6 py-4">Created</th>
-              <th className="px-6 py-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {groups?.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic">
-                  No groups found. Create one to start organizing your team.
-                </td>
-              </tr>
-            ) : (
-              groups?.map((group) => (
-                <tr key={group.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900">{group.name}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{group.description || '-'}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500">
+      {groupsError && !groups?.length ? <ParkEmptyState role="alert" title="Groups could not be loaded" description="Retry to load groups before managing members." action={<ParkButton type="button" onClick={() => void refetchGroups()}>Retry groups</ParkButton>} /> : <ParkCard.Root variant="outline"><ParkCard.Body className={groups?.length ? css({ minW: '0', overflowX: 'auto' }) : css({ minW: '0' })}>
+        {!groups?.length ? <ParkEmptyState title="No groups found." description={isAdmin && createDisabled ? 'Group creation is disabled in this local review.' : isAdmin ? 'Create a group to organize your team.' : 'No groups are available in this workspace.'} className={css({ minW: '0', w: 'full', overflowWrap: 'anywhere' })} /> : <ParkTable.Root className={css({ w: 'full', fontFamily: 'tabular' })}>
+          <ParkTable.Head>
+            <ParkTable.Row>
+              <ParkTable.Header>Group Name</ParkTable.Header>
+              <ParkTable.Header>Description</ParkTable.Header>
+              <ParkTable.Header>Created</ParkTable.Header>
+              <ParkTable.Header>Actions</ParkTable.Header>
+            </ParkTable.Row>
+          </ParkTable.Head>
+          <ParkTable.Body>
+            {groups.map((group) => (
+                <ParkTable.Row key={group.id}>
+                  <ParkTable.Cell className={css({ fontWeight: 'medium', color: 'fg.default' })}>{group.name}</ParkTable.Cell>
+                  <ParkTable.Cell className={css({ color: 'fg.muted', overflowWrap: 'anywhere' })}>{group.description || 'No description'}</ParkTable.Cell>
+                  <ParkTable.Cell className={css({ fontVariantNumeric: 'tabular-nums' })}>
                     {new Date(group.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <TocynButton
+                  </ParkTable.Cell>
+                  <ParkTable.Cell><div className={css({ display: 'flex', alignItems: 'center', gap: '2', flexWrap: 'wrap' })}>
+                    <ParkButton type="button" variant="outline"
                       onClick={event => { membersOpener.current = event.currentTarget; setManagingGroupId(group.id); setMembersOpen(true); }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-600 hover:bg-brand-50 rounded-lg transition-colors border border-brand-200"
+                      className={css({"display":"inline-flex","alignItems":"center","gap":"2","minW":0})}
                     >
-                      <Users className="w-3.5 h-3.5" />
+                      <IconUsers aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                       Members
-                    </TocynButton>
+                    </ParkButton>
                     {isAdmin && (
-                      <TocynButton
+                      <IconButton type="button" variant="outline" colorPalette="red"
                         aria-label={`Delete ${group.name}`} onClick={event => { deleteOpener.current = event.currentTarget; deleteSucceeded.current = false; setReturnFocusToHeading(false); setDeleteGroup(group); setDeleteError(''); setDeleteOpen(true); }}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Delete Group"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </TocynButton>
+                        <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
+                      </IconButton>
                     )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                  </div></ParkTable.Cell>
+                </ParkTable.Row>
+              ))}
+          </ParkTable.Body>
+        </ParkTable.Root>}
+      </ParkCard.Body></ParkCard.Root>}
 
       {managingGroupId && managingGroup && (
         <ManageMembersModal
@@ -254,8 +278,8 @@ interface ManageMembersModalProps {
 }
 
 const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, finalFocusEl, onClose, isAdmin }) => {
-  const { data: members, isLoading: isLoadingMembers, isError: membersError } = useGroupMembers(group.id);
-  const { data: agents, isLoading: agentsLoading, isError: agentsError } = useAgents();
+  const { data: members, isLoading: isLoadingMembers, isError: membersError, refetch: refetchMembers } = useGroupMembers(group.id);
+  const { data: agents, isLoading: agentsLoading, isError: agentsError, refetch: refetchAgents } = useAgents();
   const addMemberMutation = useAddMember();
   const removeMemberMutation = useRemoveMember();
 
@@ -292,63 +316,69 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
   );
 
   return (
-    <TocynDialog open={open} busy={pending} labelledBy={titleId} initialFocusEl={() => closeButton.current} finalFocusEl={finalFocusEl} onOpenChange={next => { if (!next) close(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+    <ParkDialog.Root open={open} onOpenChange={({ open: nextOpen }) => { if (!nextOpen && !pending) close(); }}
+      initialFocusEl={() => closeButton.current} finalFocusEl={finalFocusEl}
+      closeOnEscape={!pending} closeOnInteractOutside={false} lazyMount unmountOnExit>
+      <ParkDialog.Backdrop />
+      <ParkDialog.Positioner>
+        <ParkDialog.Content aria-labelledby={titleId}>
+        <ParkDialog.Header className={css({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '3' })}>
           <div>
-            <h2 id={titleId} className="text-xl font-bold text-slate-900">Manage Members: {group.name}</h2>
-            <p className="text-sm text-slate-500">Add or remove agents from this group.</p>
+            <ParkDialog.Title id={titleId}>Manage Members: {group.name}</ParkDialog.Title>
+            <ParkDialog.Description>Add or remove agents from this group.</ParkDialog.Description>
           </div>
-          <TocynButton ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all">
-            <X size={24} />
-          </TocynButton>
-        </div>
+          <IconButton type="button" variant="plain" ref={closeButton} disabled={pending} aria-label="Close group members" onClick={close}>
+            <IconXmark aria-hidden="true" size={24} />
+          </IconButton>
+        </ParkDialog.Header>
 
-        <div className="flex-1 overflow-auto p-6 space-y-6">
-          {operationError && <p role="alert" className="text-red-700">{operationError}</p>}
-          {status && <p role="status">{status}</p>}
-          {membersError && <p role="alert">Group members could not be loaded. Reopen this page to retry.</p>}
-          {removingId && <div role="group" aria-label="Confirm member removal" className="rounded-lg border p-4 space-y-3">
+        <ParkDialog.Body className={css({ display: 'grid', gap: '5', minW: '0' })}>
+          {operationError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{operationError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          {status && <ParkAlert.Root role="status" status="success" variant="surface"><ParkAlert.Content><ParkAlert.Description>{status}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          {membersError && (members?.length ? <ParkAlert.Root role="alert" status="error">
+            <ParkAlert.Content>
+              <ParkAlert.Title>Group members could not be refreshed</ParkAlert.Title>
+              <ParkAlert.Description>These members are the last loaded version. Retry before changing membership.</ParkAlert.Description>
+              <ParkButton type="button" onClick={() => void refetchMembers()}>Retry members</ParkButton>
+            </ParkAlert.Content>
+          </ParkAlert.Root> : <ParkEmptyState role="alert" title="Group members could not be loaded" description="Retry before changing membership." action={<ParkButton type="button" onClick={() => void refetchMembers()}>Retry members</ParkButton>} />)}
+          {removingId && <div role="group" aria-label="Confirm member removal" className={css({"minW":0})}>
             <p>Remove {members?.find(member => member.id === removingId)?.full_name || members?.find(member => member.id === removingId)?.email || 'this member'} from the group?</p>
-            <TocynButton ref={confirmRemovalButton} disabled={pending} onClick={() => changeMember(removingId, true)}>Remove member</TocynButton>
-            <TocynButton disabled={pending} onClick={() => { setRemovingId(null); closeButton.current?.focus(); }}>Cancel removal</TocynButton>
+            <ParkButton type="button" colorPalette="red" ref={confirmRemovalButton} disabled={pending || isLoadingMembers || membersError} onClick={() => changeMember(removingId, true)}>Remove member</ParkButton>
+            <ParkButton type="button" variant="outline" disabled={pending} onClick={() => { setRemovingId(null); closeButton.current?.focus(); }}>Cancel removal</ParkButton>
           </div>}
           {/* Current Members Section */}
           <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Current Members ({members?.length || 0})</h3>
-            <div className="space-y-2">
+            <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"fg.default"})}>Current Members{members?.length ? ` (${members.length})` : !isLoadingMembers && !membersError ? ' (0)' : ''}</h3>
+            <div className={css({"display":"grid","gap":"4"})}>
               {isLoadingMembers ? (
-                <div className="text-center py-4 text-slate-400 italic">Loading members...</div>
-              ) : members?.length === 0 ? (
-                <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-6 text-center text-slate-500 italic">
-                  No members assigned yet.
-                </div>
+                <div role="status" aria-label="Loading group members" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading members…</span><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /></div>
+              ) : !membersError && members?.length === 0 ? (
+                <ParkEmptyState title="No members assigned yet." className={css({"py":"6"})} />
               ) : (
                 members?.map(member => (
-                  <div key={member.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl hover:border-brand-200 transition-colors group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center text-brand-700 font-bold border border-brand-100">
-                        {member.full_name?.[0] || member.email[0].toUpperCase()}
-                      </div>
+                  <div key={member.id} className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                    <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                      <ParkAvatar size="md"><ParkAvatarFallback name={member.full_name || member.email} /></ParkAvatar>
                       <div>
-                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                        <div className={css({"fontWeight":"medium","color":"fg.default"})}>
                           {member.full_name || 'Unnamed'}
-                          {member.role === 'admin' && <Shield className="w-3 h-3 text-purple-500" />}
+                          {member.role === 'admin' && <IconShieldHalved aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />}
                         </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
+                        <div className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>
+                          <IconEnvelope aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
                           {member.email}
                         </div>
                       </div>
                     </div>
                     {isAdmin && (
-                      <TocynButton
-                        disabled={pending} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
-                        className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      <IconButton
+                        type="button" variant="plain" colorPalette="red" disabled={pending || isLoadingMembers || membersError} aria-label={`Remove ${member.full_name || member.email}`} onClick={() => setRemovingId(member.id)}
+                        className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
                         title="Remove member"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </TocynButton>
+                        <IconTrash aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
+                      </IconButton>
                     )}
                   </div>
                 ))
@@ -358,60 +388,59 @@ const ManageMembersModal: React.FC<ManageMembersModalProps> = ({ group, open, fi
 
           {/* Add New Member Section (Admin Only) */}
           {isAdmin && (
-            <div className="pt-6 border-t border-slate-100">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Add Agent</h3>
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <TocynInput
+            <div className={css({"minW":0})}>
+              <h3 className={css({"fontSize":"xl","fontWeight":"semibold","lineHeight":"tight","color":"fg.default"})}>Add Agent</h3>
+              <InputGroup startElement={<IconMagnifyingGlass aria-hidden="true" className={css({ w: '4', h: '4' })} />}>
+                <ParkInput
                   type="text"
                   aria-label="Search agents" disabled={pending} placeholder="Search agents by name or email..."
-                  className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-brand-500 transition-all focus:bg-white border-transparent"
+                  className={css({"w":"full"})}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
-              </div>
+              </InputGroup>
 
-              <div className="max-h-60 overflow-auto space-y-1 pr-1">
-                {agentsError && <p role="alert">Agents could not be loaded. Reopen this page to retry.</p>}
-                {agentsLoading && <p role="status">Loading agents...</p>}
+              <div className={css({"display":"grid","gap":"4"})}>
+                {agentsError && (agents?.length ? <ParkAlert.Root role="alert" status="error">
+                  <ParkAlert.Content>
+                    <ParkAlert.Title>Agents could not be refreshed</ParkAlert.Title>
+                    <ParkAlert.Description>These agents are the last loaded version. Retry before adding anyone to the group.</ParkAlert.Description>
+                    <ParkButton type="button" onClick={() => void refetchAgents()}>Retry agents</ParkButton>
+                  </ParkAlert.Content>
+                </ParkAlert.Root> : <ParkEmptyState role="alert" title="Agents could not be loaded" description="Retry to find agents who can join this group." action={<ParkButton type="button" onClick={() => void refetchAgents()}>Retry agents</ParkButton>} />)}
+                {agentsLoading && <div role="status" aria-label="Loading available agents" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading agents…</span><ParkSkeleton aria-hidden="true" className={css({ h: '12', w: 'full' })} /></div>}
                 {availableAgents?.map(agent => (
-                  <TocynButton
+                  <ParkButton
                     key={agent.id}
                     disabled={pending || isLoadingMembers || membersError || agentsLoading || agentsError} aria-label={`Add ${agent.full_name || agent.email}`} onClick={() => changeMember(agent.id, false)}
-                    className="w-full flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors group text-left"
+                    className={css({"minW":0})}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold">
-                        {agent.full_name?.[0] || agent.email[0].toUpperCase()}
-                      </div>
+                    <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}>
+                      <ParkAvatar size="md"><ParkAvatarFallback name={agent.full_name || agent.email} /></ParkAvatar>
                       <div>
-                        <div className="text-sm font-semibold text-slate-800">{agent.full_name || 'Unnamed'}</div>
-                        <div className="text-[11px] text-slate-500">{agent.email}</div>
+                        <div className={css({"fontWeight":"medium","color":"fg.default"})}>{agent.full_name || 'Unnamed'}</div>
+                        <div className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{agent.email}</div>
                       </div>
                     </div>
-                    <UserPlus className="w-4 h-4 text-slate-300 group-hover:text-brand-600 transition-colors" />
-                  </TocynButton>
+                    <IconUserPlus aria-hidden="true" className={css({"w":"4","h":"4","flexShrink":0})} />
+                  </ParkButton>
                 ))}
-                {availableAgents?.length === 0 && searchTerm && (
-                  <div className="text-center py-4 text-slate-400 text-sm italic">No matching agents found.</div>
+                {!agentsError && availableAgents?.length === 0 && searchTerm && (
+                  <ParkEmptyState title="No matching agents found." className={css({"py":"6"})} />
                 )}
-                {availableAgents?.length === 0 && !searchTerm && (
-                  <div className="text-center py-4 text-slate-400 text-sm italic">All available agents are already in this group.</div>
+                {!agentsError && availableAgents?.length === 0 && !searchTerm && (
+                  <ParkEmptyState title="All available agents are already in this group." className={css({"py":"6"})} />
                 )}
               </div>
             </div>
           )}
-        </div>
+        </ParkDialog.Body>
 
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-          <TocynButton
-            disabled={pending} onClick={close}
-            className="px-6 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-all shadow-sm active:scale-95"
-          >
-            Done
-          </TocynButton>
-        </div>
-      </div>
-    </TocynDialog>
+        <ParkDialog.Footer>
+          <ParkButton type="button" variant="outline" disabled={pending} onClick={close}>Done</ParkButton>
+        </ParkDialog.Footer>
+        </ParkDialog.Content>
+      </ParkDialog.Positioner>
+    </ParkDialog.Root>
   );
 };

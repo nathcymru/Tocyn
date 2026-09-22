@@ -1,0 +1,374 @@
+import { compact, getSlotCompoundVariant, memo, splitProps } from '../helpers.mjs';
+import { createRecipe } from './create-recipe.mjs';
+
+const pageDefaultVariants = {
+  "kind": "dashboard"
+}
+const pageCompoundVariants = [
+  {
+    "kind": "settings",
+    "css": {
+      "grid": {
+        "gridTemplateColumns": "1fr"
+      },
+      "settingsSections": {
+        "maxWidth": "56rem",
+        "marginInline": "auto"
+      }
+    }
+  }
+]
+
+const pageSlotNames = [
+  [
+    "root",
+    "page__root"
+  ],
+  [
+    "header",
+    "page__header"
+  ],
+  [
+    "content",
+    "page__content"
+  ],
+  [
+    "grid",
+    "page__grid"
+  ],
+  [
+    "section",
+    "page__section"
+  ],
+  [
+    "settingsSections",
+    "page__settingsSections"
+  ],
+  [
+    "settingsField",
+    "page__settingsField"
+  ],
+  [
+    "settingsError",
+    "page__settingsError"
+  ],
+  [
+    "settingsHelp",
+    "page__settingsHelp"
+  ],
+  [
+    "knowledgeWorkspace",
+    "page__knowledgeWorkspace"
+  ],
+  [
+    "knowledgeSidebar",
+    "page__knowledgeSidebar"
+  ],
+  [
+    "knowledgeContent",
+    "page__knowledgeContent"
+  ],
+  [
+    "knowledgeTable",
+    "page__knowledgeTable"
+  ],
+  [
+    "knowledgeRow",
+    "page__knowledgeRow"
+  ],
+  [
+    "knowledgeSearch",
+    "page__knowledgeSearch"
+  ],
+  [
+    "knowledgePreview",
+    "page__knowledgePreview"
+  ],
+  [
+    "knowledgeCategoryRow",
+    "page__knowledgeCategoryRow"
+  ],
+  [
+    "knowledgeCategoryRowSelected",
+    "page__knowledgeCategoryRowSelected"
+  ],
+  [
+    "knowledgeCategoryMain",
+    "page__knowledgeCategoryMain"
+  ],
+  [
+    "knowledgeCategoryActions",
+    "page__knowledgeCategoryActions"
+  ],
+  [
+    "knowledgeCategoryChildren",
+    "page__knowledgeCategoryChildren"
+  ],
+  [
+    "knowledgeCategoryList",
+    "page__knowledgeCategoryList"
+  ],
+  [
+    "knowledgeCategorySpacer",
+    "page__knowledgeCategorySpacer"
+  ],
+  [
+    "knowledgeCategoryButton",
+    "page__knowledgeCategoryButton"
+  ],
+  [
+    "knowledgeDeleteActions",
+    "page__knowledgeDeleteActions"
+  ],
+  [
+    "accountGrid",
+    "page__accountGrid"
+  ],
+  [
+    "accountIdentityName",
+    "page__accountIdentityName"
+  ],
+  [
+    "accountIdentityEmail",
+    "page__accountIdentityEmail"
+  ],
+  [
+    "inboxWorkspace",
+    "page__inboxWorkspace"
+  ],
+  [
+    "inboxList",
+    "page__inboxList"
+  ],
+  [
+    "inboxDetail",
+    "page__inboxDetail"
+  ],
+  [
+    "inboxHeader",
+    "page__inboxHeader"
+  ],
+  [
+    "inboxHiddenHeading",
+    "page__inboxHiddenHeading"
+  ],
+  [
+    "inboxMetrics",
+    "page__inboxMetrics"
+  ],
+  [
+    "inboxToolbar",
+    "page__inboxToolbar"
+  ],
+  [
+    "inboxRows",
+    "page__inboxRows"
+  ],
+  [
+    "inboxRow",
+    "page__inboxRow"
+  ],
+  [
+    "inboxTable",
+    "page__inboxTable"
+  ],
+  [
+    "inboxTableWrap",
+    "page__inboxTableWrap"
+  ],
+  [
+    "inboxTableRow",
+    "page__inboxTableRow"
+  ],
+  [
+    "inboxPresentationButton",
+    "page__inboxPresentationButton"
+  ],
+  [
+    "inboxPresentationActive",
+    "page__inboxPresentationActive"
+  ],
+  [
+    "inboxPresentationInactive",
+    "page__inboxPresentationInactive"
+  ],
+  [
+    "inboxEmpty",
+    "page__inboxEmpty"
+  ],
+  [
+    "inboxMobileHidden",
+    "page__inboxMobileHidden"
+  ],
+  [
+    "inboxTableMobileHidden",
+    "page__inboxTableMobileHidden"
+  ],
+  [
+    "inboxStatus",
+    "page__inboxStatus"
+  ],
+  [
+    "inboxPriority",
+    "page__inboxPriority"
+  ],
+  [
+    "inboxMobileNote",
+    "page__inboxMobileNote"
+  ],
+  [
+    "inboxTableResponsive",
+    "page__inboxTableResponsive"
+  ],
+  [
+    "inboxTitleRow",
+    "page__inboxTitleRow"
+  ],
+  [
+    "inboxRowCopy",
+    "page__inboxRowCopy"
+  ],
+  [
+    "inboxRowSubject",
+    "page__inboxRowSubject"
+  ],
+  [
+    "inboxRowCustomer",
+    "page__inboxRowCustomer"
+  ],
+  [
+    "inboxRowDate",
+    "page__inboxRowDate"
+  ],
+  [
+    "inboxRowPreview",
+    "page__inboxRowPreview"
+  ],
+  [
+    "inboxRowMeta",
+    "page__inboxRowMeta"
+  ],
+  [
+    "inboxToolbarGroup",
+    "page__inboxToolbarGroup"
+  ],
+  [
+    "inboxPagination",
+    "page__inboxPagination"
+  ],
+  [
+    "dashboardHeading",
+    "page__dashboardHeading"
+  ],
+  [
+    "dashboardAction",
+    "page__dashboardAction"
+  ],
+  [
+    "metricStrip",
+    "page__metricStrip"
+  ],
+  [
+    "metricCard",
+    "page__metricCard"
+  ],
+  [
+    "metricCardHeader",
+    "page__metricCardHeader"
+  ],
+  [
+    "metricCardBody",
+    "page__metricCardBody"
+  ],
+  [
+    "metricIcon",
+    "page__metricIcon"
+  ],
+  [
+    "metricLabel",
+    "page__metricLabel"
+  ],
+  [
+    "metricValue",
+    "page__metricValue"
+  ],
+  [
+    "panels",
+    "page__panels"
+  ],
+  [
+    "panelHeader",
+    "page__panelHeader"
+  ],
+  [
+    "panelIcon",
+    "page__panelIcon"
+  ],
+  [
+    "panelTitle",
+    "page__panelTitle"
+  ],
+  [
+    "priorityList",
+    "page__priorityList"
+  ],
+  [
+    "priorityRow",
+    "page__priorityRow"
+  ],
+  [
+    "overviewGrid",
+    "page__overviewGrid"
+  ],
+  [
+    "overviewCard",
+    "page__overviewCard"
+  ],
+  [
+    "overviewCardBody",
+    "page__overviewCardBody"
+  ],
+  [
+    "overviewCardLabel",
+    "page__overviewCardLabel"
+  ],
+  [
+    "overviewCardValue",
+    "page__overviewCardValue"
+  ],
+  [
+    "overviewFooter",
+    "page__overviewFooter"
+  ]
+]
+const pageSlotFns = /* @__PURE__ */ pageSlotNames.map(([slotName, slotKey]) => [slotName, createRecipe(slotKey, pageDefaultVariants, getSlotCompoundVariant(pageCompoundVariants, slotName))])
+
+const pageFn = memo((props = {}) => {
+  return Object.fromEntries(pageSlotFns.map(([slotName, slotFn]) => [slotName, slotFn.recipeFn(props)]))
+})
+
+const pageVariantKeys = [
+  "kind"
+]
+const getVariantProps = (variants) => ({ ...pageDefaultVariants, ...compact(variants) })
+
+export const page = /* @__PURE__ */ Object.assign(pageFn, {
+  __recipe__: false,
+  __name__: 'page',
+  raw: (props) => props,
+  classNameMap: {},
+  variantKeys: pageVariantKeys,
+  variantMap: {
+  "kind": [
+    "dashboard",
+    "knowledge",
+    "inbox",
+    "settings",
+    "account"
+  ]
+},
+  splitVariantProps(props) {
+    return splitProps(props, pageVariantKeys)
+  },
+  getVariantProps
+})

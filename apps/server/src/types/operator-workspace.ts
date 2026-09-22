@@ -63,6 +63,7 @@ export type OperatorWorkspaceState = Readonly<{
   listAnchor: string;
   selectedTicketId: string | null;
   panel: 'conversation' | 'details';
+  splitterRatio: number;
   updatedAt: string;
 }>;
 import type { ArticleBodyFormat } from '@luminatick/shared';

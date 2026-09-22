@@ -1,4 +1,6 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { w } from '../widgetStyles';
+import { ParkAlert, ParkButton, ParkInput, ParkScrollArea, ParkSkeleton } from '@luminatick/ui/park';
+import { IconPaperPlane } from '@luminatick/ui/icons';
 import { BASE_URL, widgetHeaders } from '../api';
 import React, { useState, useRef, useEffect } from 'react';
 
@@ -96,61 +98,60 @@ const AiChat: React.FC<Props> = ({ config }) => {
   };
 
   return (
-    <div className="flex flex-col h-[400px]">
-      <div role="log" aria-label="AI conversation" aria-relevant="additions" className="flex-1 overflow-y-auto space-y-4 mb-4 pr-1 scrollbar-thin scrollbar-thumb-gray-200">
+    <div className={w.aiChat}>
+      <ParkScrollArea.Root className={w.aiMessages}>
+        <ParkScrollArea.Viewport role="log" aria-label="AI conversation" aria-relevant="additions" tabIndex={0} className={w.aiMessagesViewport}>
+          <ParkScrollArea.Content className={w.aiMessagesContent}>
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={[w.aiMessageRow, msg.role === 'user' ? w.aiMessageRowUser : ''].join(' ')}
           >
             <div
-              className={`max-w-[85%] px-3 py-2 rounded-lg text-sm break-words whitespace-pre-wrap ${
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-gray-100 text-gray-800 rounded-bl-none'
-              }`}
+              className={[w.aiMessage, msg.role === 'user' ? w.aiMessageUser : w.aiMessageAssistant].join(' ')}
             >
               {msg.content}
             </div>
           </div>
         ))}
         {isLoading && (
-          <div role="status" aria-label="Waiting for AI response" className="flex justify-start">
-            <div className="bg-gray-100 px-3 py-2 rounded-lg rounded-bl-none">
-              <div aria-hidden="true" className="flex space-x-1">
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" style={{ animationDelay: '300ms' }}></div>
-              </div>
+          <div role="status" aria-label="Waiting for AI response" className={w.aiWaiting}>
+            <div className={w.aiWaitingBubble}>
+              <span className={w.aiWaitingLabel}>Waiting for AI response…</span>
+              <ParkSkeleton aria-hidden="true" height="3" width="12rem" />
+              <ParkSkeleton aria-hidden="true" height="3" width="8rem" />
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
-      </div>
+            <div ref={messagesEndRef} />
+          </ParkScrollArea.Content>
+        </ParkScrollArea.Viewport>
+        <ParkScrollArea.Scrollbar orientation="vertical" />
+      </ParkScrollArea.Root>
 
-      {error && <p role="alert" className="text-red-700 text-sm mb-2">{error}</p>}
-      <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className="flex gap-2">
-        <TocynInput
+      {error && <ParkAlert.Root role="alert" status="error" variant="surface">
+        <ParkAlert.Content><ParkAlert.Description>{error}</ParkAlert.Description></ParkAlert.Content>
+      </ParkAlert.Root>}
+      <form onSubmit={handleSend} aria-label="Ask AI support" aria-busy={isLoading} className={w.aiComposer}>
+        <ParkInput
           ref={inputRef}
           aria-label="Your question"
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your question..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm"
+          className={[w.formControl, w.chatInput].join(' ')}
           disabled={isLoading}
         />
-        <TocynButton
+        <ParkButton
           aria-label="Send question"
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="p-2 rounded text-white flex items-center justify-center disabled:opacity-50 transition-colors"
-          style={{ backgroundColor: config.primaryColor }}
+          variant="solid"
+          className={w.aiSend}
         >
-          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-          </svg>
-        </TocynButton>
+          <IconPaperPlane className={w.aiSendIcon} aria-hidden="true" />
+        </ParkButton>
       </form>
     </div>
   );

@@ -1130,6 +1130,8 @@ dashboard.get("/tickets", async (c) => {
   if (!sort.success) return c.json({ error: 'Invalid ticket sort' }, 400);
   const queue = z.enum(TICKET_QUEUE_KEYS).optional().safeParse(c.req.query('queue'));
   if (!queue.success) return c.json({ error: 'Invalid ticket queue' }, 400);
+  const createdAfter = z.string().datetime({ offset: true }).optional().safeParse(c.req.query('created_after'));
+  if (!createdAfter.success) return c.json({ error: 'Invalid ticket created-after value' }, 400);
   if (queue.data && ['drafts', 'mine', 'unassigned', 'mentions'].includes(queue.data) && (!payload || !['admin', 'agent'].includes(payload.role)
     || payload.sub !== d.scope.actorId || payload.tenant_id !== d.scope.tenantId
     || !d.scope.roles.includes(payload.role) || payload.mfa_verified !== true)) {
@@ -1152,7 +1154,7 @@ dashboard.get("/tickets", async (c) => {
        secret:c.env.JWT_SECRET,now:()=>c.env.localNow?.()??Date.now(),settle:(authority,outcome,now)=>apiTicketBudgetCache.settleOperation(authority,outcome,now)});
     let completed:SlaQueuePage|undefined;
     try{
-      const selection=Object.fromEntries(Object.entries({customerEmail:c.req.query('customer_email'),filterId:c.req.query('filter_id'),
+      const selection=Object.fromEntries(Object.entries({customerEmail:c.req.query('customer_email'),createdAfter:createdAfter.data,filterId:c.req.query('filter_id'),
         status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),groupId:c.req.query('group_id'),
         ticketNo:c.req.query('ticket_no'),search:search.data,queue:queue.data,draftNotExpiredAt}).filter(([,value])=>value!==undefined));
       const result=await service.read(selection,{limit,cursor});
@@ -1182,7 +1184,7 @@ dashboard.get("/tickets", async (c) => {
     };
     const listOptions = {
       sort: sort.data,
-      customerEmail:c.req.query('customer_email'), filterId:c.req.query('filter_id'),
+      customerEmail:c.req.query('customer_email'), createdAfter:createdAfter.data, filterId:c.req.query('filter_id'),
       status:c.req.query('status'),priority:c.req.query('priority'),assignedTo:c.req.query('assigned_to'),
       groupId:c.req.query('group_id'),ticketNo:c.req.query('ticket_no'),search:search.data,
       page:Number(c.req.query('page') || 1),limit:Number(c.req.query('limit') || 50),

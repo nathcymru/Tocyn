@@ -1,4 +1,5 @@
-import { TocynButton, TocynInput } from '@luminatick/ui/primitives';
+import { css } from '@luminatick/ui/styled-system/css';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkSkeleton } from '@luminatick/ui/park';
 import React, { useState, useEffect } from 'react';
 import { dashboardApi } from '../api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -6,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export function WidgetChannelPage() {
   const queryClient = useQueryClient();
 
-  const { data: config, isLoading, isError } = useQuery({
+  const { data: config, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['settings'],
     queryFn: () => dashboardApi.get<Record<string, string>>('/settings'),
   });
@@ -67,58 +68,52 @@ export function WidgetChannelPage() {
 <!-- Requires a widget build configured for your API and customer sign-in. -->`;
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Widget Channel</h1>
-        <p className="text-slate-500 mt-1">Configure your embeddable customer support widget.</p>
+    <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+      <div className={css({ display: 'grid', gap: '1' })}>
+        <h1 className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Widget Channel</h1>
+        <p className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>Configure your embeddable customer support widget.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-          <h2 className="text-lg font-semibold border-b pb-2 text-slate-900">Features</h2>
+      <div className={css({ display: 'grid', gridTemplateColumns: { base: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' }, alignItems: 'start', gap: '6' })}>
+        <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Header><ParkCard.Title asChild><h2>Features</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', gap: '4' })}>
 
-          {isError && <p role="alert">Widget settings could not be loaded. Reload this page before saving.</p>}
-          {saveError && <p role="alert">{saveError}</p>}
-          {saveStatus && <p role="status">{saveStatus}</p>}
-          {isLoading ? (
-            <div className="text-slate-500">Loading settings...</div>
+          {saveError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{saveError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
+          {saveStatus && <p role="status" className={css({ color: 'fg.default', textStyle: 'sm' })}>{saveStatus}</p>}
+          {isError && config && <ParkAlert.Root role="alert" status="warning" variant="surface">
+            <ParkAlert.Content>
+              <ParkAlert.Description>Widget settings could not be refreshed. Your choices are kept; refresh before saving.</ParkAlert.Description>
+              <ParkButton type="button" disabled={isFetching} onClick={() => void refetch()}>Retry widget settings</ParkButton>
+            </ParkAlert.Content>
+          </ParkAlert.Root>}
+          {isLoading && !config ? (
+            <div role="status" aria-label="Loading widget settings" aria-busy="true" className={css({ display: 'grid', gap: '2' })}><span className={css({ srOnly: true })}>Loading widget settings…</span><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /><ParkSkeleton aria-hidden="true" className={css({ h: '10', w: 'full' })} /></div>
+          ) : isError && !config ? (
+            <ParkEmptyState role="alert" title="Widget settings could not be loaded" description="Retry loading the settings before saving." action={<ParkButton type="button" onClick={() => void refetch()}>Retry widget settings</ParkButton>} />
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="relative flex items-center">
-                  <TocynInput
-                    type="checkbox"
-                    id={chatId} aria-describedby={`${chatId}-help`} disabled={isSaving || isError || !config}
-                    checked={chatEnabled}
-                    onChange={(e) => { dirty.current = true; setSaveStatus(''); setChatEnabled(e.target.checked); }}
-                    className="w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label htmlFor={chatId} className="inline-flex min-h-11 items-center text-sm font-medium text-slate-900">
-                    Chat Enabled
-                  </label>
-                  <p id={`${chatId}-help`} className="text-xs text-slate-500">
+            <div className={css({"display":"grid","gap":"4"})}>
+              <div className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
+                <div className={css({ minW: '0' })}>
+                  <ParkCheckbox.Root checked={chatEnabled} disabled={isSaving || isError || !config}
+                    onCheckedChange={({ checked }) => { dirty.current = true; setSaveStatus(''); setChatEnabled(checked === true); }}>
+                    <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+                    <ParkCheckbox.HiddenInput id={chatId} aria-describedby={`${chatId}-help`} />
+                    <ParkCheckbox.Label>Chat Enabled</ParkCheckbox.Label>
+                  </ParkCheckbox.Root>
+                  <p id={`${chatId}-help`} className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>
                     Allow customers to chat with the AI support agent.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="relative flex items-center">
-                  <TocynInput
-                    type="checkbox"
-                    id={formId} aria-describedby={`${formId}-help`} disabled={isSaving || isError || !config}
-                    checked={formEnabled}
-                    onChange={(e) => { dirty.current = true; setSaveStatus(''); setFormEnabled(e.target.checked); }}
-                    className="w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label htmlFor={formId} className="inline-flex min-h-11 items-center text-sm font-medium text-slate-900">
-                    Web Form Enabled
-                  </label>
-                  <p id={`${formId}-help`} className="text-xs text-slate-500">
+              <div className={css({ display: 'flex', alignItems: 'center', gap: '3' })}>
+                <div className={css({ minW: '0' })}>
+                  <ParkCheckbox.Root checked={formEnabled} disabled={isSaving || isError || !config}
+                    onCheckedChange={({ checked }) => { dirty.current = true; setSaveStatus(''); setFormEnabled(checked === true); }}>
+                    <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control>
+                    <ParkCheckbox.HiddenInput id={formId} aria-describedby={`${formId}-help`} />
+                    <ParkCheckbox.Label>Web Form Enabled</ParkCheckbox.Label>
+                  </ParkCheckbox.Root>
+                  <p id={`${formId}-help`} className={css({ color: 'fg.muted', textStyle: 'sm', lineHeight: 'relaxed' })}>
                     Allow customers to submit a ticket via a form.
                   </p>
                 </div>
@@ -126,40 +121,38 @@ export function WidgetChannelPage() {
             </div>
           )}
 
-          <TocynButton
+          <ParkButton type="button"
             onClick={handleSave}
-            disabled={isSaving || isLoading || isError || !config}
-            className="w-full bg-brand-600 text-white py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors"
+            disabled={isLoading || isError || !config} loading={isSaving} loadingText="Saving widget settings…"
+            variant="solid" className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </TocynButton>
-        </div>
+            Save Changes
+          </ParkButton>
+        </ParkCard.Body></ParkCard.Root>
 
-        <div className="space-y-6">
-          <div className="bg-slate-900 text-white p-6 rounded-xl shadow-sm border border-slate-800">
-            <h2 className="text-lg font-semibold mb-4 text-indigo-400">Embed Snippet</h2>
-            <p className="text-sm text-slate-400 mb-4">
+        <div className={css({ display: 'grid', gap: '4', alignContent: 'start', minW: 0 })}>
+          <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Header><ParkCard.Title asChild><h2>Embed Snippet</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', minW: 0, gap: '3' })}>
+            <p className={css({ m: 0, color: 'fg.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>
               Integration example: replace the public widget key and host the widget build configured for your API. Customer sign-in must be configured separately. Place the script before the closing <code>&lt;/body&gt;</code> tag.
             </p>
-            <pre className="bg-black/50 p-4 rounded-lg text-xs overflow-x-auto text-emerald-400 border border-white/10 whitespace-pre">
+            <pre className={css({ minW: 0, maxW: 'full', m: 0, overflowX: 'auto', rounded: 'md', bg: 'bg.subtle', p: '3', fontFamily: 'tabular', fontSize: 'sm', whiteSpace: 'pre', fontVariantNumeric: 'tabular-nums' })}>
               {snippet}
             </pre>
-            <TocynButton
-              disabled={copying} onClick={copySnippet}
-              className="mt-4 w-full bg-white/10 hover:bg-white/20 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+            <ParkButton type="button"
+              loading={copying} loadingText="Copying snippet…" onClick={copySnippet}
+              className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}
             >
-              {copying ? 'Copying...' : 'Copy Snippet'}
-            </TocynButton>
-            {copyError && <p role="alert">{copyError}</p>}
+              Copy Snippet
+            </ParkButton>
+            {copyError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content><ParkAlert.Description>{copyError}</ParkAlert.Description></ParkAlert.Content></ParkAlert.Root>}
             {copyStatus && <p role="status">{copyStatus}</p>}
-          </div>
+          </ParkCard.Body></ParkCard.Root>
 
-          <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-xl">
-            <h2 className="text-lg font-semibold text-indigo-900 mb-2">Shadow DOM</h2>
-            <p className="text-sm text-indigo-800">
+          <ParkCard.Root variant="outline" className={css({ minW: 0 })}><ParkCard.Header><ParkCard.Title asChild><h2>Shadow DOM</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body className={css({ display: 'grid', alignContent: 'start', minW: 0, gap: '2' })}>
+            <p className={css({ m: 0, color: 'fg.muted', fontSize: 'sm', lineHeight: 'relaxed' })}>
               The widget uses Shadow DOM to limit accidental styling conflicts. Test it with your website’s styles; the host page still controls its placement, visibility and scripts.
             </p>
-          </div>
+          </ParkCard.Body></ParkCard.Root>
         </div>
       </div>
     </div>

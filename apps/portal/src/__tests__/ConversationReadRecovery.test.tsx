@@ -1,11 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
 import { portalApi } from '../api/client';
 
 vi.mock('../api/client', () => ({ portalApi: { get: vi.fn(), post: vi.fn(), postForm: vi.fn(), download: vi.fn() } }));
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); });
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const ticket = { id: 'ticket', subject: 'Conversation', status: 'open', priority: 'normal', ticket_no: 1, created_at: '2026-09-09 00:00:00' };
 const page = (id: string, next = 'cursor') => ({
   ticket,

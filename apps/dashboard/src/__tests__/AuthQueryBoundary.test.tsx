@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthQueryBoundary } from '../components/auth/AuthQueryBoundary';
 import { useTickets } from '../hooks/useTickets';
@@ -40,6 +40,20 @@ afterEach(() => {
 });
 
 describe('authentication-scoped dashboard data', () => {
+  it('does not show a previous operator ticket page while the mounted list changes identity', async () => {
+    const second = deferred<Response>();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response('First account')).mockReturnValueOnce(second.promise));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    useAuthStore.getState().setAuth('synthetic-first', user('first'));
+    render(<QueryClientProvider client={client}><Feed /></QueryClientProvider>);
+    await screen.findByText('First account');
+    act(() => useAuthStore.getState().setAuth('synthetic-second', user('second')));
+    expect(screen.queryByText('First account')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading')).toBeInTheDocument();
+    await act(async () => { second.resolve(response('Second account')); });
+    await screen.findByText('Second account');
+  });
+
   it.each([200,401])('discards old cached state and ignored-abort %i responses after account change', async status => {
     const oldRefresh = deferred<Response>();
     const nextFetch = deferred<Response>();

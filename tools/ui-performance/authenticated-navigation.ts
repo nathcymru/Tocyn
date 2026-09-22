@@ -84,8 +84,11 @@ function requestHeaders(request: IncomingMessage): Record<string, string> {
   return headers;
 }
 
-async function staticResponse(root: string, pathname: string, response: ServerResponse): Promise<void> {
-  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') || pathname.startsWith('/inbox') ? 'index.html' : pathname.slice(1);
+async function staticResponse(root: string, client: Client, pathname: string, response: ServerResponse): Promise<void> {
+  const isClientRoute = client === 'dashboard'
+    ? pathname === '/inbox' || pathname.startsWith('/inbox/')
+    : pathname === '/tickets' || pathname.startsWith('/tickets/');
+  const candidate = pathname === '/' || isClientRoute ? 'index.html' : pathname.slice(1);
   const path = resolve(root, normalize(candidate));
   if (!path.startsWith(root + sep) && path !== root) { response.writeHead(403).end(); return; }
   try {
@@ -102,7 +105,7 @@ async function startServer(fixture: LocalTenantFixture, client: Client): Promise
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? '/', 'http://localhost');
-      if (!url.pathname.startsWith('/api/')) return await staticResponse(root, url.pathname, response);
+      if (!url.pathname.startsWith('/api/')) return await staticResponse(root, client, url.pathname, response);
       if (failedDetailReadsRemaining > 0 && request.method === 'GET' && /\/tickets\/fixture-ticket$/.test(url.pathname)) {
         failedDetailReadsRemaining--;
         response.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"error":"Synthetic local detail read failure"}');
@@ -183,10 +186,11 @@ async function measure(client: Client, origin: string, browser: Browser, fixture
       if (pageErrorNames.length > 4) pageErrorNames.shift();
     });
     page.setDefaultTimeout(10_000);
+    const ticketLinkSelector = client === 'dashboard' ? 'a[href^="/inbox/"]' : 'a[href^="/tickets/"]';
     await page.addInitScript(`document.addEventListener('click', event => {
-      const target = event.target instanceof Element ? event.target.closest('a[href^="/inbox/"], a[href="/tickets/fixture-ticket"], button') : null;
+      const target = event.target instanceof Element ? event.target.closest('${ticketLinkSelector}, button') : null;
       if (!target) return;
-      if (target.matches('a[href^="/inbox/"], a[href="/tickets/fixture-ticket"]')) window.__tocynTicketNavigationStart = performance.now();
+      if (target.matches('${ticketLinkSelector}')) window.__tocynTicketNavigationStart = performance.now();
       if (/^Retry loading (ticket|conversation)$/.test(target.textContent.trim())) window.__tocynTicketRetryStart = performance.now();
     }, true);`);
     if (client === 'dashboard') {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useEffect } from 'react';
+import { existsSync, readFileSync } from 'node:fs';
 import { cleanup, render, screen } from '@testing-library/react';
 import { AuthLayout } from '../auth-layout';
 
@@ -12,25 +13,26 @@ function media(wide: boolean, dark = false) {
 it('omits splash elements on mobile while retaining the form', () => {
   media(false);
   const view = render(<AuthLayout><input aria-label="Email" /></AuthLayout>);
-  expect(view.container.querySelector('.tocyn-auth-splash')).toBeNull();
+  expect(view.container.querySelector('aside[aria-hidden="true"]')).toBeNull();
   expect(screen.getByLabelText('Email')).toBeTruthy();
 });
 it('uses the explicit app mode before the system preference', () => {
   media(true, false); document.documentElement.setAttribute('data-tocyn-theme-mode', 'dark');
   const view = render(<AuthLayout>Form</AuthLayout>);
-  expect(view.container.querySelector('.tocyn-auth-splash img')?.getAttribute('src')).toContain('/splash/dark/');
+  expect(view.container.querySelector('aside[aria-hidden="true"] img')?.getAttribute('src')).toContain('/splash/dark/');
+  expect(view.container.querySelector('.dark')).toBeTruthy();
 });
 it('retains the choice across auth-boundary remounts but selects again for a new entry', () => {
   media(true); const random = vi.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValue(0.99);
   const first = render(<AuthLayout>Credentials</AuthLayout>);
-  const src = first.container.querySelector('.tocyn-auth-splash img')?.getAttribute('src');
+  const src = first.container.querySelector('aside[aria-hidden="true"] img')?.getAttribute('src');
   first.unmount();
   const second = render(<AuthLayout>Verification</AuthLayout>);
-  expect(second.container.querySelector('.tocyn-auth-splash img')?.getAttribute('src')).toBe(src);
+  expect(second.container.querySelector('aside[aria-hidden="true"] img')?.getAttribute('src')).toBe(src);
   expect(random).toHaveBeenCalledTimes(1);
   second.unmount(); window.history.replaceState({}, '');
   const nextVisit = render(<AuthLayout>Credentials</AuthLayout>);
-  expect(nextVisit.container.querySelector('.tocyn-auth-splash img')?.getAttribute('src')).not.toBe(src);
+  expect(nextVisit.container.querySelector('aside[aria-hidden="true"] img')?.getAttribute('src')).not.toBe(src);
 });
 
 it('waits for outgoing tenant theme cleanup before mounting a splash', () => {
@@ -42,12 +44,23 @@ it('waits for outgoing tenant theme cleanup before mounting a splash', () => {
   }
   const view = render(<Tenant />);
   view.rerender(<AuthLayout>Form</AuthLayout>);
-  expect(view.container.querySelector('.tocyn-auth-splash img')?.getAttribute('src')).toContain('/splash/light/');
+  expect(view.container.querySelector('aside[aria-hidden="true"] img')?.getAttribute('src')).toContain('/splash/light/');
 });
 it('preserves the visual across the MFA enrolment navigation state', () => {
   media(true); vi.spyOn(Math, 'random').mockReturnValue(0.99);
   window.history.replaceState({ usr: { tocynAuthVisual: { document: performance.timeOrigin, choice: 0 } } }, '');
   const view = render(<AuthLayout>Enrolment</AuthLayout>);
   expect(Math.random).not.toHaveBeenCalled();
-  expect(view.container.querySelector('.tocyn-auth-splash img')).toBeTruthy();
+  expect(view.container.querySelector('aside[aria-hidden="true"] img')).toBeTruthy();
+});
+
+it('rebinds Park gray palette and icon tokens inside the nested dark auth shell', () => {
+  const cssPath = ['src/styles/panda.css', 'packages/ui/src/styles/panda.css'].find(existsSync);
+  expect(cssPath).toBeDefined();
+  const css = readFileSync(cssPath!, 'utf8');
+  const authRoot = css.match(/\.authShell__root\s*\{([^}]+)\}/)?.[1];
+  const darkTokens = css.match(/\.dark\s*\{([^}]+)\}/)?.[1];
+  expect(authRoot).toContain('--colors-color-palette-plain-fg: var(--colors-gray-plain-fg)');
+  expect(darkTokens).toContain('--colors-icon\\.primary: var(--colors-gray-12)');
+  expect(darkTokens).toContain('--colors-icon\\.muted: var(--colors-gray-11)');
 });

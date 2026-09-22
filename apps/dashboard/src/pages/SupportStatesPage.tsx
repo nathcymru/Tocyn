@@ -1,6 +1,8 @@
+import { DashboardSelect } from '../components/DashboardSelect';
+import { Badge, Field } from '@luminatick/ui/components';
+import { css } from '@luminatick/ui/styled-system/css';
 import React, { useId, useRef, useState } from 'react';
-import { TocynButton, TocynInput, TocynSelect } from '@luminatick/ui/primitives';
-import { ApiError } from '../api/client';
+import { ParkAlert, ParkButton, ParkCard, ParkCheckbox, ParkEmptyState, ParkInput, ParkSkeleton } from '@luminatick/ui/park';
 import { useAuthStore } from '../store/authStore';
 import { type SupportLifecycle, type SupportStateDefinition, useCreateSupportState, useDeactivateSupportState, useSupportStates, useUpdateSupportState } from '../hooks/useSupportStates';
 
@@ -9,7 +11,7 @@ const blank = () => ({ id: '', legacyStatus: 'open' as SupportLifecycle, interna
 
 export function SupportStatesPage() {
   const { user } = useAuthStore();
-  const { data: states = [], isLoading, error, refetch, loadMore, hasMore, isLoadingMore, isLoadMoreError } = useSupportStates(true);
+  const { data: states = [], dataUpdatedAt, isLoading, error, refetch, loadMore, hasMore, isLoadingMore, isLoadMoreError } = useSupportStates(true);
   const create = useCreateSupportState();
   const update = useUpdateSupportState();
   const deactivate = useDeactivateSupportState();
@@ -21,12 +23,22 @@ export function SupportStatesPage() {
   const [replacementId, setReplacementId] = useState('');
   const [notice, setNotice] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const hasLoadedDefinitions = dataUpdatedAt > 0;
+  const definitionsAreStale = Boolean(error) && hasLoadedDefinitions;
 
-  if (user?.role !== 'admin') return <div><h1 className="text-2xl font-bold text-slate-900">Support states</h1><p role="alert" className="mt-4">Only administrators can manage support states.</p></div>;
+  if (user?.role !== 'admin') return <ParkEmptyState role="alert" title="Support states are unavailable" description="Only administrators can manage support states." />;
+  if (isLoading && !hasLoadedDefinitions) return <section role="status" aria-label="Loading support states" aria-busy="true" className={css({ display: 'grid', gap: '4', maxW: '6xl', mx: 'auto', p: '6' })}>
+    <span className={css({ srOnly: true })}>Loading support states…</span>
+    <ParkSkeleton aria-hidden="true" className={css({ h: '8', w: '48' })} />
+    <ParkSkeleton aria-hidden="true" className={css({ h: '32', w: 'full' })} />
+  </section>;
+  if (error && !hasLoadedDefinitions) return <ParkEmptyState role="alert" title="Support states could not be loaded" description="Retry before editing state definitions." action={<ParkButton type="button" onClick={() => void refetch()}>Retry loading support states</ParkButton>} />;
 
   const reset = () => { setForm(blank()); setEditing(null); setErrorMessage(''); };
   const save = async (event: React.FormEvent) => {
-    event.preventDefault(); setNotice(''); setErrorMessage('');
+    event.preventDefault();
+    if (definitionsAreStale) return;
+    setNotice(''); setErrorMessage('');
     try {
       if (editing) await update.mutateAsync({ id: editing, internalLabel: form.internalLabel.trim(), publicLabel: form.publicLabel.trim(), waitingReasonRequired: form.waitingReasonRequired, nextActionRequired: form.nextActionRequired });
       else await create.mutateAsync({ ...form, id: form.id.trim(), internalLabel: form.internalLabel.trim(), publicLabel: form.publicLabel.trim() });
@@ -38,30 +50,52 @@ export function SupportStatesPage() {
     setDeactivating(null); setErrorMessage(''); document.getElementById(`${formId}-internal`)?.focus();
   };
   const confirmDeactivate = async (state: SupportStateDefinition) => {
+    if (definitionsAreStale) return;
     if (!replacementId) { setErrorMessage('Choose an active replacement before deactivating this state.'); return; }
     setErrorMessage(''); setNotice('');
     try { await deactivate.mutateAsync({ id: state.id, replacementId }); setNotice(`${state.internal_label} was deactivated and active tickets were remapped.`); setDeactivating(null); setReplacementId(''); heading.current?.focus(); }
     catch (cause) { setErrorMessage(cause instanceof Error ? cause.message : 'Support state could not be deactivated. No state was discarded.'); }
   };
 
-  return <div className="max-w-4xl space-y-6">
-    <div><h1 ref={heading} tabIndex={-1} className="text-2xl font-bold text-slate-900">Support states</h1><p className="mt-1 text-slate-600">Name the operator workflow separately from the customer-facing label. State labels do not change access permissions.</p></div>
-    {notice && <p role="status">{notice}</p>}{errorMessage && <p role="alert">{errorMessage}</p>}
-    {error && states.length === 0 && <div role="alert">Could not load support states. <TocynButton type="button" onClick={() => void refetch()} className="underline">Retry loading support states</TocynButton></div>}
-    <form onSubmit={save} className="rounded-xl border border-slate-200 bg-white p-5 space-y-4" aria-label={editing ? 'Edit support state' : 'Create support state'}>
-      <h2 className="font-semibold">{editing ? `Edit ${editing}` : 'Create support state'}</h2>
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="text-sm font-medium">State ID<TocynInput id={`${formId}-id`} required disabled={Boolean(editing)} value={form.id} onChange={event => setForm(current => ({ ...current, id: event.target.value }))} maxLength={120} className="mt-1 w-full border rounded px-3 py-2" /></label>
-        <label className="text-sm font-medium">Legacy lifecycle<TocynSelect disabled={Boolean(editing)} value={form.legacyStatus} onChange={event => setForm(current => ({ ...current, legacyStatus: event.target.value as SupportLifecycle }))} className="mt-1 w-full border rounded px-3 py-2">{lifecycles.map(value => <option key={value} value={value}>{value}</option>)}</TocynSelect></label>
-        <label className="text-sm font-medium">Internal label<TocynInput id={`${formId}-internal`} required value={form.internalLabel} onChange={event => setForm(current => ({ ...current, internalLabel: event.target.value }))} maxLength={120} className="mt-1 w-full border rounded px-3 py-2" /></label>
-        <label className="text-sm font-medium">Customer-visible label<TocynInput required value={form.publicLabel} onChange={event => setForm(current => ({ ...current, publicLabel: event.target.value }))} maxLength={120} className="mt-1 w-full border rounded px-3 py-2" /></label>
+  return <div className={css({"maxW":"6xl","mx":"auto","px":{"base":"4","md":"6"},"py":"6","display":"grid","gap":"6"})}>
+    <div className={css({"display":"grid","gap":"1","mb":"2"})}><h1 ref={heading} tabIndex={-1} className={css({ m: '0', textStyle: '2xl', fontWeight: 'semibold', color: 'fg.default' })}>Support states</h1><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Name the operator workflow separately from the customer-facing label. State labels do not change access permissions.</p></div>
+    {notice && <ParkAlert.Root role="status" status="success" variant="surface">
+      <ParkAlert.Content><ParkAlert.Description>{notice}</ParkAlert.Description></ParkAlert.Content>
+    </ParkAlert.Root>}{errorMessage && <ParkAlert.Root role="alert" status="error" variant="surface">
+      <ParkAlert.Content><ParkAlert.Description>{errorMessage}</ParkAlert.Description></ParkAlert.Content>
+    </ParkAlert.Root>}
+    {error && hasLoadedDefinitions && !isLoadMoreError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Title>Support states could not be refreshed</ParkAlert.Title>
+      <ParkAlert.Description>These definitions are the last loaded version and may have changed. Saving is paused until the retry succeeds.</ParkAlert.Description>
+      <ParkButton type="button" variant="outline" onClick={() => void refetch()}>Retry loading support states</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
+    <ParkCard.Root variant="outline"><ParkCard.Header><ParkCard.Title asChild><h2>{editing ? `Edit ${editing}` : 'Create support state'}</h2></ParkCard.Title></ParkCard.Header><ParkCard.Body>
+    <form onSubmit={save} className={css({ display: 'grid', gap: '4' })} aria-label={editing ? 'Edit support state' : 'Create support state'}>
+      <div className={css({"display":"grid","gap":"4","gridTemplateColumns":{"base":"1fr","md":"repeat(2,minmax(0,1fr))"}})}>
+        <Field.Root required className={css({ w: 'full' })}><Field.Label htmlFor={`${formId}-id`}>State ID</Field.Label><ParkInput id={`${formId}-id`} required disabled={Boolean(editing)} value={form.id} onChange={event => setForm(current => ({ ...current, id: event.target.value }))} maxLength={120} className={css({ w: 'full' })} /></Field.Root>
+        <DashboardSelect label="Legacy lifecycle" disabled={Boolean(editing)} value={form.legacyStatus} onValueChange={value => setForm(current => ({ ...current, legacyStatus: value as SupportLifecycle }))} options={lifecycles.map(value => ({ value, label: value }))} className={css({ w: 'full' })} />
+        <Field.Root required className={css({ w: 'full' })}><Field.Label htmlFor={`${formId}-internal`}>Internal label</Field.Label><ParkInput id={`${formId}-internal`} required value={form.internalLabel} onChange={event => setForm(current => ({ ...current, internalLabel: event.target.value }))} maxLength={120} className={css({ w: 'full' })} /></Field.Root>
+        <Field.Root required className={css({ w: 'full' })}><Field.Label htmlFor={`${formId}-public`}>Customer-visible label</Field.Label><ParkInput id={`${formId}-public`} required value={form.publicLabel} onChange={event => setForm(current => ({ ...current, publicLabel: event.target.value }))} maxLength={120} className={css({ w: 'full' })} /></Field.Root>
       </div>
-      <div className="flex flex-wrap gap-5"><label><input type="checkbox" checked={form.waitingReasonRequired} onChange={event => setForm(current => ({ ...current, waitingReasonRequired: event.target.checked }))} /> Require waiting reason</label><label><input type="checkbox" checked={form.nextActionRequired} onChange={event => setForm(current => ({ ...current, nextActionRequired: event.target.checked }))} /> Require next action</label></div>
-      <div className="flex gap-3"><TocynButton type="submit" aria-disabled={create.isPending || update.isPending} className="rounded bg-brand-600 px-4 py-2 text-white">{editing ? 'Save state' : 'Create state'}</TocynButton>{editing && <TocynButton type="button" onClick={reset} className="underline">Cancel edit</TocynButton>}</div>
-    </form>
-    {isLoading ? <p role="status">Loading support states…</p> : <><ul className="space-y-3" aria-label="Support state definitions">{states.map(state => <li key={state.id} className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{state.internal_label} {!state.is_active && <span className="text-slate-500">(inactive)</span>}</h2><p className="text-sm text-slate-600">Customer label: {state.public_label} · Legacy lifecycle: {state.legacy_status}</p><p className="text-sm text-slate-600">{state.waiting_reason_required ? 'Waiting reason required' : 'Waiting reason optional'} · {state.next_action_required ? 'Next action required' : 'Next action optional'}</p></div><div className="flex gap-3"><TocynButton type="button" onClick={() => beginEdit(state)} className="underline">Edit {state.internal_label}</TocynButton>{state.is_active === 1 && state.is_compatibility_default === 0 && <TocynButton type="button" onClick={() => { setDeactivating(state.id); setReplacementId(''); setErrorMessage(''); }} className="text-red-700 underline">Deactivate {state.internal_label}</TocynButton>}</div></div>
-      {deactivating === state.id && <div className="mt-4 border-t pt-4"><p className="text-sm">Active tickets must move to an active replacement; this cannot leave tickets without a state.</p><label className="mt-2 block text-sm font-medium">Replacement state<TocynSelect autoFocus value={replacementId} onChange={event => setReplacementId(event.target.value)} className="mt-1 w-full border rounded px-3 py-2"><option value="">Choose a replacement</option>{states.filter(candidate => candidate.is_active === 1 && candidate.id !== state.id).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.internal_label} ({candidate.legacy_status})</option>)}</TocynSelect></label><div className="mt-3 flex gap-3"><TocynButton type="button" aria-disabled={deactivate.isPending} onClick={() => void confirmDeactivate(state)} className="rounded bg-red-700 px-4 py-2 text-white">Remap and deactivate</TocynButton><TocynButton type="button" onClick={() => setDeactivating(null)} className="underline">Cancel</TocynButton></div></div>}
-    </li>)}</ul>{hasMore && <TocynButton type="button" onClick={() => void loadMore()} aria-disabled={isLoadingMore} className="underline">{isLoadingMore ? 'Loading more support states…' : 'Load more support states'}</TocynButton>}{isLoadMoreError && <p role="alert" className="text-sm text-red-800">Could not load more support states. Try again.</p>}</>}
+      <div className={css({ display: 'grid', gap: '4' })}>
+        <ParkCheckbox.Root checked={form.waitingReasonRequired} onCheckedChange={({ checked }) => setForm(current => ({ ...current, waitingReasonRequired: checked === true }))}>
+          <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control><ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Require waiting reason</ParkCheckbox.Label>
+        </ParkCheckbox.Root>
+        <ParkCheckbox.Root checked={form.nextActionRequired} onCheckedChange={({ checked }) => setForm(current => ({ ...current, nextActionRequired: checked === true }))}>
+          <ParkCheckbox.Control><ParkCheckbox.Indicator /></ParkCheckbox.Control><ParkCheckbox.HiddenInput /><ParkCheckbox.Label>Require next action</ParkCheckbox.Label>
+        </ParkCheckbox.Root>
+      </div>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="submit" disabled={definitionsAreStale} loading={create.isPending || update.isPending} loadingText="Saving support state…">{editing ? 'Save state' : 'Create state'}</ParkButton>{editing && <ParkButton type="button" variant="outline" onClick={reset}>Cancel edit</ParkButton>}</div>
+    </form></ParkCard.Body></ParkCard.Root>
+    {states.length === 0 ? !error && <ParkEmptyState title="No support states found." description="Create a support state to define the operator workflow." headingLevel={false} /> : <ul className={css({"display":"grid","gap":"4"})} aria-label="Support state definitions">{states.map(state => <li key={state.id}>
+      <ParkCard.Root variant="outline"><ParkCard.Body className={css({ display: 'grid', gap: '3' })}>
+      <div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><div className={css({"minW":0})}><h2 className={css({"fontWeight":"medium","color":"fg.default","display":"flex","alignItems":"center","gap":"2","flexWrap":"wrap"})}>{state.internal_label} {!state.is_active && <Badge variant="subtle" colorPalette="gray">Inactive</Badge>}</h2><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>Customer label: {state.public_label} · Legacy lifecycle: {state.legacy_status}</p><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed"})}>{state.waiting_reason_required ? 'Waiting reason required' : 'Waiting reason optional'} · {state.next_action_required ? 'Next action required' : 'Next action optional'}</p></div><div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="button" variant="outline" disabled={definitionsAreStale} onClick={() => beginEdit(state)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Edit {state.internal_label}</ParkButton>{state.is_active === 1 && state.is_compatibility_default === 0 && <ParkButton type="button" variant="outline" colorPalette="red" disabled={definitionsAreStale} onClick={() => { setDeactivating(state.id); setReplacementId(''); setErrorMessage(''); }} className={css({"minW":0})}>Deactivate {state.internal_label}</ParkButton>}</div></div>
+      {deactivating === state.id && <div className={css({"minW":0})}><p className={css({"color":"fg.muted","fontSize":"sm","lineHeight":"relaxed","display":"inline-flex","alignItems":"center","gap":"2"})}>Active tickets must move to an active replacement; this cannot leave tickets without a state.</p><DashboardSelect label="Replacement state" autoFocus value={replacementId} onValueChange={setReplacementId} options={[{ value: '', label: 'Choose a replacement' }, ...states.filter(candidate => candidate.is_active === 1 && candidate.id !== state.id).map(candidate => ({ value: candidate.id, label: `${candidate.internal_label} (${candidate.legacy_status})` }))]} className={css({ w: 'full' })} /><div className={css({"display":"flex","alignItems":"center","justifyContent":"space-between","gap":"3","flexWrap":"wrap"})}><ParkButton type="button" colorPalette="red" disabled={definitionsAreStale} loading={deactivate.isPending} loadingText="Deactivating" onClick={() => void confirmDeactivate(state)} className={css({"display":"inline-flex","alignItems":"center","gap":"2"})}>Remap and deactivate</ParkButton><ParkButton type="button" variant="outline" onClick={() => setDeactivating(null)}>Cancel</ParkButton></div></div>}
+      </ParkCard.Body></ParkCard.Root>
+    </li>)}</ul>}{hasMore && !isLoadMoreError && <ParkButton type="button" onClick={() => void loadMore()} loading={isLoadingMore} loadingText="Loading more support states…">Load more support states</ParkButton>}{isLoadMoreError && <ParkAlert.Root role="alert" status="error"><ParkAlert.Content>
+      <ParkAlert.Title>Could not load more support states</ParkAlert.Title>
+      <ParkAlert.Description>The definitions already shown are retained. Retry to load the next page.</ParkAlert.Description>
+      <ParkButton type="button" variant="outline" onClick={() => void loadMore()} loading={isLoadingMore} loadingText="Retrying support states…">Retry loading more support states</ParkButton>
+    </ParkAlert.Content></ParkAlert.Root>}
   </div>;
 }

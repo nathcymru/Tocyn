@@ -162,7 +162,7 @@ function requestHeaders(request: IncomingMessage): Record<string, string> {
 }
 
 async function staticResponse(root: string, pathname: string, response: ServerResponse): Promise<void> {
-  const candidate = pathname === '/' || pathname === '/tickets' || pathname.startsWith('/tickets/') || pathname === '/inbox' || pathname.startsWith('/inbox/') || pathname === '/login' || pathname === '/mfa'
+  const candidate = pathname === '/' || pathname === '/inbox' || pathname.startsWith('/inbox/') || pathname === '/login' || pathname === '/mfa'
     ? 'index.html' : pathname.slice(1);
   const path = resolve(root, normalize(candidate));
   if (!path.startsWith(root + sep) && path !== root) { response.writeHead(403).end(); return; }
@@ -535,7 +535,8 @@ test('proves operator theme first paint, persistence, recovery and tenant separa
       const composer = page.getByLabel('Reply message', { exact: true });
       await composer.waitFor();
       await page.waitForFunction(() => !!(globalThis as any).__firstWorkspacePaint);
-      assert.deepEqual(await page.evaluate(() => (globalThis as any).__firstWorkspacePaint), { mode: 'dark', background: 'rgb(17, 24, 39)' }, 'First workspace paint must use the stored actor mode and validated tenant branding');
+      assert.deepEqual(await page.evaluate(() => (globalThis as any).__firstWorkspacePaint), { mode: null, background: 'rgb(248, 250, 252)' }, 'First workspace paint must remain available with the validated fallback tokens while preferences restore');
+      await page.waitForFunction(() => document.documentElement.getAttribute('data-tocyn-theme-mode') === 'dark' && getComputedStyle(document.body).backgroundColor === 'rgb(15, 17, 21)');
       await page.locator('#reply-message:not([readonly])').waitFor();
       await composer.fill('Synthetic theme continuity draft');
       await page.getByText('Draft saved.', { exact: true }).waitFor();
@@ -548,12 +549,12 @@ test('proves operator theme first paint, persistence, recovery and tenant separa
         'The account popover must retain its native dark colour scheme in a tenant-themed workspace');
       await assertRenderedContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] label', 4.5, 'Dark-workspace Appearance label');
       await assertRenderedContrast(page, 'main h1', 4.5, 'Dark-workspace main headline');
-      await assertRenderedContrast(page, 'main .text-slate-700', 4.5, 'Dark-workspace common neutral text');
+      await assertRenderedContrast(page, 'main .tocyn-ticket-detail-meta', 4.5, 'Dark-workspace common neutral text');
       await page.getByRole('radio', { name: 'Light', exact: true }).check();
       await page.waitForFunction(() => (globalThis as any).document.documentElement.getAttribute('data-tocyn-theme-mode') === 'light');
       await assertRenderedContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] label', 4.5, 'Light-workspace Appearance label');
       await assertRenderedContrast(page, 'main h1', 4.5, 'Light-workspace main headline');
-      await assertRenderedContrast(page, 'main .text-slate-700', 4.5, 'Light-workspace common neutral text');
+      await assertRenderedContrast(page, 'main .tocyn-ticket-detail-meta', 4.5, 'Light-workspace common neutral text');
       await assertRenderedContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] button', 4.5, 'Appearance save button');
       await page.keyboard.press('Tab');
       await assertFocusedOutlineContrast(page, '[role="dialog"][data-tocyn-inverse] [data-tocyn-appearance] button', 'Appearance save button');

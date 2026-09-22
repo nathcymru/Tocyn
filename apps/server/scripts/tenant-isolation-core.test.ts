@@ -394,11 +394,11 @@ test('durable operator drafts and workspace state remain per-tenant, revision-bo
 
     const state = {
       expectedRevision: 0, view: 'custom', sort: 'updated_desc', filters: {},
-      listQuery: 'synthetic current-view query', listAnchor: 'opaque-anchor-1', selectedTicketId: 'fixture-ticket', panel: 'details',
+      listQuery: 'synthetic current-view query', listAnchor: 'opaque-anchor-1', selectedTicketId: 'fixture-ticket', panel: 'details', splitterRatio: 32,
     };
     const stateA = await fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, body: state });
     await expectStatus(stateA, 200, 'A may persist server-scoped workspace continuity');
-    const storedState = await stateA.json<{ revision: number; view: string; sort: string; filters: unknown; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: string; updatedAt: string }>();
+    const storedState = await stateA.json<{ revision: number; view: string; sort: string; filters: unknown; listQuery: string; listAnchor: string; selectedTicketId: string | null; panel: string; splitterRatio: number; updatedAt: string }>();
     assert.equal(storedState.revision, 1);
     assert.equal(storedState.view, 'custom');
     assert.equal(storedState.sort, 'updated_desc');
@@ -407,14 +407,23 @@ test('durable operator drafts and workspace state remain per-tenant, revision-bo
     assert.equal(storedState.listAnchor, 'opaque-anchor-1');
     assert.equal(storedState.selectedTicketId, 'fixture-ticket');
     assert.equal(storedState.panel, 'details');
+    assert.equal(storedState.splitterRatio, 32);
     assert.match(storedState.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
     const stateUpdate = await fixture.request('/api/workspace/state', {
       method: 'PUT', token: operatorA, body: { ...state, expectedRevision: 1, listAnchor: 'opaque-anchor-2' },
     });
     await expectStatus(stateUpdate, 200, 'A matching workspace revision updates state');
     assert.equal((await stateUpdate.json<{ revision: number; listAnchor: string }>()).revision, 2);
+    const ratioUpdate = await fixture.request('/api/workspace/state', {
+      method: 'PUT', token: operatorA, body: { ...state, expectedRevision: 2, splitterRatio: 48 },
+    });
+    await expectStatus(ratioUpdate, 200, 'A may persist a bounded splitter ratio');
+    assert.equal((await ratioUpdate.json<{ splitterRatio: number }>()).splitterRatio, 48);
+    await expectStatus(await fixture.request('/api/workspace/state', {
+      method: 'PUT', token: operatorA, body: { ...state, expectedRevision: 3, splitterRatio: 51 },
+    }), 400, 'Out-of-range splitter ratios are rejected');
     const races = await Promise.all(['opaque-anchor-3a', 'opaque-anchor-3b'].map(listAnchor =>
-      fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, body: { ...state, expectedRevision: 2, listAnchor } }),
+      fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, body: { ...state, expectedRevision: 3, listAnchor } }),
     ));
     assert.deepEqual(races.map(response => response.status).sort(), [200, 409], 'Only one same-revision workspace save may commit');
     await expectStatus(await fixture.request('/api/workspace/state', { method: 'PUT', token: operatorA, rawBody: '{', contentType: 'application/json' }), 400,

@@ -1,6 +1,6 @@
 import { productBranding } from '../../tools/branding/vite';
 /// <reference types="vitest" />
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
@@ -20,7 +20,6 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             { name: 'entry-closure', test: /\/apps\/dashboard\/src\/main\.tsx$/, priority: 100 },
-            { name: 'lucide-icons', test: /lucide-react/, priority: 10 },
             { name: 'workspace-hooks', test: /apps\/dashboard\/src\/hooks\//, priority: 10 },
             { name: 'administration-routes', test: /\/apps\/dashboard\/src\/pages\/(?:ApiKey|AgentPermissions|EmailChannel|WidgetChannel|FiltersSettings|Groups|Settings|SlaSettings|SupportStates|TicketFields|Users)Page\.tsx$/, priority: 0 },
             // Remain lazy, while sharing their small route wrappers in the total bundle.
@@ -46,5 +45,6 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
     globals: true,
+    maxWorkers: 2,
   },
 })

@@ -44,7 +44,7 @@ Canonical routes are:
 /inbox/:viewId/:conversationId
 ```
 
-Only opaque identifiers and an allowlist of nonsensitive presentation values may appear in URLs. Customer names, email addresses, message text, arbitrary/free-text search terms, draft bodies, credentials and tenant-sensitive payloads are prohibited in URLs. If a search term is needed, keep it in authenticated in-memory/server state or use a non-content query token whose server-side meaning is separately authorized. `/tickets` and `/tickets/:id` remain compatibility routes during migration and resolve into the workspace with the best authorized view context.
+Only opaque identifiers and an allowlist of nonsensitive presentation values may appear in URLs. Customer names, email addresses, message text, arbitrary/free-text search terms, draft bodies, credentials and tenant-sensitive payloads are prohibited in URLs. If a search term is needed, keep it in authenticated in-memory/server state or use a non-content query token whose server-side meaning is separately authorized. The #315 Park/Panda migration retires the dashboard `/tickets` and `/tickets/:id` compatibility routes; existing bookmarks to those paths need to be updated to `/inbox/all` and `/inbox/all/:conversationId`. The customer portal's `/tickets` routes and the ticket API paths are separate and remain supported.
 
 Deep-link behavior:
 

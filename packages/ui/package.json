@@ -7,31 +7,56 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./styles.css": "./src/styles/tocyn.css",
-    "./primitives": "./src/primitives.tsx",
+    "./styles.css": "./src/styles/app-layout.css",
     "./ark": "./src/ark.ts",
-    "./dialog": "./src/dialog.tsx",
     "./brand": "./src/brand.tsx",
-    "./auth-layout": "./src/auth-layout.tsx"
+    "./auth-layout": "./src/auth-layout.tsx",
+    "./park": "./src/park.tsx",
+    "./components": "./src/components/ui/index.ts",
+    "./styled-system/jsx": {
+      "types": "./src/styles/generated/jsx/index.d.ts",
+      "import": "./src/styles/generated/jsx/index.mjs"
+    },
+    "./styled-system/css": {
+      "types": "./src/styles/generated/css/index.d.ts",
+      "import": "./src/styles/generated/css/index.mjs"
+    },
+    "./icons": {
+      "types": "./src/icons.tsx",
+      "import": "./src/icons.tsx",
+      "browser": "./src/icons.tsx",
+      "module": "./src/icons.tsx",
+      "default": "./src/icons.tsx"
+    }
   },
   "sideEffects": [
-    "./src/styles/tocyn.css"
+    "./src/styles/app-layout.css",
+    "./src/styles/panda.css"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "panda:codegen": "panda codegen --config ./panda.config.ts && node ./scripts/normalize-generated.mjs",
+    "panda:cssgen": "panda cssgen --config ./panda.config.ts --outfile ./src/styles/panda.css",
+    "panda:generate": "npm run panda:codegen && npm run panda:cssgen"
   },
   "peerDependencies": {
     "react": ">=18.2.0",
     "react-dom": ">=18.2.0"
   },
   "dependencies": {
-    "@ark-ui/react": "^5.26.0"
+    "@ark-ui/react": "^5.26.0",
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@phosphor-icons/react": "^2.1.10"
   },
   "devDependencies": {
+    "@pandacss/dev": "^1.12.1",
+    "@park-ui/cli": "1.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^24.13.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "jsdom": "^29.1.1",

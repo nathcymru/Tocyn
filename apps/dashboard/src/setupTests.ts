@@ -1,5 +1,41 @@
 import '@testing-library/jest-dom';
 
+if (!(globalThis as any).ResizeObserver) {
+  (globalThis as any).ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+}
+if (!(globalThis as any).IntersectionObserver) {
+  (globalThis as any).IntersectionObserver = class {
+    readonly root = null; readonly rootMargin = ''; readonly thresholds: number[] = [];
+    observe() {} unobserve() {} disconnect() {} takeRecords() { return []; }
+  };
+}
+if (!HTMLElement.prototype.scrollTo) HTMLElement.prototype.scrollTo = () => {};
+// jsdom does not provide layout geometry. ProseMirror asks every selected
+// element for these methods, including elements whose inherited implementation
+// is absent in a particular jsdom release, so install deterministic no-op
+// geometry for the complete DOM hierarchy used by the editor.
+if (typeof Element !== 'undefined') {
+  Element.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Element.prototype.getBoundingClientRect = () => new DOMRect();
+}
+if (typeof HTMLElement !== 'undefined') HTMLElement.prototype.scrollTo = () => {};
+if (typeof Range !== 'undefined') {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
+if (typeof Text !== 'undefined') {
+  (Text.prototype as any).getClientRects = () => [];
+  (Text.prototype as any).getBoundingClientRect = () => new DOMRect();
+}
+// Tiptap renders a contenteditable instead of a native textarea. Keep legacy
+// test helpers usable while assertions migrate to the editor's text content.
+const htmlValue = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'value');
+if (!htmlValue) Object.defineProperty(HTMLElement.prototype, 'value', {
+  configurable: true,
+  get() { return this.getAttribute('contenteditable') !== null ? this.textContent ?? '' : undefined; },
+  set(next: string) { if (this.getAttribute('contenteditable') !== null) this.textContent = next; },
+});
+
 if (!(globalThis as any).localStorage) {
   const localStorageData = new Map<string, string>();
   const localStorageMock: Storage = {

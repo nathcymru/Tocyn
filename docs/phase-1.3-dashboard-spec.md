@@ -222,10 +222,10 @@ import { QRCodeSVG } from 'qrcode.react';
 
 ### 5.1 Tech Stack
 - **Framework:** React 18 + Vite.
-- **Styling:** Tailwind CSS + Headless UI or Shadcn/UI (Radix UI).
+- **Styling:** Panda CSS + Ark UI, with shared Park-compatible recipes from `@luminatick/ui`.
 - **Data Fetching:** React Query (TanStack Query).
 - **State Management:** Zustand (for simple auth and UI state).
-- **Icons:** Lucide React.
+- **Icons:** Font Awesome 6 semantic icons.
 
 ### 5.2 Directory Structure
 ```text

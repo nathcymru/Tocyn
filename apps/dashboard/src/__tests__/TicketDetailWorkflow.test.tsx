@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
@@ -25,8 +26,8 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
   vi.stubGlobal('fetch',vi.fn(async (url:string,options:RequestInit)=>{
     const path=new URL(url,'http://localhost').pathname;
     if(path==='/api/workspace/state') {
-      if(options.method==='PUT') return json({revision:1,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:'workflow-ticket',panel:'details',updatedAt:'2026-09-11T00:00:00Z'});
-      return json({revision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'details',updatedAt:'2026-09-11T00:00:00Z'});
+      if(options.method==='PUT') return json({revision:1,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:'workflow-ticket',panel:'details',splitterRatio:32,updatedAt:'2026-09-11T00:00:00Z'});
+      return json({revision:0,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId:null,panel:'details',splitterRatio:32,updatedAt:'2026-09-11T00:00:00Z'});
     }
     if(path.startsWith('/api/workspace/drafts')) {
       const override = workspace?.(options); if (override) return override;
@@ -61,8 +62,35 @@ function transport(handle:(path:string,options:RequestInit,url:string)=>Response
   }));
 }
 function showDetail(onRender?: ProfilerOnRenderCallback){
-  const router = createMemoryRouter([{ path: '/tickets/:id', element: <TicketDetailPage /> }], { initialEntries: ['/tickets/workflow-ticket'] });
+  const router = createMemoryRouter([{ path: '/inbox/all/:id', element: <TicketDetailPage /> },{path:'/settings',element:<h1>General settings</h1>}], { initialEntries: ['/inbox/all/workflow-ticket'] });
   render(<QueryClientProvider client={client}><CollaborationProvider><Profiler id="ticket-detail-workflow" onRender={onRender ?? (() => undefined)}><RouterProvider router={router} /></Profiler></CollaborationProvider></QueryClientProvider>);
+  return router;
+}
+const selectLabels: Record<string, Record<string, string>> = {
+  Status: { open: 'Open', pending: 'Pending', resolved: 'Resolved', closed: 'Closed' },
+  Priority: { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' },
+  'Assigned To': { '': 'Unassigned' },
+  Group: { '': 'No Group' },
+};
+function optionLabel(name: string, value: string) { return selectLabels[name]?.[value] ?? value; }
+async function chooseSelect(name: string, option: string) {
+  await userEvent.click(screen.getByRole('combobox', { name }));
+  await userEvent.click(await screen.findByRole('option', { name: option }));
+}
+async function typeRichReply(value: string) {
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  expect(editor).toHaveAttribute('contenteditable', 'true');
+  editor.focus();
+  await userEvent.clear(editor);
+  await userEvent.type(editor, value, { skipClick: true });
+  return editor;
+}
+function pointDropAt(editor: HTMLElement) {
+  // JSDOM does not provide elementFromPoint, which ProseMirror calls before a
+  // file drop can bubble to the composer's attachment handler.
+  const prior = Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
+  Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => editor });
+  return () => prior ? Object.defineProperty(document, 'elementFromPoint', prior) : Reflect.deleteProperty(document, 'elementFromPoint');
 }
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
@@ -70,6 +98,41 @@ beforeEach(()=>{
   useAuthStore.getState().setAuth('synthetic-operator-session',{id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();});
+
+it('lets an untouched conversation navigate after its selection preference is acknowledged',async()=>{
+  transport(()=>json(ticket));
+  const router=showDetail();
+  await screen.findByText('Customer question');
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/workspace/drafts/workflow-ticket')).toBe(true));
+  await screen.findByText('Workspace preference saved.', undefined, { timeout: 5000 });
+  await act(async()=>{void router.navigate('/settings');});
+  expect(await screen.findByRole('heading',{name:'General settings'})).toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT')).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/drafts/workflow-ticket'&&options?.method==='PUT')).toBe(false);
+});
+
+it('puts the conversation before secondary ticket tools in the detail reading order', async () => {
+  transport(() => json(ticket));
+  showDetail();
+  expect(await screen.findByText('Customer question')).toBeInTheDocument();
+  const messages = screen.getByText('Customer question').closest('.scroll-area__root');
+  const actions = screen.getByRole('region', { name: 'Ticket actions' });
+  expect(messages).not.toBeNull();
+  expect(document.getElementById('conversation-messages')).toBeInTheDocument();
+  expect(messages!.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Copy ticket reference' })).toBeInTheDocument();
+});
+
+it('keeps secondary disclosures at least 24px tall with the Park keyboard focus ring', async () => {
+  transport(() => json(ticket));
+  showDetail();
+  await screen.findByText('Customer question');
+  for (const name of ['Operational context', 'Knowledge', 'Collaboration']) {
+    const trigger = screen.getByRole('button', { name });
+    expect(trigger).toHaveClass('min-h_8', 'focusVisible:focus-v-ring_outside');
+    expect(trigger.className).not.toContain('focusVisible:outline');
+  }
+});
 
 it.each([
   [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
@@ -88,6 +151,31 @@ it('converts the legacy attachment byte field when canonical size is absent', as
   })) };
   transport(() => json(data)); showDetail();
   expect(await screen.findByRole('button', { name: /legacy\.txt/ })).toHaveTextContent('2 KB');
+});
+
+it('keeps the complete email subject, sender, plain body and attachment readable in a narrow detail pane', async () => {
+  const subject = 'A deliberately long synthetic email subject for narrow layout review';
+  const sender = 'long.synthetic.customer.address@example.invalid';
+  const data = { ...ticket, subject, source: 'email', customer_email: sender, articles: [
+    { id: 'email-fixture', sender_type: 'customer', is_internal: false, body: 'Newest message body.\n\n> Older quoted history retained.', body_format: 'plain', raw_email_id: 'synthetic-email-raw', created_at: '2026-09-09T00:00:00Z', attachments: [{ id: 'document-fixture', file_name: 'a-very-long-synthetic-attachment-name-for-geometry-check.pdf', file_size: 24576, content_type: 'application/pdf' }] },
+    { id: 'internal-fixture', sender_type: 'agent', is_internal: true, body: 'Private internal note.', body_format: 'plain', created_at: '2026-09-09T00:01:00Z', attachments: [] },
+  ] };
+  transport(() => json(data)); showDetail();
+  const heading = await screen.findByRole('heading', { name: subject });
+  expect(heading).toHaveClass('white-space_normal', 'ov-wrap_anywhere');
+  const metadata = document.querySelector('.ticketDetail__emailSummaryFields');
+  expect(metadata?.querySelectorAll('dd span')).toHaveLength(2);
+  expect(metadata?.textContent).toContain(sender);
+  expect(metadata?.textContent).toContain(subject);
+  const body = screen.getByText(/Newest message body\./);
+  expect(body).toHaveClass('white-space_pre-wrap');
+  expect(body.textContent).toContain('\n\n> Older quoted history retained.');
+  const attachment = screen.getByRole('button', { name: /a-very-long-synthetic-attachment-name/ });
+  expect(attachment.parentElement).toHaveClass('min-w_0', 'max-w_full');
+  expect(document.querySelector('.ticketDetail__composerForm')).toHaveClass('grid-tc_minmax(0,_1fr)');
+  expect(document.querySelector('[data-internal="true"] .ticketDetail__timelineLabel')).toHaveTextContent('Internal Note');
+  fireEvent.click(screen.getByRole('button', { name: 'Show full email' }));
+  expect(screen.getByText('Complete stored body is shown above.')).toBeInTheDocument();
 });
 
 it('previews an article raster attachment only through its authenticated download endpoint', async () => {
@@ -118,10 +206,10 @@ it('snapshots native file selection before clearing the input and preserves expl
   let nativeFiles = [file];
   Object.defineProperty(input, 'files', { configurable: true, get: () => nativeFiles });
   Object.defineProperty(input, 'value', { configurable: true, get: () => '', set: () => { nativeFiles = []; } });
-  // A browser clears FileList when value is cleared. Queue another update so the
-  // attachment updater executes after the event, rather than an eager test-only path.
+  // A browser clears FileList when value is cleared. Enter an actual reply
+  // before the queued attachment update rather than relying on a fake value.
+  await typeRichReply('Draft');
   act(() => {
-    fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Draft' } });
     fireEvent.change(input);
   });
   const remove = await screen.findByRole('button', { name: 'Remove selected.txt' });
@@ -133,12 +221,33 @@ it('snapshots native file selection before clearing the input and preserves expl
   expect(screen.getByText('Attachment removed.')).toHaveAttribute('role', 'status');
 });
 
+it('allows a file to be selected again after its queued attachment is removed', async () => {
+  transport(() => json(ticket));
+  showDetail(); await screen.findByText('Customer question');
+  const input = screen.getByLabelText('Reply attachments');
+  const file = new File(['synthetic'], 'reselect.txt', { type: 'text/plain' });
+
+  fireEvent.change(input, { target: { files: [file] } });
+  const firstRemove = await screen.findByRole('button', { name: 'Remove reselect.txt' });
+  fireEvent.click(firstRemove);
+  expect(screen.queryByRole('button', { name: 'Remove reselect.txt' })).not.toBeInTheDocument();
+
+  fireEvent.change(input, { target: { files: [file] } });
+  expect(await screen.findByRole('button', { name: 'Remove reselect.txt' })).toBeInTheDocument();
+});
+
 it('distinguishes a recoverable detail failure from not found and recovers through an explicit retry',async()=>{
   let failed=true;transport(()=>failed?json({error:'Temporarily unavailable'},503):json(ticket));
   showDetail();expect(await screen.findByRole('alert')).toHaveTextContent('Could not load ticket');
   expect(screen.queryByText('Ticket not found.')).not.toBeInTheDocument();
+  const unavailableBack=screen.getByRole('link',{name:'Back to Inbox'});
+  expect(unavailableBack).toHaveClass('link');expect(unavailableBack).toHaveAttribute('href','/inbox/all');
+  unavailableBack.focus();expect(unavailableBack).toHaveFocus();
   failed=false;fireEvent.click(screen.getByRole('button',{name:'Retry loading ticket'}));
   await screen.findByRole('heading',{name:ticket.subject});
+  const toolbarBack=screen.getByRole('link',{name:'Back to Inbox'});
+  expect(toolbarBack).toHaveClass('link','link--variant_plain');expect(toolbarBack).toHaveAttribute('href','/inbox/all');
+  toolbarBack.focus();expect(toolbarBack).toHaveFocus();
 });
 
 it('shows a mounted service-level failure and retries its shared detail query without blocking the ticket', async () => {
@@ -164,25 +273,25 @@ it('persists explicit assignment clearing and exposes pending/rejected state cha
     return json(ticket);
   });
   showDetail();await screen.findByRole('heading',{name:ticket.subject});
-  fireEvent.change(screen.getByRole('combobox',{name:'Assigned To'}),{target:{value:''}});
+  await chooseSelect('Assigned To', 'Unassigned');
   await waitFor(()=>expect(patches).toContainEqual({assigned_to:null}));
   expect(paths).toContain('/api/tickets/workflow-ticket/responsible-owner');
   const assignmentRequest=vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/responsible-owner'));
   expect(new Headers(assignmentRequest?.[1]?.headers).get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/);
-  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Assigned To'})).toHaveValue(''));
-  fireEvent.change(screen.getByRole('combobox',{name:'Group'}),{target:{value:''}});
+  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Assigned To'})).toHaveTextContent('Unassigned'));
+  await chooseSelect('Group', 'No Group');
   await waitFor(()=>expect(patches).toContainEqual({group_id:null}));
-  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Group'})).toHaveValue(''));
-  hold=true;const pendingStatus=screen.getByRole('combobox',{name:'Status'});pendingStatus.focus();fireEvent.change(pendingStatus,{target:{value:'closed'}});
-  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Status'})).toHaveAttribute('aria-disabled','true'));
-  expect(document.activeElement).toBe(screen.getByRole('combobox',{name:'Status'}));
-  fireEvent.change(screen.getByRole('combobox',{name:'Status'}),{target:{value:'resolved'}});
+  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Group'})).toHaveTextContent('No Group'));
+  hold=true;const pendingStatus=screen.getByRole('combobox',{name:'Status'});pendingStatus.focus();await chooseSelect('Status', 'Closed');
+  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Status'})).toBeDisabled());
+  expect(['trigger', 'list']).toContain(document.activeElement?.getAttribute('data-part'));
+  await userEvent.click(screen.getByRole('combobox',{name:'Status'}));
   expect(patches.filter(patch=>'status' in patch)).toHaveLength(1);
   pending.resolve(json({error:'State change rejected'},403));
   expect(await screen.findByRole('alert')).toHaveTextContent('State change rejected');
   expect(screen.getByRole('combobox',{name:'Status'})).toBe(pendingStatus);
-  expect(pendingStatus).toHaveValue('open');
-  expect(pendingStatus).toHaveAttribute('aria-disabled','false');
+  expect(pendingStatus).toHaveTextContent('Open');
+  expect(pendingStatus).not.toBeDisabled();
   expect(pendingStatus).toHaveFocus();
 });
 
@@ -191,7 +300,7 @@ it.each([
   ['Priority', { priority: 'high' }, 'high'],
   ['Assigned To', { assigned_to: null }, ''],
   ['Group', { group_id: null }, ''],
-] as const)('refreshes the native %s control after its authoritative update without losing focus', async (name, change, expected) => {
+] as const)('refreshes the Park %s control after its authoritative update without losing focus', async (name, change, expected) => {
   transport((_path, options) => {
     if (options.method === 'PATCH') {
       Object.assign(ticket, JSON.parse(String(options.body)));
@@ -201,11 +310,16 @@ it.each([
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const previous = screen.getByRole('combobox', { name });
-  previous.focus(); fireEvent.change(previous, { target: { value: expected } });
+  if (name !== 'Status') {
+    const root = previous.closest('[data-scope="select"][data-part="root"]');
+    expect(root).toHaveClass('select__root');
+    expect(root?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
+  }
+  previous.focus(); await chooseSelect(name, optionLabel(name, expected));
   await waitFor(() => {
     const refreshed = screen.getByRole('combobox', { name });
     expect(refreshed).not.toBe(previous);
-    expect(refreshed).toHaveValue(expected);
+    expect(refreshed).toHaveTextContent(optionLabel(name, expected));
     expect(refreshed).toHaveFocus();
   });
   expect(ticket).toMatchObject(change);
@@ -219,13 +333,17 @@ it('does not steal focus after a confirmed select update when the operator moves
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const priority = screen.getByRole('combobox', { name: 'Priority' });
-  priority.focus(); fireEvent.change(priority, { target: { value: 'high' } });
-  const status = screen.getByRole('combobox', { name: 'Status' });
-  status.focus();
+  priority.focus(); await chooseSelect('Priority', 'High');
+  // Ark returns focus to the trigger on the next animation frame after closing
+  // the list. Move elsewhere after that close step, while PATCH is still pending.
+  await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
+  const alternate = screen.getByRole('button', { name: 'Hide ticket context' });
+  alternate.focus();
+  expect(alternate).toHaveFocus();
   Object.assign(ticket, { priority: 'high' });
   await act(async () => { pending.resolve(json({ success: true })); });
   await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));
-  expect(status).toHaveFocus();
+  expect(alternate).toHaveFocus();
 });
 
 it('keeps a committed select read-only until its detail refresh succeeds without repeating the PATCH', async () => {
@@ -241,13 +359,13 @@ it('keeps a committed select read-only until its detail refresh succeeds without
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const priority = screen.getByRole('combobox', { name: 'Priority' });
-  priority.focus(); fireEvent.change(priority, { target: { value: 'high' } });
+  priority.focus(); await chooseSelect('Priority', 'High');
   await screen.findByRole('alert');
   expect(screen.getByText('Ticket details saved. Refresh the ticket before making another change.')).toHaveAttribute('role', 'status');
   expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
-  expect(priority).toHaveAttribute('aria-disabled', 'true');
-  fireEvent.change(priority, { target: { value: 'urgent' } });
-  expect(priority).toHaveValue('normal');
+  expect(priority).toBeDisabled();
+  await userEvent.click(priority);
+  expect(priority).toHaveTextContent('Normal');
   expect(patches).toBe(1);
   confirmationAvailable = true;
   const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
@@ -255,11 +373,85 @@ it('keeps a committed select read-only until its detail refresh succeeds without
   await waitFor(() => {
     const refreshed = screen.getByRole('combobox', { name: 'Priority' });
     expect(refreshed).not.toBe(priority);
-    expect(refreshed).toHaveValue('high');
-    expect(refreshed).toHaveAttribute('aria-disabled', 'false');
+    expect(refreshed).toHaveTextContent('High');
+    expect(refreshed).not.toBeDisabled();
     expect(refreshed).toHaveFocus();
   });
   expect(patches).toBe(1);
+});
+
+it('recovers initial support-state and definition reads with separate Park retry actions', async () => {
+  const current = { ticket_id: 'workflow-ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason: null, next_action: null, snoozed_until: null, changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const definitions = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
+  let currentReads = 0;
+  let definitionReads = 0;
+  transport((path) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') return ++currentReads === 1 ? json({ error: 'temporarily unavailable' }, 503) : json(current);
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states') return ++definitionReads === 1 ? json({ error: 'temporarily unavailable' }, 503) : json(definitions);
+    return original(url, options);
+  }));
+  showDetail();
+  await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  expect(await screen.findByRole('heading', { name: 'Current support state could not be loaded' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Support-state definitions could not be loaded' })).toBeInTheDocument();
+  expect(screen.queryByRole('form', { name: 'Support state' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry current support state' }));
+  expect(await screen.findByRole('form', { name: 'Support state' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry support-state definitions' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save support state' })).toBeEnabled());
+  expect(currentReads).toBe(2);
+  expect(definitionReads).toBe(2);
+});
+
+it('keeps confirmed support-state data and unsaved facts through failed refreshes', async () => {
+  const current = { ticket_id: 'workflow-ticket', definition_id: 'legacy-open', lifecycle: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason: 'Original', next_action: 'Next step', snoozed_until: null, changed_at: '2026-09-11T00:00:00Z', revision: 4 };
+  const definitions = [{ id: 'legacy-open', legacy_status: 'open', internal_label: 'Open', public_label: 'Open', waiting_reason_required: 0, next_action_required: 0, is_compatibility_default: 1, is_active: 1 }];
+  let failCurrent = false;
+  let failDefinitions = false;
+  let writes = 0;
+  transport((path, options) => {
+    if (path === '/api/tickets/workflow-ticket/support-state') {
+      if (options.method === 'PATCH') { writes++; return json(current); }
+      return failCurrent ? json({ error: 'temporarily unavailable' }, 503) : json(current);
+    }
+    return json(ticket);
+  });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (new URL(url, 'http://localhost').pathname === '/api/support-states') return failDefinitions ? json({ error: 'temporarily unavailable' }, 503) : json(definitions);
+    return original(url, options);
+  }));
+  showDetail();
+  await screen.findByRole('heading', { name: ticket.subject });
+  fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
+  await screen.findByRole('form', { name: 'Support state' });
+  fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: 'My unsaved reason' } });
+  failCurrent = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh current state' }));
+  expect(await screen.findByRole('heading', { name: 'Current support state could not be refreshed' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('My unsaved reason');
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  fireEvent.submit(screen.getByRole('form', { name: 'Support state' }));
+  expect(writes).toBe(0);
+  failCurrent = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry current support state' }));
+  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Current support state could not be refreshed' })).not.toBeInTheDocument());
+  failDefinitions = true;
+  await act(async () => { await client.refetchQueries({ queryKey: ['support-states'] }); });
+  expect(await screen.findByRole('heading', { name: 'Support-state definitions could not be refreshed' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('My unsaved reason');
+  expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
+  failDefinitions = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry support-state definitions' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save support state' })).toBeEnabled());
+  expect(screen.getByLabelText('Waiting reason')).toHaveValue('My unsaved reason');
+  expect(writes).toBe(0);
 });
 
 it('transitions a custom waiting state with its required private facts and retains input after a CAS conflict', async () => {
@@ -284,7 +476,14 @@ it('transitions a custom waiting state with its required private facts and retai
   }));
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
-  await screen.findByRole('combobox', { name: 'Support state' });
+  const stateSelect = await screen.findByRole('combobox', { name: 'Support state' });
+  expect(stateSelect.closest('[data-scope="select"][data-part="root"]')?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
+  for (const name of ['Waiting reason', 'Next action', 'Snooze until (your local time)']) {
+    const input = screen.getByLabelText(name);
+    const field = input.closest('[data-scope="field"][data-part="root"]');
+    expect(field).toHaveClass('field__root');
+    expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveClass('field__label');
+  }
   expect(screen.getByText(/Customer-facing label: We need your reply/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Waiting reason'), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
@@ -295,6 +494,7 @@ it('transitions a custom waiting state with its required private facts and retai
   expect(await screen.findByRole('alert')).toHaveTextContent('changed elsewhere');
   expect(screen.getByLabelText('Waiting reason')).toHaveValue('Waiting for their account number');
   expect(screen.getByLabelText('Next action')).toHaveValue('Follow up tomorrow');
+  expect(screen.getByRole('button', { name: 'Refresh current state' })).toHaveClass('button--variant_plain');
   refreshed = true;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh current support state' }));
   await screen.findByText('Current support state refreshed. Your local input is retained; review it before saving.');
@@ -334,15 +534,19 @@ it('discovers a later current support state, recovers its page load, and enforce
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   fireEvent.click(screen.getByRole('button', { name: 'Manage support state' }));
   const select = await screen.findByRole('combobox', { name: 'Support state' });
-  expect(select).toHaveValue('late-waiting');
-  expect(screen.getByRole('option', { name: 'Later queue (pending) — state details loading' })).toBeInTheDocument();
+  expect(select).toHaveTextContent('Later queue');
+  await userEvent.click(select);
+  expect(await screen.findByRole('option', { name: 'Later queue (pending) — state details loading' })).toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
   expect(screen.getByText(/Customer-facing label: We need more information/)).toBeInTheDocument();
   expect(screen.getByLabelText('Waiting reason')).toHaveAttribute('aria-required', 'false');
   expect(screen.getByRole('button', { name: 'Save support state' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
   expect(await screen.findByText('Could not load more support states. Try again.')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Load more support states' }));
-  await waitFor(() => expect(screen.getByRole('option', { name: 'Later queue (pending)' })).toBeInTheDocument());
+  await userEvent.click(select);
+  expect(await screen.findByRole('option', { name: 'Later queue (pending)' })).toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
   expect(screen.getByLabelText('Waiting reason')).toHaveAttribute('aria-required', 'true');
   expect(screen.getByLabelText('Next action')).toHaveAttribute('aria-required', 'true');
   fireEvent.click(screen.getByRole('button', { name: 'Save support state' }));
@@ -445,7 +649,7 @@ it('keeps explicit confirmation recovery available after a successful background
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const priority = screen.getByRole('combobox', { name: 'Priority' });
-  fireEvent.change(priority, { target: { value: 'high' } });
+  await chooseSelect('Priority', 'High');
   await screen.findByRole('alert');
   const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
   retry.focus();
@@ -455,16 +659,16 @@ it('keeps explicit confirmation recovery available after a successful background
   expect(screen.getByRole('button', { name: 'Retry loading ticket' })).toBe(retry);
   expect(retry).toHaveFocus();
   expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
-  expect(priority).toHaveValue('high');
-  expect(priority).toHaveAttribute('aria-disabled', 'true');
-  fireEvent.change(priority, { target: { value: 'urgent' } });
-  expect(priority).toHaveValue('high');
+  expect(priority).toHaveTextContent('High');
+  expect(priority).toBeDisabled();
+  await userEvent.click(priority);
+  expect(priority).toHaveTextContent('High');
   expect(patches).toBe(1);
-  fireEvent.click(retry);
+  await userEvent.click(retry);
   await waitFor(() => {
     const refreshed = screen.getByRole('combobox', { name: 'Priority' });
-    expect(refreshed).toHaveAttribute('aria-disabled', 'false');
-    expect(refreshed).toHaveValue('high');
+    expect(refreshed).not.toBeDisabled();
+    expect(refreshed).toHaveTextContent('High');
     expect(refreshed).toHaveFocus();
   });
   expect(screen.queryByRole('button', { name: 'Retry loading ticket' })).not.toBeInTheDocument();
@@ -487,22 +691,22 @@ it('advertises and guards the separate confirmation read after mutation pending 
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const priority = screen.getByRole('combobox', { name: 'Priority' });
-  priority.focus(); fireEvent.change(priority, { target: { value: 'high' } });
+  priority.focus(); await chooseSelect('Priority', 'High');
   await waitFor(() => expect(postPatchReads).toBe(2));
-  for (const select of screen.getAllByRole('combobox').filter(element => element.getAttribute('aria-label') !== 'Message format')) expect(select).toHaveAttribute('aria-disabled', 'true');
+  for (const select of screen.getAllByRole('combobox').filter(element => element.getAttribute('aria-label') !== 'Message format')) expect(select).toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'Message format' })).not.toBeDisabled();
+  expect(screen.getByRole('combobox', { name: 'Message format' }).closest('[data-scope="select"][data-part="root"]')?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
   expect(screen.getByRole('combobox', { name: 'Priority' })).toBe(priority);
-  expect(priority).toHaveFocus();
-  fireEvent.change(priority, { target: { value: 'urgent' } });
-  expect(priority).toHaveValue('high');
+  expect(['trigger', 'list']).toContain(document.activeElement?.getAttribute('data-part'));
+  await userEvent.click(priority);
+  expect(priority).toHaveTextContent('High');
   expect(patches).toBe(1);
   await act(async () => { confirmation.resolve(json(ticket)); });
   await waitFor(() => {
     const refreshed = screen.getByRole('combobox', { name: 'Priority' });
     expect(refreshed).toBeTruthy();
-    expect(refreshed).toHaveAttribute('aria-disabled', 'true');
-    expect(refreshed).toHaveValue('high');
-    expect(refreshed).toHaveFocus();
+    expect(refreshed).toBeDisabled();
+    expect(refreshed).toHaveTextContent('High');
   });
   expect(patches).toBe(1);
 });
@@ -526,16 +730,16 @@ it.each(['another control', 'document body'])('does not steal focus when the ope
   });
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
   const priority = screen.getByRole('combobox', { name: 'Priority' });
-  fireEvent.change(priority, { target: { value: 'high' } });
+  await chooseSelect('Priority', 'High');
   await screen.findByRole('alert');
   confirmationAvailable = true;
   const retry = screen.getByRole('button', { name: 'Retry loading ticket' });
   retry.focus(); fireEvent.click(retry);
   await confirmationStartedPromise;
-  const status = screen.getByRole('combobox', { name: 'Status' });
-  if (destination === 'another control') status.focus();
+  const alternate = screen.getByRole('button', { name: 'Hide ticket context' });
+  if (destination === 'another control') alternate.focus();
   else retry.blur();
-  const expectedFocus = destination === 'another control' ? status : document.body;
+  const expectedFocus = destination === 'another control' ? alternate : document.body;
   expect(document.activeElement).toBe(expectedFocus);
   await act(async () => { confirmationRead.resolve(json(ticket)); });
   await waitFor(() => expect(screen.getByRole('combobox', { name: 'Priority' })).not.toBe(priority));
@@ -557,23 +761,22 @@ it('preserves a rejected reply draft and recovers once, refreshing both detail a
     return json(ticket);
   });
   showDetail();await screen.findByText('Customer question');
-  const composer=screen.getByRole('textbox',{name:'Reply message'});
-  fireEvent.change(composer,{target:{value:'Synthetic public reply'}});
+  const composer=await typeRichReply('Synthetic public reply');
   screen.getByRole('button',{name:'Send Reply'}).focus();
   fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
   await waitFor(()=>expect(composer).toHaveAttribute('readonly'));
   expect(document.activeElement).toBe(screen.getByRole('button',{name:'Send Reply'}));
-  fireEvent.change(composer,{target:{value:'Ignored pending edit'}});
-  expect(composer).toHaveValue('Synthetic public reply');
-  fireEvent.click(screen.getByRole('button',{name:'Internal Note'}));
-  expect(screen.getByRole('button',{name:'Public Reply'})).toHaveAttribute('aria-pressed','true');
+  composer.focus();await userEvent.keyboard('Ignored pending edit');
+  expect(composer).toHaveTextContent('Synthetic public reply');
+  fireEvent.click(screen.getByRole('tab',{name:'Internal Note'}));
+  expect(screen.getByRole('tab',{name:'Public Reply'})).toHaveAttribute('aria-selected','true');
   fireEvent.submit(composer.closest('form')!);expect(posts).toBe(1);
   pending.resolve(json({error:'Reply temporarily unavailable'},503));
   expect(await screen.findByRole('alert')).toHaveTextContent('Reply temporarily unavailable');
-  expect(composer).toHaveValue('Synthetic public reply');
+  expect(composer).toHaveTextContent('Synthetic public reply');
   fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
   await screen.findByText('Synthetic public reply',{selector:'div'});
-  expect(composer).toHaveValue('');
+  expect(composer.textContent).toBe('');
   expect(posts).toBe(2);
   expect(client.getQueryState(['tickets',{}])?.isInvalidated).toBe(true);
   expect(window.alert).not.toHaveBeenCalled();
@@ -586,9 +789,14 @@ it('does not expose or send mention fields when the route has not advertised dur
     return json(ticket);
   });
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  const publicTab = screen.getByRole('tab', { name: 'Public Reply' });
+  publicTab.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Internal Note' })).toHaveFocus());
+  await userEvent.keyboard('{Enter}');
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Internal Note' })).toHaveAttribute('aria-selected', 'true'));
   expect(screen.queryByRole('group', { name: 'Mention colleagues' })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Legacy private note' } });
+  await typeRichReply('Legacy private note');
   fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(JSON.parse(String(requests[0].body))).not.toHaveProperty('mentioned_user_ids');
@@ -635,11 +843,11 @@ it('keeps the bounded roster discoverable beyond sixteen while limiting selected
   vi.mocked(fetch).mockImplementation(async (url, options) => new URL(String(url), 'http://localhost').pathname === '/api/users/agents'
     ? json(roster) : original(url, options));
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Internal Note' }));
   const late = await screen.findByRole('checkbox', { name: 'Late colleague' });
   late.focus(); expect(late).toHaveFocus(); fireEvent.click(late);
   expect(late).toBeChecked();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Late roster mention' } });
+  await typeRichReply('Late roster mention');
   fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(JSON.parse(String(requests[0].body))).toMatchObject({ mentioned_user_ids: [lateId] });
@@ -655,17 +863,17 @@ it('keeps a selected internal mention through recipient denial and retries the s
     return json(ticket);
   }, [], undefined, undefined, true);
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button', { name: 'Internal Note' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Internal Note' }));
   const mention = await screen.findByRole('checkbox', { name: 'Assigned agent' });
   mention.focus(); expect(mention).toHaveFocus(); fireEvent.click(mention);
   expect(mention).toBeChecked();
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Private handoff' } });
+  await typeRichReply('Private handoff');
   fireEvent.click(screen.getByRole('button', { name: 'Add Note' }));
   await screen.findByRole('alert');
   expect(screen.getByRole('alert')).toHaveTextContent('Mention recipient access changed');
   expect(screen.queryByRole('button', { name: 'Rebase saved draft' })).not.toBeInTheDocument();
   expect(mention).toBeChecked();
-  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Private handoff');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Private handoff');
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(JSON.parse(String(requests[0].body))).toMatchObject({ is_internal: true,
     mentioned_user_ids: ['22222222-2222-4222-8222-222222222222'] });
@@ -706,14 +914,43 @@ it('uploads dropped and pasted images through the existing authenticated attachm
     return json(ticket);
   });
   showDetail(); await screen.findByText('Customer question');
-  const composer = screen.getByLabelText('Rich message composer');
+  await chooseSelect('Message format', 'Markdown');
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  expect(editor).toHaveAttribute('contenteditable', 'true');
   const dropped = new File(['png'], 'dropped.png', { type: 'image/png' });
   const pasted = new File(['webp'], 'pasted.webp', { type: 'image/webp' });
-  fireEvent.drop(composer, { dataTransfer: { files: [dropped] } });
-  fireEvent.paste(composer, { clipboardData: { files: [pasted] } });
+  const restorePoint = pointDropAt(editor);
+  try {
+    fireEvent.drop(editor, { dataTransfer: { files: [dropped], types: ['Files'], getData: () => '' } });
+    fireEvent.paste(editor, { clipboardData: { files: [pasted], types: ['Files'], getData: () => '' } });
+  } finally { restorePoint(); }
   await waitFor(() => expect(uploaded).toEqual([dropped, pasted]));
   expect(screen.getByRole('button', { name: 'Remove dropped.png' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Remove pasted.webp' })).toBeInTheDocument();
+});
+
+it.each(['drop', 'paste'] as const)('rejects %s images in ProseMirror without uploading them', async action => {
+  let uploads = 0;
+  transport(path => {
+    if (path === '/api/attachments/upload') uploads += 1;
+    return json(ticket);
+  });
+  showDetail(); await screen.findByText('Customer question');
+  await chooseSelect('Message format', 'Markdown');
+  const editor = screen.getByRole('textbox', { name: 'Reply message' });
+  const rejected = action === 'drop'
+    ? new File(['svg'], 'unsupported.svg', { type: 'image/svg+xml' })
+    : new File(['synthetic'], 'oversized.png', { type: 'image/png' });
+  if (action === 'paste') Object.defineProperty(rejected, 'size', { value: 10 * 1024 * 1024 + 1 });
+  const restorePoint = pointDropAt(editor);
+  try {
+    if (action === 'drop') fireEvent.drop(editor, { dataTransfer: { files: [rejected], types: ['Files'], getData: () => '' } });
+    else fireEvent.paste(editor, { clipboardData: { files: [rejected], types: ['Files'], getData: () => '' } });
+  } finally { restorePoint(); }
+  expect(await screen.findByText(/1 image was not attached/)).toBeInTheDocument();
+  expect(uploads).toBe(0);
+  expect(screen.queryByRole('button', { name: `Remove ${rejected.name}` })).toBeNull();
+  expect(editor.querySelector('img, [data-tocyn-image]')).toBeNull();
 });
 
 it('promotes a completed upload in one committed attachment row and keeps it after draft save', async () => {
@@ -747,7 +984,9 @@ it('retains a failed dropped image and retries it without changing the draft att
   showDetail(); await screen.findByText('Customer question');
   fireEvent.drop(screen.getByLabelText('Rich message composer'), { dataTransfer: { files: [new File(['png'], 'retry.png', { type: 'image/png' })] } });
   expect(await screen.findByText('Upload failed.')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Retry upload' }));
+  const retryUpload = screen.getByRole('button', { name: 'Retry upload' });
+  expect(retryUpload).toHaveClass('button--variant_plain');
+  fireEvent.click(retryUpload);
   await waitFor(() => expect(attempts).toBe(2));
   expect(screen.getByRole('button', { name: 'Remove retry.png' })).toBeInTheDocument();
 });
@@ -770,7 +1009,7 @@ it('retries acknowledged-send cleanup without sending the article again', async 
     return json(ticket);
   }, [], options => options.method==='DELETE' && ++deletes===1 ? json({error:'Cleanup unavailable'},503) : undefined);
   showDetail(); await screen.findByText('Customer question');
-  fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Only send once'}});
+  await typeRichReply('Only send once');
   fireEvent.click(screen.getByRole('button',{name:'Send Reply'}));
   const retry=await screen.findByRole('button',{name:'Retry sent-draft cleanup'});
   await waitFor(()=>expect(retry).toHaveAttribute('aria-disabled','false'));
@@ -779,7 +1018,7 @@ it('retries acknowledged-send cleanup without sending the article again', async 
   fireEvent.click(retry);
   await waitFor(()=>expect(screen.queryByRole('button',{name:'Retry sent-draft cleanup'})).not.toBeInTheDocument());
   expect(posts).toBe(1); expect(deletes).toBe(2);
-  expect(screen.getByRole('textbox',{name:'Reply message'})).toHaveValue('');
+  expect(screen.getByRole('textbox',{name:'Reply message'}).textContent).toBe('');
 });
 
 
@@ -796,12 +1035,12 @@ it('retains uploaded attachments after a rejected internal note and reuses them 
     return json(ticket);
   });
   showDetail();await screen.findByText('Customer question');
-  fireEvent.click(screen.getByRole('button',{name:'Internal Note'}));
-  expect(screen.getByRole('button',{name:'Internal Note'})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('tab',{name:'Internal Note'}));
+  await waitFor(() => expect(screen.getByRole('tab',{name:'Internal Note'})).toHaveAttribute('aria-selected','true'));
   fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['synthetic attachment'],'note.txt',{type:'text/plain'})]}});
   await waitFor(()=>expect(screen.queryByText('Uploading…')).not.toBeInTheDocument());
   expect(screen.getByRole('button',{name:'Add Note'})).toHaveAttribute('aria-disabled','true');
-  fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Synthetic private note'}});
+  await typeRichReply('Synthetic private note');
   fireEvent.click(screen.getByRole('button',{name:'Add Note'}));
   await screen.findByRole('alert');
   expect(screen.getByText('note.txt')).toBeInTheDocument();
@@ -817,7 +1056,9 @@ it('retains confirmed conversation content when a refresh fails and explicitly r
   let failed=false;transport(()=>failed?json({error:'Refresh unavailable'},503):json(ticket));
   showDetail();await screen.findByText('Customer question');
   failed=true;await act(()=>client.invalidateQueries({queryKey:['ticket','workflow-ticket']}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Showing the last confirmed details');
+  const refreshAlert = await screen.findByRole('alert');
+  expect(refreshAlert).toHaveTextContent('Showing the last confirmed details');
+  expect(refreshAlert).toHaveClass('alert__root');
   expect(screen.getByText('Customer question')).toBeInTheDocument();
   failed=false;fireEvent.click(screen.getByRole('button',{name:'Retry loading ticket'}));
   await waitFor(()=>expect(screen.queryByRole('alert')).not.toBeInTheDocument());
@@ -837,7 +1078,8 @@ it('waits for all pending attachment outcomes before unlocking a partial-failure
   });
   showDetail();await screen.findByText('Customer question');
   fireEvent.change(screen.getByLabelText('Reply attachments'),{target:{files:[new File(['a'], 'a.txt', { type: 'text/plain' }),new File(['b'], 'b.txt', { type: 'text/plain' })]}});
-  fireEvent.change(screen.getByRole('textbox',{name:'Reply message'}),{target:{value:'Partial attachment retry'}});
+  screen.getByRole('textbox',{name:'Reply message'}).focus();
+  await userEvent.keyboard('Partial attachment retry');
   const send=screen.getByRole('button',{name:'Send Reply'});send.focus();fireEvent.click(send);
   await waitFor(()=>expect(uploads).toBe(2));
   expect(screen.getByText('Upload failed.')).toBeInTheDocument();
@@ -866,26 +1108,36 @@ it('replaces a pre-commit read when event and mutation invalidations overlap',as
   await waitFor(()=>expect(reads).toBeGreaterThan(2));
   ticket.articles.push({id:'live-message',body:'Post-event authoritative message',sender_type:'agent',is_internal:false,created_at:'2026-09-09T00:01:00Z'});
   act(()=>Socket.latest.emit({type:'article.created',payload:{ticket_id:ticket.id}}));
-  fireEvent.change(screen.getByRole('combobox',{name:'Status'}),{target:{value:'resolved'}});
-  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('resolved'));
+  await chooseSelect('Status', 'Resolved');
+  await waitFor(()=>expect(screen.getByRole('combobox',{name:'Status'})).toHaveTextContent('Resolved'));
   await screen.findByText('Post-event authoritative message');
   await act(async()=>{stale.resolve(json(old));await oldRequest!;});
-  expect(screen.getByRole('combobox',{name:'Status'})).toHaveValue('resolved');
+  expect(screen.getByRole('combobox',{name:'Status'})).toHaveTextContent('Resolved');
   expect(screen.getByText('Post-event authoritative message')).toBeInTheDocument();
   expect(reads).toBeGreaterThan(2);
 });
 
 
-it('associates every retained custom field label with its native control', async () => {
+it('associates every retained custom field label with its control', async () => {
   const fields = ['text','textarea','select','checkbox'].map((field_type, i) => ({id:`field-${i}`,name:`field_${i}`,label:`Custom ${field_type}`,field_type,options:field_type==='select'?'One,Two':null,is_active:true}));
   transport(() => json(ticket), fields);
   showDetail();
   for (const field of fields) {
-    const input = await screen.findByLabelText(field.label);
+    const input = field.field_type === 'select'
+      ? await screen.findByRole('combobox', { name: field.label })
+      : await screen.findByLabelText(field.label);
     expect(input).toHaveAccessibleName(field.label);
     expect(input.id).toBeTruthy();
+    if (field.field_type === 'text' || field.field_type === 'textarea') {
+      const root = input.closest('[data-scope="field"][data-part="root"]');
+      expect(root).toHaveClass('field__root');
+      expect(root?.querySelector('[data-scope="field"][data-part="label"]')).toHaveClass('field__label');
+    }
   }
   expect(screen.getByRole('combobox',{name:'Custom select'})).toBeVisible();
+  const customSelectRoot = screen.getByRole('combobox',{name:'Custom select'}).closest('[data-scope="select"][data-part="root"]');
+  expect(customSelectRoot).toHaveClass('select__root');
+  expect(customSelectRoot?.querySelector('[data-scope="select"][data-part="label"]')).toHaveClass('select__label');
   expect(screen.getByRole('checkbox',{name:'Custom checkbox'})).toBeVisible();
 });
 
@@ -930,13 +1182,14 @@ it('retains the draft and prevents send until reply-capability failure is recove
     ? Promise.resolve(json({ error: 'Unavailable' }, 503)) : original(input, options));
   showDetail(); await screen.findByText('Customer question');
   const retry = await screen.findByRole('button', { name: 'Retry reply options' });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Retained while options unavailable' } });
+  expect(retry).toHaveClass('button--variant_plain');
+  await typeRichReply('Retained while options unavailable');
   const send = screen.getByRole('button', { name: 'Send Reply' });
-  expect(send).toHaveAttribute('aria-disabled', 'true'); fireEvent.click(send);
+  expect(send).toHaveAttribute('aria-disabled','true'); fireEvent.click(send);
   expect(posts).toBe(0);
   unavailable = false; fireEvent.click(retry);
-  await waitFor(() => expect(send).toHaveAttribute('aria-disabled', 'false'));
-  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Retained while options unavailable');
+  await waitFor(() => expect(send).toHaveAttribute('aria-disabled','false'));
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Retained while options unavailable');
 });
 
 
@@ -947,7 +1200,7 @@ it('sends an acknowledged collision-safe draft with one stable idempotency key',
     return json(ticket);
   }, [], undefined, undefined, true);
   showDetail(); await screen.findByRole('heading', { name: ticket.subject });
-  fireEvent.change(screen.getByRole('textbox', { name: 'Reply message' }), { target: { value: 'Acknowledged collision-safe reply' } });
+  await typeRichReply('Acknowledged collision-safe reply');
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: /send reply/i }));
   await waitFor(() => expect(requests).toHaveLength(1));
@@ -989,8 +1242,7 @@ it('requires manually loading the bounded newest conversation page before a stal
       mode: body.mode, body: body.body, bodyFormat: body.bodyFormat, attachments: body.attachments, baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
   }, undefined, () => conversationRevision);
   showDetail(); await screen.findByText('Customer question');
-  const message = screen.getByRole('textbox', { name: 'Reply message' });
-  fireEvent.change(message, { target: { value: 'Retain paginated draft' } });
+  await typeRichReply('Retain paginated draft');
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
   await screen.findByText(/Review and rebase before sending/);
@@ -999,7 +1251,7 @@ it('requires manually loading the bounded newest conversation page before a stal
   await screen.findByText(/More messages are available\. Load them/i);
   expect(screen.queryByRole('button', { name: 'Rebase saved draft' })).not.toBeInTheDocument();
   expect(rebaseRequests).toHaveLength(0);
-  expect(message).toHaveValue('Retain paginated draft');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Retain paginated draft');
 
   fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }));
   await screen.findByText('Newest customer material');
@@ -1009,7 +1261,7 @@ it('requires manually loading the bounded newest conversation page before a stal
   fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
   await screen.findByText(/Draft rebased to the reviewed conversation/);
   expect(rebaseRequests).toEqual([expect.objectContaining({ expectedReviewedConversationRevision: 1, expectedRevision: 1 })]);
-  expect(message).toHaveValue('Retain paginated draft');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Retain paginated draft');
 });
 
 it('requires a rendered conversation review and explicit CAS rebase after a stale reply before manual resend', async () => {
@@ -1047,27 +1299,26 @@ it('requires a rendered conversation review and explicit CAS rebase after a stal
       mode: body.mode, body: body.body, bodyFormat: body.bodyFormat, attachments: body.attachments, baseConversationRevision: 0, expiresAt: null, updatedAt: '2026-09-10T00:00:00Z' });
   }, undefined, () => conversationRevision);
   showDetail(); await screen.findByText('Customer question');
-  const message = screen.getByRole('textbox', { name: 'Reply message' });
-  fireEvent.change(message, { target: { value: 'Keep this draft through review' } });
+  await typeRichReply('Keep this draft through review');
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) => String(url).endsWith('/workspace/drafts/workflow-ticket') && init?.method === 'PUT')).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
   await screen.findByText(/Review and rebase before sending/);
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this draft through review');
   expect(screen.getByRole('button', { name: 'Send Reply' })).toHaveAttribute('aria-disabled', 'true');
 
   injectMaterialBetweenTicketAndRevisionRead = true;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
   await screen.findByText(/conversation changed while it was being refreshed/i);
   expect(screen.queryByText('A newer customer reply')).not.toBeInTheDocument();
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this draft through review');
 
   fireEvent.click(screen.getByRole('button', { name: 'Refresh and review conversation' }));
   await screen.findByText('A newer customer reply');
   await screen.findByRole('button', { name: 'Rebase saved draft' });
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveTextContent('Keep this draft through review');
   fireEvent.click(screen.getByRole('button', { name: 'Rebase saved draft' }));
   await screen.findByText(/Draft rebased to the reviewed conversation/);
-  expect(message).toHaveValue('Keep this draft through review');
+  expect(screen.getByRole('textbox', { name: 'Reply message' })).toHaveValue('Keep this draft through review');
 
   fireEvent.click(screen.getByRole('button', { name: 'Send Reply' }));
   await waitFor(() => expect(replyRequests).toHaveLength(2));

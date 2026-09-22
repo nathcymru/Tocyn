@@ -32,9 +32,10 @@ const tickets=Array.from({length:20},(_,index)=>({
   created_at:'2026-09-11T00:00:00Z',updated_at:`2026-09-11T00:${String(index).padStart(2,'0')}:00Z`,
 }));
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
-const workspace=(selectedTicketId:string|null=null)=>({revision:4,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel:'conversation',updatedAt:'2026-09-11T00:00:00Z'});
+const workspace=(selectedTicketId:string|null=null)=>({revision:4,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel:'conversation',splitterRatio:savedRatio,updatedAt:'2026-09-11T00:00:00Z'});
 let client:QueryClient;
 let savedSelection:string|null=null;
+let savedRatio=32;
 
 function Location(){const location=useLocation();return <output data-testid="location">{location.pathname}</output>;}
 function showInbox(entry='/inbox/all',globalSearch=false){
@@ -42,17 +43,35 @@ function showInbox(entry='/inbox/all',globalSearch=false){
   const result=render(<QueryClientProvider client={client}><RouterProvider router={router}/></QueryClientProvider>);
   return {...result,router};
 }
+async function chooseSort(option:string){
+  await openFilters();
+  await userEvent.click(screen.getByRole('button',{name:/^Sort:/}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:option}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+}
+async function chooseView(label:string){
+  await userEvent.click(screen.getByRole('button',{name:'Inbox views'}));
+  await userEvent.click(within(await screen.findByRole('menu',{name:'Inbox views'})).getByRole('menuitem',{name:label}));
+}
+async function choosePresentation(label:'List view'|'Table view'){await chooseView(label);}
+async function openFilters(){
+  const trigger=screen.getByRole('button',{name:'Filter tickets'});
+  if(trigger.getAttribute('aria-expanded')!=='true')fireEvent.click(trigger);
+  const supplemental=screen.getByRole('button',{name:/^More filters/});
+  if(supplemental.getAttribute('aria-expanded')!=='true')await userEvent.click(supplemental);
+  await waitFor(()=>expect(supplemental).toHaveAttribute('aria-expanded','true'));
+}
 
 beforeEach(()=>{
   client=new QueryClient({defaultOptions:{queries:{retry:false,refetchInterval:false},mutations:{retry:false}}});
   useAuthStore.setState({token:null,user:null,mfaRequired:false,sessionGeneration:0});
   useAuthStore.getState().setAuth('tenant-session',operator);
-  savedSelection=null;presentation.enabled=true;
+  savedSelection=null;savedRatio=32;presentation.enabled=true;
   detailNavigation.pending=false;
   detailNavigation.flush.mockReset().mockResolvedValue(true);
   vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
     if(url==='/api/workspace/state'&&options.method==='PUT'){
-      const input=JSON.parse(String(options.body));savedSelection=input.selectedTicketId??null;
+      const input=JSON.parse(String(options.body));savedSelection=input.selectedTicketId??null;savedRatio=input.splitterRatio;
       return json({...input,revision:5,updatedAt:'2026-09-11T00:01:00Z'});
     }
     if(url==='/api/workspace/state')return json(workspace(savedSelection));
@@ -66,6 +85,41 @@ beforeEach(()=>{
   }));
 });
 afterEach(()=>{cleanup();client.clear();useAuthStore.getState().logout();localStorage.clear();vi.unstubAllGlobals();vi.restoreAllMocks();});
+
+it('gives the desktop splitter a 24px hit area and one Park keyboard focus ring',()=>{
+  showInbox();
+  const separator=screen.getByRole('separator',{name:'Resize conversation panes'});
+  expect(separator).toHaveClass('splitter__resizeTrigger','min-w_6','w_6','bg_transparent','focusVisible:focus-v-ring_outside');
+  expect(separator.className).toContain('before:w_0.5');
+  expect(separator.className).toContain('before:bg_gray.outline.border');
+  separator.focus();
+  expect(separator).toHaveFocus();
+});
+
+it('persists a pointer-resized splitter ratio and restores it on a fresh inbox mount',async()=>{
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){
+    return this.dataset.part==='resize-trigger' ? new DOMRect(320,0,24,600) : new DOMRect(0,0,1000,600);
+  });
+  const first=showInbox();
+  await screen.findByRole('listbox',{name:'Conversation list'});
+  const separator=screen.getByRole('separator',{name:'Resize conversation panes'});
+  Object.defineProperties(separator,{
+    setPointerCapture:{configurable:true,value:vi.fn()},
+    hasPointerCapture:{configurable:true,value:()=>true},
+    releasePointerCapture:{configurable:true,value:vi.fn()},
+  });
+  await waitFor(()=>expect(separator).toHaveAttribute('aria-valuenow','32'));
+  fireEvent.pointerDown(separator,{button:0,buttons:1,pointerId:1,pointerType:'mouse',clientX:320,clientY:20});
+  await waitFor(()=>expect(separator).toHaveAttribute('data-dragging'));
+  await act(async()=>{await new Promise(resolve=>window.setTimeout(resolve,0));});
+  fireEvent.pointerMove(document,{button:0,buttons:1,pointerId:1,pointerType:'mouse',clientX:400,clientY:20});
+  await waitFor(()=>expect(separator).toHaveAttribute('aria-valuenow','40'));
+  fireEvent.pointerUp(document,{button:0,buttons:0,pointerId:1,pointerType:'mouse',clientX:400,clientY:20});
+  await waitFor(()=>expect(savedRatio).toBe(40));
+  first.unmount();
+  showInbox();
+  await waitFor(()=>expect(screen.getByRole('separator',{name:'Resize conversation panes'})).toHaveAttribute('aria-valuenow','40'));
+});
 
 it('keeps the 20-result list node, scroll position and roving focus while conversations change',async()=>{
   showInbox();
@@ -90,7 +144,11 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
   expect(options[2]).toHaveFocus();
   expect(options[2]).toHaveAttribute('tabindex','0');
   await userEvent.tab();
+  expect(screen.getByRole('separator',{name:'Resize conversation panes'})).toHaveFocus();
+  await userEvent.tab();
   expect(screen.getByRole('link',{name:'Back to conversations'})).toHaveFocus();
+  await userEvent.tab({shift:true});
+  expect(screen.getByRole('separator',{name:'Resize conversation panes'})).toHaveFocus();
   await userEvent.tab({shift:true});
   expect(options[2]).toHaveFocus();
 
@@ -102,48 +160,334 @@ it('keeps the 20-result list node, scroll position and roving focus while conver
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 });
 
+it('renders spaced ticket surfaces with a left SLA anchor, stable marker slots and an expandable preview',async()=>{
+  showInbox();
+  const row=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const surface=row.querySelector('[data-part="ticket-row-surface"]');
+  const slaAnchor=row.querySelector('[data-part="ticket-sla-anchor"]');
+  const details=row.querySelector('[data-part="ticket-default"]');
+  const preview=row.querySelector('[data-part="ticket-preview"]');
+  const previewPanel=row.querySelector('[data-part="ticket-preview-panel"]');
+  expect(surface).toBeInTheDocument();
+  expect(surface?.firstElementChild).toBe(slaAnchor);
+  await waitFor(() => {
+    expect(slaAnchor?.querySelector('[aria-label]')).toHaveAttribute('aria-label', 'Service level unavailable');
+    expect(slaAnchor).toHaveTextContent('H');
+  }, { timeout: 5000 });
+  expect(within(row).getByText('#1')).toBeInTheDocument();
+  expect(within(row).getByRole('heading',{name:'Fixture conversation 1'})).toBeInTheDocument();
+  expect(row.querySelector('time')).toHaveAttribute('aria-label', expect.stringMatching(/^Updated /));
+  expect(row.querySelector('time')).not.toHaveClass('d_none');
+  expect(row.querySelectorAll('[data-part="ticket-pill-slot"]')).toHaveLength(2);
+  expect(row.querySelector('[data-part="ticket-pill-slots"]')).toHaveTextContent('Unassigned');
+  expect(preview).toHaveTextContent('Last confirmed message 1');
+  expect(preview).toHaveAttribute('data-expanded','false');
+  expect(details).toHaveAttribute('aria-hidden','false');
+  expect(previewPanel).toHaveAttribute('aria-hidden','true');
+  expect(row.className).not.toMatch(/shadow_xs|rounded_lg/);
+  fireEvent.mouseEnter(row);
+  expect(preview).toHaveAttribute('data-expanded','true');
+  expect(details).toHaveAttribute('aria-hidden','true');
+  expect(previewPanel).toHaveAttribute('aria-hidden','false');
+  expect(slaAnchor?.querySelector('[aria-label]')).toHaveAttribute('aria-label','Service level unavailable');
+  expect(row).toHaveAttribute('aria-label',expect.stringContaining('Fixture conversation 1'));
+  expect(within(row).getByRole('link',{name:'Open #1: Fixture conversation 1'})).toBeInTheDocument();
+  fireEvent.mouseLeave(row);
+  expect(preview).toHaveAttribute('data-expanded','false');
+  act(()=>row.focus());
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.mouseLeave(row);
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.keyDown(row,{key:' '});
+  expect(preview).toHaveAttribute('data-expanded','false');
+  fireEvent.keyDown(row,{key:' '});
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.keyDown(row,{key:'Escape'});
+  expect(preview).toHaveAttribute('data-expanded','false');
+  fireEvent.keyDown(row,{key:' '});
+  expect(preview).toHaveAttribute('data-expanded','true');
+  fireEvent.blur(row,{relatedTarget:document.body});
+  expect(preview).toHaveAttribute('data-expanded','false');
+});
+
+it('does not open the hover preview on a touch-only device, while keyboard Space remains available',async()=>{
+  vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addListener:vi.fn(),removeListener:vi.fn(),addEventListener:vi.fn(),removeEventListener:vi.fn()})));
+  showInbox();
+  const row=await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fireEvent.mouseEnter(row);
+  expect(row).toHaveAttribute('data-preview-expanded','false');
+  act(()=>row.focus());
+  expect(row).toHaveAttribute('data-preview-expanded','true');
+  fireEvent.keyDown(row,{key:' '});
+  expect(row).toHaveAttribute('data-preview-expanded','false');
+});
+
+it('pulses either live breached SLA phase but keeps a historical breach static',async()=>{
+  const baselineFetch=fetch as typeof fetch;
+  const running={state:'on-track',phase:'running',completedAt:null,dueAt:'2026-09-11T01:00:00Z',remainingWorkingMilliseconds:1000,targetWorkingMilliseconds:3600000};
+  const liveBreach={...running,state:'breached',remainingWorkingMilliseconds:0};
+  const completedBreach={...liveBreach,phase:'completed',completedAt:'2026-09-11T02:00:00Z'};
+  vi.stubGlobal('fetch',vi.fn((url:string,options?:RequestInit)=>url==='/api/ticket-sla/projections'
+    ? Promise.resolve(json({
+      'ticket-1':{response:liveBreach,resolution:running,handlerName:null},
+      'ticket-2':{response:running,resolution:liveBreach,handlerName:null},
+      'ticket-3':{response:completedBreach,resolution:running,handlerName:null},
+      ...Object.fromEntries(tickets.slice(3).map(ticket=>[ticket.id,unavailableSla])),
+    }))
+    : baselineFetch(url,options)));
+  showInbox();
+  const rows=await within(screen.getByRole('listbox',{name:'Conversation list'})).findAllByRole('option');
+  await waitFor(()=>expect(rows[0].querySelector('[data-sla-pulsing]')).toHaveAttribute('data-sla-pulsing','true'));
+  expect(rows[0]).toHaveAttribute('aria-label',expect.stringContaining('Service level overdue'));
+  expect(rows[1].querySelector('[data-sla-pulsing]')).toHaveAttribute('data-sla-pulsing','true');
+  expect(rows[1].querySelector('[data-sla-breached]')).toHaveAttribute('aria-label','Breached service level');
+  expect(rows[2].querySelector('[data-sla-breached]')).toHaveAttribute('data-sla-breached','true');
+  expect(rows[2].querySelector('[data-sla-pulsing]')).toHaveAttribute('data-sla-pulsing','false');
+});
+
+it('keeps one compact toolbar and shows honest metrics only in the statistics drawer',async()=>{
+  showInbox();
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const toolbar=document.querySelector('[data-part="inbox-primary-toolbar"]') as HTMLElement;
+  expect(within(toolbar).getByRole('button',{name:'Inbox views'}).querySelector('svg')).toHaveAttribute('aria-hidden','true');
+  expect(within(toolbar).getByRole('button',{name:'Quick statistics'})).toBeInTheDocument();
+  expect(within(toolbar).getByRole('button',{name:'Filter tickets'})).toBeInTheDocument();
+  const create=within(toolbar).getByRole('button',{name:'New Ticket'});
+  expect(within(create).getByText('New Ticket')).toBeInTheDocument();
+  expect(create.querySelector('svg')).toHaveAttribute('aria-hidden','true');
+  expect(document.querySelector('[data-part="inbox-page-metrics"]')).toBeNull();
+  expect(screen.queryByRole('region',{name:'Quick statistics'})).not.toBeInTheDocument();
+  fireEvent.click(within(toolbar).getByRole('button',{name:'Quick statistics'}));
+  const metrics=screen.getByRole('region',{name:'Quick statistics'}).querySelector('dl') as HTMLElement;
+  expect(metrics).toHaveAttribute('aria-label','Tickets on the current page');
+  await waitFor(()=>expect(within(metrics).getByText('Open / pending').parentElement).toHaveTextContent('20'));
+  expect(within(metrics).getByText('Resolved / closed').parentElement).toHaveTextContent('0');
+  await waitFor(()=>expect(within(metrics).getByText('Overdue').parentElement).toHaveTextContent('0'));
+  await openFilters();
+  const drawer=screen.getByRole('region',{name:'Ticket filters'});
+  expect(within(drawer).getByRole('button',{name:'Ticket owner: All tickets'})).toBeInTheDocument();
+  expect(within(drawer).getByRole('button',{name:'Sort: recently updated'})).toBeInTheDocument();
+});
+
 it('uses the authoritative actionable and snoozed queue views without losing the inbox surface',async()=>{
   showInbox();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 
-  fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
+  await chooseView('Snoozed');
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=snoozed'))).toBe(true));
-  expect(screen.getByRole('button',{name:'Snoozed'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Snoozed');
   await waitFor(()=>expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toHaveTextContent('Snoozed'));
 
-  fireEvent.click(screen.getByRole('button',{name:'Needs Action'}));
+  await chooseView('Needs Attention');
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=actionable'))).toBe(true));
-  expect(screen.getByRole('button',{name:'Needs Action'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Needs Attention');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBeInTheDocument();
 });
 
-it('labels filtering as current-view, clears it with a button or Escape, and resets to page one',async()=>{
+it('stages ticket filters until Apply, clears them, and closes on Escape',async()=>{
   showInbox();
-  const input=await screen.findByRole('textbox',{name:'Filter this view'});
-  expect(input).toHaveAttribute('placeholder','Filter this view');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await openFilters();
+  const input=screen.getByRole('textbox',{name:'Search ticket text'});
+  expect(input).toHaveAttribute('placeholder','Search ticket text');
   fireEvent.change(input,{target:{value:'billing'}});
-  fireEvent.submit(input.closest('form')!);
-  await waitFor(()=>expect(input).toHaveValue('billing'));
-  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter applied.');
-  fireEvent.click(screen.getByRole('button',{name:'Clear current-view filter'}));
-  await waitFor(()=>expect(input).toHaveValue(''));
-  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter cleared.');
-  fireEvent.change(input,{target:{value:'urgent'}});
-  fireEvent.keyDown(input,{key:'Escape'});
-  expect(input).toHaveValue('');
-  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Current-view filter cleared.');
+  expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('search=billing'))).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('search=billing'))).toBe(true));
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Ticket filters applied.'));
+  await openFilters();
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
+  fireEvent.click(screen.getByRole('button',{name:'Clear all'}));
+  await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Ticket filters cleared.'));
+  await waitFor(()=>{
+    const latest=vi.mocked(fetch).mock.calls.filter(([url])=>String(url).startsWith('/api/tickets?')).at(-1);
+    expect(latest).toBeDefined();
+    expect(new URL(String(latest![0]),'http://localhost').searchParams.has('search')).toBe(false);
+  });
+  await openFilters();
+  fireEvent.change(screen.getByRole('textbox',{name:'Search ticket text'}),{target:{value:'urgent'}});
+  fireEvent.keyDown(screen.getByRole('textbox',{name:'Search ticket text'}),{key:'Escape'});
+  expect(screen.queryByRole('region',{name:'Ticket filters'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Filter tickets'})).toHaveFocus();
+});
+
+it('uses an installed Collapsible for supplemental filters without losing staged values',async()=>{
+  showInbox();
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fireEvent.click(screen.getByRole('button',{name:'Filter tickets'}));
+  const drawer=screen.getByRole('region',{name:'Ticket filters'});
+  const supplemental=within(drawer).getByRole('button',{name:/^More filters/});
+  expect(supplemental).toHaveClass('collapsible__trigger');
+  expect(supplemental).toHaveAttribute('aria-expanded','false');
+  expect(within(drawer).queryByRole('textbox',{name:'Search ticket text'})).not.toBeInTheDocument();
+
+  await userEvent.click(supplemental);
+  const input=await within(drawer).findByRole('textbox',{name:'Search ticket text'});
+  fireEvent.change(input,{target:{value:'billing'}});
+  expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('search=billing'))).toBe(false);
+  await userEvent.click(supplemental);
+  await waitFor(()=>expect(supplemental).toHaveAttribute('aria-expanded','false'));
+  expect(supplemental).toHaveTextContent('1 set');
+  expect(within(drawer).queryByRole('textbox',{name:'Search ticket text'})).not.toBeInTheDocument();
+  await userEvent.click(supplemental);
+  expect(await within(drawer).findByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
+  fireEvent.click(within(drawer).getByRole('button',{name:'Apply filters'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('search=billing'))).toBe(true));
+  fireEvent.click(screen.getByRole('button',{name:'Filter tickets'}));
+  expect(screen.getByRole('button',{name:/^More filters/})).toHaveAttribute('aria-expanded','true');
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
+});
+
+it('returns focus to the statistics trigger when its panel closes with Escape',async()=>{
+  showInbox();
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const trigger=screen.getByRole('button',{name:'Quick statistics'});
+  fireEvent.click(trigger);
+  const region=screen.getByRole('region',{name:'Quick statistics'});
+  expect(region).toBeInTheDocument();
+  act(()=>trigger.focus());
+  fireEvent.keyDown(trigger,{key:'Escape'});
+  expect(screen.queryByRole('region',{name:'Quick statistics'})).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+it('applies owner, date and customer choices together after the queue route changes',async()=>{
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Ticket owner: All tickets'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'My tickets'}));
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'day'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Filter by exact customer email'}),{target:{value:'customer-1@example.invalid'}});
+  expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all');
+  expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('queue=mine'))).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  await waitFor(()=>expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mine'));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>{
+    if(!String(url).startsWith('/api/tickets?'))return false;
+    const query=new URL(String(url),'http://localhost').searchParams;
+    return query.get('queue')==='mine'&&query.get('customer_email')==='customer-1@example.invalid'&&Boolean(query.get('created_after'));
+  })).toBe(true));
+  await openFilters();
+  expect(screen.getByRole('button',{name:'Ticket owner: My tickets'})).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Created: day'})).toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:'Filter by exact customer email'})).toHaveValue('customer-1@example.invalid');
+});
+
+it('keeps applied date, customer and text filters when changing the three reference view rankings',async()=>{
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  expect(screen.queryByText('Current view')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Filter'})).not.toBeInTheDocument();
+  await openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'day'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Filter by exact customer email'}),{target:{value:'customer-1@example.invalid'}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Search ticket text'}),{target:{value:'billing'}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  const matchingQuery=(queue:string|null,sort:string)=>vi.mocked(fetch).mock.calls.some(([url])=>{
+    if(!String(url).startsWith('/api/tickets?'))return false;
+    const params=new URL(String(url),'http://localhost').searchParams;
+    return params.get('queue')===queue&&params.get('sort')===sort&&params.get('customer_email')==='customer-1@example.invalid'
+      &&params.get('search')==='billing'&&Boolean(params.get('created_after'));
+  });
+  await waitFor(()=>expect(matchingQuery(null,'updated_desc')).toBe(true));
+
+  await chooseView('Highest Impact');
+  await waitFor(()=>expect(matchingQuery(null,'priority_desc')).toBe(true));
+  await chooseView('Contract SLAs');
+  await waitFor(()=>expect(matchingQuery(null,'sla_priority')).toBe(true));
+  await chooseView('Needs Attention');
+  await waitFor(()=>expect(matchingQuery('actionable','updated_desc')).toBe(true));
+  await openFilters();
+  expect(screen.getByRole('button',{name:'Created: day'})).toBeInTheDocument();
+  expect(screen.getByRole('textbox',{name:'Filter by exact customer email'})).toHaveValue('customer-1@example.invalid');
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('billing');
+});
+
+it('uses clamped calendar dates for the month and quarter filter choices',async()=>{
+  vi.spyOn(Date,'now').mockReturnValue(Date.UTC(2026,2,31,10,15));
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'month'}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  const requestedDate=(expected:string)=>vi.mocked(fetch).mock.calls.some(([url])=>String(url).startsWith('/api/tickets?')
+    &&new URL(String(url),'http://localhost').searchParams.get('created_after')===expected);
+  await waitFor(()=>expect(requestedDate('2026-02-28T10:15:00.000Z')).toBe(true));
+
+  await openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: month'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'quarter'}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
+  await waitFor(()=>expect(requestedDate('2025-12-31T10:15:00.000Z')).toBe(true));
+});
+
+it('saves only filter combinations the server can reproduce as a quick view',async()=>{
+  const fallback=fetch;
+  let saved: {id:string;name:string;conditions:unknown[]} | null=null;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/settings/filters'&&options.method==='POST'){
+      const body=JSON.parse(String(options.body));
+      saved={id:'customer-quick-view',name:body.name,conditions:body.conditions};
+      return json(saved);
+    }
+    if(url==='/api/settings/filters'&&saved)return json([{...saved,is_system:false,created_at:'2026-09-11T00:00:00Z',updated_at:'2026-09-11T00:00:00Z'}]);
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await openFilters();
+  await userEvent.click(screen.getByRole('button',{name:'Created: anytime'}));
+  await userEvent.click(await screen.findByRole('menuitem',{name:'day'}));
+  fireEvent.click(screen.getByRole('button',{name:'Add to quick view'}));
+  expect(screen.getByRole('button',{name:'Save quick view'})).toBeDisabled();
+  expect(screen.getByText(/Quick views can currently save All tickets/)).toBeInTheDocument();
+  expect(saved).toBeNull();
+
+  fireEvent.click(screen.getByRole('button',{name:'Clear all'}));
+  await openFilters();
+  fireEvent.change(screen.getByRole('textbox',{name:'Filter by exact customer email'}),{target:{value:'customer-1@example.invalid'}});
+  fireEvent.click(screen.getByRole('button',{name:'Add to quick view'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Quick view name'}),{target:{value:'Customer follow-up'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save quick view'}));
+  await waitFor(()=>expect(saved).toEqual({id:'customer-quick-view',name:'Customer follow-up',conditions:[{field:'customer_email',operator:'equals',value:'customer-1@example.invalid'}]}));
+  await waitFor(()=>expect(screen.getByTestId('location')).toHaveTextContent('/inbox/customer-quick-view'));
+});
+
+it('keeps quick-view input available with a Park recovery alert after a failed save',async()=>{
+  const fallback=fetch;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>{
+    if(url==='/api/settings/filters'&&options.method==='POST')return json({error:'Temporary failure'},503);
+    return fallback(url,options);
+  }));
+  showInbox('/inbox/all');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await openFilters();
+  fireEvent.click(screen.getByRole('button',{name:'Add to quick view'}));
+  const name=screen.getByRole('textbox',{name:'Quick view name'});
+  fireEvent.change(name,{target:{value:'Follow up'}});
+  fireEvent.click(screen.getByRole('button',{name:'Save quick view'}));
+  const alert=await screen.findByRole('alert');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert).toHaveTextContent('Could not save the quick view. Your filter choices are still here; try again.');
+  expect(name).toHaveValue('Follow up');
+  expect(screen.getByRole('button',{name:'Save quick view'})).toBeEnabled();
 });
 
 it('switches to an accessible factual table with row navigation and a mobile list fallback',async()=>{
   showInbox();
-  await screen.findByRole('option',{name:/Fixture conversation 1 customer-1/});
-  const tableView=screen.getByRole('button',{name:'Table view'});
-  fireEvent.click(tableView);
-  expect(tableView).toHaveAttribute('aria-pressed','true');
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await choosePresentation('Table view');
   expect(screen.getByRole('table',{name:'Tickets in the current view'})).toBeInTheDocument();
   expect(screen.getByRole('columnheader',{name:'Reference'})).toBeInTheDocument();
   expect(screen.getByRole('columnheader',{name:'Customer'})).toBeInTheDocument();
-  expect(screen.getByRole('link',{name:'Fixture conversation 1'})).toHaveAttribute('href','/inbox/all/ticket-1');
+  const subjectLink=screen.getByRole('link',{name:'Fixture conversation 1'});
+  expect(subjectLink).toHaveAttribute('href','/inbox/all/ticket-1');
+  expect(subjectLink).toHaveClass('link');
+  subjectLink.focus();expect(subjectLink).toHaveFocus();
   expect(screen.getByText('Table view uses the compact conversation list on small screens.')).toBeInTheDocument();
   expect(screen.queryByRole('button',{name:/Actions for/})).not.toBeInTheDocument();
 });
@@ -155,7 +499,7 @@ it('does not persist a view switch before an unsaved conversation draft permits 
   showInbox('/inbox/all/ticket-1');
   await screen.findByRole('heading',{name:'Conversation ticket-1'});
 
-  fireEvent.click(screen.getByRole('button',{name:'Priority follow-up'}));
+  await chooseView('Priority follow-up');
   await waitFor(()=>expect(detailNavigation.flush).toHaveBeenCalledOnce());
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-1');
   await new Promise(resolve=>setTimeout(resolve,350));
@@ -198,7 +542,7 @@ it('keeps a confirmed conversation and draft/list visibility while workspace pre
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveAttribute('aria-selected','true');
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Draft');
 
-  fireEvent.change(screen.getByRole('combobox',{name:'Sort conversations'}),{target:{value:'created_asc'}});
+  await chooseSort('oldest first');
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Workspace preferences changed in another session. Review before replacing them.'));
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/all/ticket-20');
   expect(screen.getByRole('heading',{name:'Conversation ticket-20'})).toBeInTheDocument();
@@ -221,7 +565,9 @@ it('shows recovery and no historical rows when the current tenant list read is d
     return json({});
   }));
   showInbox();
-  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load conversations.');
+  const failedLoad=await screen.findByRole('alert');
+  expect(failedLoad).toHaveClass('alert__root');
+  expect(failedLoad).toHaveTextContent('Could not load conversations.');
   expect(within(screen.getByRole('listbox',{name:'Conversation list'})).queryAllByRole('option')).toHaveLength(0);
   expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
 });
@@ -253,11 +599,12 @@ it('switches all 20 fixture conversations and returns without losing the custom 
   showInbox('/inbox/priority-follow-up');
   const list=screen.getByRole('listbox',{name:'Conversation list'});
   const options=await within(list).findAllByRole('option');
-  await waitFor(()=>expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up'));
+  await openFilters();
+  await waitFor(()=>expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('follow up'));
   const pane=screen.getByRole('region',{name:'Conversations'});
   pane.scrollTop=480;
-  const queryInput=screen.getByRole('textbox',{name:'Filter this view'});
-  const sortInput=screen.getByRole('combobox',{name:'Sort conversations'});
+  const queryInput=screen.getByRole('textbox',{name:'Search ticket text'});
+  const sortInput=screen.getByRole('button',{name:/^Sort:/});
   const location=screen.getByTestId('location');
 
   for(const [index,ticket] of tickets.entries()){
@@ -268,7 +615,7 @@ it('switches all 20 fixture conversations and returns without losing the custom 
     expect(pane).toBeInTheDocument();
     expect(pane.scrollTop).toBe(480);
     expect(queryInput).toHaveValue('follow up');
-    expect(sortInput).toHaveValue('created_asc');
+    expect(sortInput).toHaveTextContent('oldest first');
   }
   fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
   await screen.findByRole('heading',{name:'Choose a conversation'});
@@ -302,14 +649,15 @@ it('keeps the custom list position and selected conversation when its draft refu
   expect(pane.scrollTop).toBe(640);
 
   detailNavigation.flush.mockResolvedValue(true);
-  fireEvent.click(screen.getByRole('link',{name:'Back to conversations'}));
+  fireEvent.click(screen.getByRole('button',{name:'Retry saving'}));
   await screen.findByRole('heading',{name:'Choose a conversation'});
   expect(detailNavigation.flush).toHaveBeenCalledTimes(2);
   expect(screen.getByTestId('location').textContent).toBe('/inbox/priority-follow-up');
   expect(screen.getByRole('listbox',{name:'Conversation list'})).toBe(list);
   expect(pane.scrollTop).toBe(640);
-  expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
-  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveValue('created_asc');
+  await openFilters();
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('follow up');
+  expect(screen.getByRole('button',{name:/^Sort:/})).toHaveTextContent('oldest first');
 });
 
 it('uses server Drafts queue results and reports an empty saved-draft view without implying all work is complete',async()=>{
@@ -331,13 +679,13 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   }));
   showInbox('/inbox/actionable');
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
-  fireEvent.click(screen.getByRole('button',{name:'Drafts'}));
+  await chooseView('Drafts');
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
   expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
   expect(screen.queryByLabelText('Inclusion reason: drafts')).not.toBeInTheDocument();
   release();
   await waitFor(()=>expect(within(screen.getByRole('listbox',{name:'Conversation list'})).getAllByRole('option')).toHaveLength(1));
-  expect(screen.getByRole('button',{name:'Drafts'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Drafts');
   expect(screen.getByRole('option',{name:/Fixture conversation 20/})).toHaveTextContent('Drafts');
   expect(screen.getByLabelText('Inclusion reason: drafts')).toBeInTheDocument();
   expect(screen.queryByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).not.toBeInTheDocument();
@@ -348,12 +696,12 @@ it('uses server Drafts queue results and reports an empty saved-draft view witho
   expect(screen.queryByText(/all work complete|inbox zero/i)).not.toBeInTheDocument();
   // An empty previous result cannot establish that the newly selected queue is empty.
   pauseSnoozed=true;
-  fireEvent.click(screen.getByRole('button',{name:'Snoozed'}));
+  await chooseView('Snoozed');
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
   expect(screen.queryByText('No snoozed conversations')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Table view'}));
+  await choosePresentation('Table view');
   expect(screen.queryByText('No snoozed conversations')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'List view'}));
+  await choosePresentation('List view');
   releaseSnoozed();
   await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
 });
@@ -372,18 +720,18 @@ it('opens authoritative Mine and Unassigned views without claiming refreshed own
   }));
   showInbox('/inbox/mine');
   await screen.findByLabelText('Inclusion reason: mine');
-  expect(screen.getByRole('button',{name:'Mine'})).toHaveAttribute('aria-pressed','true');
-  expect(screen.getByText(/Current view:/)).toHaveTextContent('Current view: Mine');
-  fireEvent.click(screen.getByRole('button',{name:'Unassigned'}));
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Mine');
+  expect(screen.queryByText(/Current view:/)).not.toBeInTheDocument();
+  await chooseView('Unassigned');
   await waitFor(()=>expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing…'));
   expect(screen.getByRole('option',{name:/Fixture conversation 1(?:\s|$)/})).toBeInTheDocument();
   expect(screen.queryByLabelText('Inclusion reason: unassigned')).not.toBeInTheDocument();
   expect(screen.queryByText('No unassigned conversations')).not.toBeInTheDocument();
   release();
   await screen.findByText('No unassigned conversations');
-  expect(screen.getByRole('button',{name:'Unassigned'})).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Unassigned');
   expect(screen.getByText('Open and pending conversations without an assignee and ready for work.')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Table view'}));
+  await choosePresentation('Table view');
   expect(within(screen.getByRole('table')).getByText('No unassigned conversations')).toBeInTheDocument();
 });
 
@@ -395,16 +743,16 @@ it('shows server standard totals separately from filtered results and retries un
     return fallback(url,options);
   }));
   showInbox('/inbox/actionable');
+  fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
   await screen.findByRole('button',{name:'Retry queue totals'});
-  expect(screen.getByRole('button',{name:'Needs Action'})).not.toHaveAttribute('aria-describedby');
   available=true;fireEvent.click(screen.getByRole('button',{name:'Retry queue totals'}));
-  await waitFor(()=>expect(screen.getByRole('button',{name:'Needs Action'})).toHaveAccessibleDescription('12 conversations in this standard queue'));
-  expect(screen.getByText('Queue totals cover standard views before search or custom filters.')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Mentions'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/tickets/queue-counts').length).toBeGreaterThan(1));
+  expect(screen.getByText('Statistics describe tickets on the current page and follow the applied filters.')).toBeInTheDocument();
+  await chooseView('Mentions');
   await screen.findByLabelText('Inclusion reason: mentions');
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mentions');
-  expect(screen.getByText('1 conversations')).toBeInTheDocument();
-  expect(screen.getByRole('button',{name:'Mentions'})).toHaveAccessibleDescription('2 conversations in this standard queue');
+  expect(within(screen.getByRole('listbox',{name:'Conversation list'})).getAllByRole('option')).toHaveLength(1);
+  expect(screen.getByRole('button',{name:'Inbox views'})).toHaveTextContent('Mentions');
 });
 
 it('starts a different queue on page one after leaving page three without changing the query or sort',async()=>{
@@ -423,17 +771,18 @@ it('starts a different queue on page one after leaving page three without changi
   showInbox('/inbox/all');
   await screen.findByText('Page 3 of 3');
   deferOld=true;const oldRefresh=client.invalidateQueries({queryKey:['tickets']});
-  fireEvent.click(screen.getByRole('button',{name:'Mine'}));
+  await chooseView('Mine');
   await waitFor(()=>expect(requests.some(params=>params.get('queue')==='mine')).toBe(true));
   expect(requests.filter(params=>params.get('queue')==='mine').every(params=>params.get('page')==='1')).toBe(true);
   await waitFor(()=>expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1));
   expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
-  expect(screen.getByRole('textbox',{name:'Filter this view'})).toHaveValue('follow up');
-  expect(screen.getByRole('combobox',{name:'Sort conversations'})).toHaveValue('created_asc');
+  await openFilters();
+  expect(screen.getByRole('textbox',{name:'Search ticket text'})).toHaveValue('follow up');
+  expect(screen.getByRole('button',{name:/^Sort:/})).toHaveTextContent('oldest first');
   releaseOld();await oldRefresh;
   expect(screen.getByTestId('location')).toHaveTextContent('/inbox/mine');
   expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1);
-  expect(screen.getByRole('status',{name:'Inbox status'})).not.toHaveTextContent('Showing the first page');
+  expect(screen.queryByRole('status',{name:'Inbox status'})?.textContent ?? '').not.toContain('Showing the first page');
 });
 
 it.each(['List view','Table view'] as const)('recovers a shrunken last page without a false queue-clear claim in %s',async presentation=>{
@@ -450,7 +799,7 @@ it.each(['List view','Table view'] as const)('recovers a shrunken last page with
   }));
   showInbox('/inbox/mine');
   await screen.findByText('Page 3 of 3');
-  fireEvent.click(screen.getByRole('button',{name:presentation}));
+  await choosePresentation(presentation);
   shrunk=true;void client.invalidateQueries({queryKey:['tickets']});
   await waitFor(()=>expect(recoveryStarted).toBe(true));
   expect(screen.queryByText('No actionable conversations assigned to you')).not.toBeInTheDocument();
@@ -478,7 +827,7 @@ it('uses whole-view SLA ordering and same-snapshot projections, then restarts an
   await screen.findByRole('option',{name:/Fixture conversation 20/});
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
   const before=vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/ticket-sla/projections').length;
-  fireEvent.change(screen.getByRole('combobox',{name:'Sort conversations'}),{target:{value:'sla_priority'}});
+  await chooseSort('contract SLA');
   await waitFor(()=>expect(slaRequests).toHaveLength(1));
   const list=screen.getByRole('listbox',{name:'Conversation list'});
   await waitFor(()=>expect(within(list).getAllByRole('option')[0]).toHaveTextContent('Fixture conversation 20'));
@@ -536,9 +885,12 @@ it.each(['filter','preference','pagination'] as const)('discards delayed advance
 it('global ticket search never enters the legacy redirect or rewrites the actual current-view filter',async()=>{
  const mounted=showInbox('/inbox/all',true);
  await screen.findAllByRole('option');
- const filter=screen.getByRole('textbox',{name:'Filter this view'});
- await userEvent.type(filter,'local-filter{Enter}');
+ await openFilters();
+ await userEvent.type(screen.getByRole('textbox',{name:'Search ticket text'}),'local-filter');
+ fireEvent.click(screen.getByRole('button',{name:'Apply filters'}));
  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT'&&JSON.parse(String(options.body)).listQuery==='local-filter')).toBe(true));
+ await openFilters();
+ const filter=screen.getByRole('textbox',{name:'Search ticket text'});
  vi.mocked(fetch).mockClear();
  const global=screen.getByRole('textbox',{name:'Search all tickets (global shell)'});
  await userEvent.type(global,'Fixture{Enter}');
@@ -547,4 +899,230 @@ it('global ticket search never enters the legacy redirect or rewrites the actual
  await userEvent.click(screen.getByRole('button',{name:'Clear global ticket search'}));
  expect(filter).toHaveValue('local-filter');expect(mounted.router.state.location.pathname).toBe('/inbox/all');
  expect(vi.mocked(fetch).mock.calls.some(([url,options])=>url==='/api/workspace/state'&&options?.method==='PUT')).toBe(false);
+});
+
+it('opens the active inbox New Ticket dialog with Park anatomy and restores trigger focus on cancellation',async()=>{
+  // Zag checks geometry before choosing the initial focus target; JSDOM has none.
+  vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(this:HTMLElement){
+    return (this.isConnected&&!this.closest('[hidden]')?[new DOMRect(0,0,100,30)]:[]) as unknown as DOMRectList;
+  });
+  showInbox();
+  const trigger=screen.getByRole('button',{name:'New Ticket'});
+  trigger.focus();
+  fireEvent.click(trigger);
+  const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
+  expect(dialog).toHaveAttribute('data-scope','dialog');
+  expect(dialog).toHaveAttribute('data-part','content');
+  expect(dialog).toHaveClass('dialog__content');
+  expect(dialog.parentElement).toHaveAttribute('data-part','positioner');
+  expect(dialog.parentElement).toHaveClass('dialog__positioner');
+  expect(document.querySelector('[data-scope="dialog"][data-part="backdrop"]')).toHaveClass('dialog__backdrop');
+  expect(within(dialog).getByRole('heading',{name:'Create New Ticket'})).toHaveAttribute('data-part','title');
+  await waitFor(()=>expect(within(dialog).getByRole('textbox',{name:'Subject'})).toHaveFocus());
+  fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
+  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Create New Ticket'})).not.toBeInTheDocument());
+  await waitFor(()=>expect(trigger).toHaveFocus());
+});
+
+it('keeps a failed New Ticket draft and retries the same validated payload in the active inbox',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let posts=0;
+  let created=false;
+  const createdTicket={...tickets[0],id:'created-ticket',subject:'Operator-created follow-up'};
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url)==='/api/tickets'&&options?.method==='POST'){
+      posts++;
+      expect(JSON.parse(String(options.body))).toEqual({
+        subject:'Operator-created follow-up',customer_email:'customer@example.invalid',body:'Synthetic operator message',
+        priority:'normal',status:'open',
+      });
+      return Promise.resolve(posts===1?json({error:'Creation is temporarily unavailable'},503):json(createdTicket,201));
+    }
+    if(created&&String(url).startsWith('/api/tickets?'))return Promise.resolve(json({data:[createdTicket,...tickets],meta:{page:1,limit:20,total:21,total_pages:2}}));
+    return original(url,options);
+  });
+  showInbox();
+  fireEvent.click(screen.getByRole('button',{name:'New Ticket'}));
+  const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
+  const subject=within(dialog).getByRole('textbox',{name:'Subject'});
+  for(const label of ['Subject','Customer Email','Initial Message']){
+    const input=within(dialog).getByRole('textbox',{name:label});
+    const field=input.closest('[data-scope="field"][data-part="root"]');
+    expect(field).toHaveClass('field__root');
+    expect(field?.querySelector('[data-scope="field"][data-part="label"]')).toHaveTextContent(label);
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)).toHaveClass('field__helperText');
+  }
+  fireEvent.change(subject,{target:{value:'Operator-created follow-up'}});
+  fireEvent.change(within(dialog).getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
+  const message=within(dialog).getByRole('textbox',{name:'Initial Message'});
+  fireEvent.change(message,{target:{value:'Synthetic operator message'}});
+  const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
+  fireEvent.click(submit);
+  const alert=await within(dialog).findByRole('alert');
+  expect(alert).toHaveAttribute('id','create-ticket-error');
+  expect(alert).toHaveClass('alert__root');
+  expect(alert.querySelector('.alert__description')).toHaveTextContent('Creation is temporarily unavailable');
+  expect(subject).toHaveAttribute('aria-describedby','create-ticket-subject-help create-ticket-error');
+  expect(message).toHaveAttribute('aria-describedby','create-ticket-body-help create-ticket-error');
+  expect(subject).toHaveValue('Operator-created follow-up');
+  expect(message).toHaveValue('Synthetic operator message');
+  created=true;
+  fireEvent.click(submit);
+  await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Create New Ticket'})).not.toBeInTheDocument());
+  expect(posts).toBe(2);
+  expect(await screen.findByRole('option',{name:/Operator-created follow-up/})).toBeInTheDocument();
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Ticket created.');
+});
+
+it('holds the New Ticket draft, focus and dialog while creation is pending',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let finish!: (response:Response)=>void;
+  let posts=0;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url)==='/api/tickets'&&options?.method==='POST'){
+      posts++;
+      return new Promise<Response>(resolve=>{finish=resolve;});
+    }
+    return original(url,options);
+  });
+  showInbox();
+  fireEvent.click(screen.getByRole('button',{name:'New Ticket'}));
+  const dialog=await screen.findByRole('dialog',{name:'Create New Ticket'});
+  const subject=within(dialog).getByRole('textbox',{name:'Subject'});
+  fireEvent.change(subject,{target:{value:'Submitted subject'}});
+  fireEvent.change(within(dialog).getByRole('textbox',{name:'Customer Email'}),{target:{value:'customer@example.invalid'}});
+  fireEvent.change(within(dialog).getByRole('textbox',{name:'Initial Message'}),{target:{value:'Submitted message'}});
+  const submit=within(dialog).getByRole('button',{name:'Create Ticket'});
+  submit.focus();fireEvent.click(submit);
+  await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Creating…'})).toHaveAttribute('aria-disabled','true'));
+  expect(submit).toHaveFocus();
+  fireEvent.change(subject,{target:{value:'Changed while pending'}});
+  expect(subject).toHaveValue('Submitted subject');
+  expect(within(dialog).getByRole('combobox',{name:'Priority'})).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
+  fireEvent.keyDown(submit,{key:'Escape'});
+  expect(screen.getByRole('dialog',{name:'Create New Ticket'})).toBeInTheDocument();
+  fireEvent.click(submit);
+  expect(posts).toBe(1);
+  await act(async()=>finish(json({error:'Intake stopped'},503)));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Intake stopped');
+  expect(within(dialog).getByRole('button',{name:'Create Ticket'})).toHaveFocus();
+});
+
+it('distinguishes a failed inbox read from an empty view and retries the authoritative list',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let reads=0;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?'))return Promise.resolve(++reads===1
+      ?json({error:'Temporarily unavailable'},503)
+      :json({data:[tickets[0]],meta:{page:1,limit:20,total:1,total_pages:1}}));
+    return original(url,options);
+  });
+  showInbox();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not load conversations.');
+  expect(screen.queryByText('No conversations in this view')).not.toBeInTheDocument();
+  expect(document.querySelector('[data-part="inbox-page-metrics"]')).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
+  const drawer=screen.getByRole('region',{name:'Quick statistics'});
+  expect(drawer.querySelector('dl')).toHaveAttribute('aria-label','Tickets on the current page');
+  for(const label of ['Open / pending','Overdue','Resolved / closed'])expect(within(drawer).getByText(label).parentElement).toHaveTextContent('—');
+  const retry=screen.getByRole('button',{name:'Retry conversations'});
+  fireEvent.click(retry);
+  expect(await screen.findByRole('option',{name:/Fixture conversation 1/})).toBeInTheDocument();
+  await waitFor(()=>expect(screen.queryByText('Could not load conversations.')).not.toBeInTheDocument());
+  expect(reads).toBe(2);
+});
+
+it('retains confirmed inbox rows and a retry action after a background refresh fails',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let fail=false;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?')&&fail)return Promise.resolve(json({error:'Temporary refresh failure'},503));
+    return original(url,options);
+  });
+  showInbox();
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  const first=await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  fail=true;
+  await act(async()=>{await client.invalidateQueries({queryKey:['tickets']});});
+  const failedRefresh=await screen.findByRole('alert');
+  expect(failedRefresh).toHaveClass('alert__root');
+  expect(failedRefresh).toHaveTextContent('Could not refresh conversations. The last confirmed list remains visible.');
+  expect(first).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
+  const drawer=screen.getByRole('region',{name:'Quick statistics'});
+  expect(drawer.querySelector('dl')).toHaveAttribute('aria-label','Tickets on the last confirmed page');
+  expect(within(drawer).getByText('Open / pending').parentElement).toHaveTextContent('20');
+  expect(within(drawer).getByText('Metrics show the last confirmed page while refresh is unavailable.')).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Retry conversations'})).toBeEnabled();
+  expect(screen.queryByText('No conversations in this view')).not.toBeInTheDocument();
+});
+
+it('does not invent an overdue zero when the SLA projection fails',async()=>{
+  const fallback=fetch;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,options:RequestInit={})=>url==='/api/ticket-sla/projections'
+    ?json({error:'Projection unavailable'},503):fallback(url,options)));
+  showInbox();
+  await screen.findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>url==='/api/ticket-sla/projections')).toBe(true));
+  await waitFor(()=>expect(client.getQueryCache().getAll().find(query=>query.queryKey[0]==='ticket-sla'&&Array.isArray(query.queryKey[1])&&query.queryKey[1].includes('ticket-1'))?.state.status).toBe('error'));
+  fireEvent.click(screen.getByRole('button',{name:'Quick statistics'}));
+  const drawer=screen.getByRole('region',{name:'Quick statistics'});
+  expect(within(drawer).getByText('Open / pending').parentElement).toHaveTextContent('20');
+  expect(within(drawer).getByText('Overdue').parentElement).toHaveTextContent('—');
+});
+
+it('keeps prior inbox results and pagination focus while the next page loads',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let finish!: (response:Response)=>void;
+  const queries:string[]=[];
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?')){
+      const page=new URL(String(url),'http://localhost').searchParams.get('page')??'1';
+      queries.push(page);
+      if(page==='2')return new Promise<Response>(resolve=>{finish=resolve;});
+      return Promise.resolve(json({data:[tickets[0]],meta:{page:1,limit:1,total:2,total_pages:2}}));
+    }
+    return original(url,options);
+  });
+  showInbox();
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  const first=await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const next=screen.getByRole('button',{name:'Next conversation page'});
+  next.focus();fireEvent.click(next);
+  await waitFor(()=>expect(finish).toBeDefined());
+  expect(next).toHaveFocus();
+  expect(next).toHaveAttribute('aria-disabled','true');
+  expect(first).toBeInTheDocument();
+  expect(screen.getByRole('status',{name:'Inbox status'})).toHaveTextContent('Refreshing');
+  fireEvent.click(next);
+  expect(queries.filter(page=>page==='2')).toHaveLength(1);
+  await act(async()=>finish(json({data:[tickets[1]],meta:{page:2,limit:1,total:2,total_pages:2}})));
+  expect(await within(list).findByRole('option',{name:/Fixture conversation 2/})).toBeInTheDocument();
+  expect(screen.getByRole('heading',{name:'Support Inbox'})).toHaveFocus();
+  expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+});
+
+it('moves focus to explicit recovery when the next inbox page fails without hiding prior results',async()=>{
+  const original=vi.mocked(fetch).getMockImplementation()!;
+  let finish!: (response:Response)=>void;
+  vi.mocked(fetch).mockImplementation((url:any,options:any)=>{
+    if(String(url).startsWith('/api/tickets?')){
+      const page=new URL(String(url),'http://localhost').searchParams.get('page')??'1';
+      if(page==='2')return new Promise<Response>(resolve=>{finish=resolve;});
+      return Promise.resolve(json({data:[tickets[0]],meta:{page:1,limit:1,total:2,total_pages:2}}));
+    }
+    return original(url,options);
+  });
+  showInbox();
+  const list=screen.getByRole('listbox',{name:'Conversation list'});
+  const first=await within(list).findByRole('option',{name:/Fixture conversation 1(?:\s|$)/});
+  const next=screen.getByRole('button',{name:'Next conversation page'});
+  next.focus();fireEvent.click(next);
+  await waitFor(()=>expect(finish).toBeDefined());
+  await act(async()=>finish(json({error:'Page unavailable'},503)));
+  const retry=await screen.findByRole('button',{name:'Retry conversations'});
+  expect(screen.getByRole('alert')).toHaveTextContent('last confirmed list remains visible');
+  expect(first).toBeInTheDocument();
+  expect(retry).toHaveFocus();
 });

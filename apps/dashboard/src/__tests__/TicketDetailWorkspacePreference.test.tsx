@@ -8,7 +8,7 @@ import { useAuthStore } from '../store/authStore';
 
 class Socket { static OPEN=1; readyState=1; onopen:null|(()=>void)=null; onclose:null|(()=>void)=null; onmessage:null|((event:{data:string})=>void)=null; onerror:null|(()=>void)=null; send(){} close(){} }
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
-const preference=(revision:number,panel:'conversation'|'details'='conversation',selectedTicketId:string|null=null)=>({revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel,updatedAt:'2026-09-11T00:00:00Z'});
+const preference=(revision:number,panel:'conversation'|'details'='conversation',selectedTicketId:string|null=null)=>({revision,view:'all',sort:'updated_desc',filters:{},listQuery:'',listAnchor:'page:1',selectedTicketId,panel,splitterRatio:32,updatedAt:'2026-09-11T00:00:00Z'});
 const ticket={id:'workspace-ticket',subject:'Workspace ticket',customer_email:'customer@example.invalid',ticket_no:1,status:'open',priority:'normal',assigned_to:null,group_id:null,created_at:'2026-09-11T00:00:00Z',articles:[],pagination:{limit:20,next_cursor:null,has_more:false}};
 const history={events:[{id:'event-1',kind:'ticket.intake',recordedAt:'2026-09-11T00:00:00Z',source:'dashboard',visibility:'public' as const,actor:{kind:'staff',id:'agent-a',provenance:'mfa-staff' as const},facts:{},articleId:null}],nextCursor:null};
 const unavailableSla={response:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},resolution:{state:'unavailable',phase:'unavailable',completedAt:null,dueAt:null,remainingWorkingMilliseconds:null,targetWorkingMilliseconds:null},handlerName:null};
@@ -32,7 +32,7 @@ function show(initial=preference(3), writeStatus=200) {
     return json([]);
   }));
   useAuthStore.getState().setAuth('workspace-session',{id:'operator',tenant_id:'tenant-a',email:'operator@example.invalid',full_name:'Operator',role:'admin',mfa_enabled:true});
-  const router=createMemoryRouter([{path:'/tickets/:id',element:<TicketDetailPage/>}],{initialEntries:['/tickets/workspace-ticket']});
+  const router=createMemoryRouter([{path:'/inbox/all/:id',element:<TicketDetailPage/>}],{initialEntries:['/inbox/all/workspace-ticket']});
   render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><CollaborationProvider><RouterProvider router={router}/></CollaborationProvider></QueryClientProvider>);
   return writes;
 }

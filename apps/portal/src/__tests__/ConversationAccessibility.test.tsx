@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TicketListPage } from '../pages/TicketListPage';
 import { TicketDetailPage } from '../pages/TicketDetailPage';
@@ -9,12 +10,13 @@ vi.mock('@marsidev/react-turnstile', () => ({ Turnstile: () => null }));
 // JSDOM has no layout. Supply nonzero rects for mounted, non-hidden controls so
 // the real Ark focus trap can classify them; browser focus/visibility is a separate gate.
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (this: HTMLElement) {
     return (this.isConnected && !this.closest('[hidden]') && this.getAttribute('type') !== 'hidden'
       ? [new DOMRect(0, 0, 100, 30)] : []) as unknown as DOMRectList;
   });
 });
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const ticket = { id: 'ticket', subject: 'Accepted conversation', status: 'open', priority: 'normal', ticket_no: 1, created_at: '2026-09-09 00:00:00' };
 const article = { id: 'article', body: 'Accepted message', sender_type: 'customer', created_at: '2026-09-09 00:00:00', attachments: [{ id: 'file', filename: 'readable.txt', size: 100 }] };
 const detail = { ticket, articles: [article], pagination: { has_more: false, next_cursor: null } };
@@ -25,6 +27,26 @@ function setupReads() {
 }
 
 describe('portal conversation accessibility and recovery', () => {
+  it('shows Park skeleton rows while the ticket list is initially loading', () => {
+    vi.mocked(portalApi.get).mockImplementation(path => path === '/tickets'
+      ? new Promise(() => {})
+      : Promise.resolve({ TICKET_PREFIX: '#' }) as never);
+    mountList();
+    const loading = screen.getByRole('status', { name: 'Loading tickets…' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(3);
+  });
+
+  it('shows Park skeleton rows while a conversation is initially loading', () => {
+    vi.mocked(portalApi.get).mockImplementation(path => path === '/tickets/ticket'
+      ? new Promise(() => {})
+      : Promise.resolve({ TICKET_PREFIX: '#' }) as never);
+    mountDetail();
+    const loading = screen.getByRole('status', { name: 'Loading conversation…' });
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    expect(loading.querySelectorAll('.skeleton')).toHaveLength(3);
+  });
+
   it.each([
     [0, '0 B'], [62, '62 B'], [1536, '1.5 KB'], [1048576, '1 MB'],
   ])('displays attachment size %s in truthful units', async (size, expected) => {
@@ -33,6 +55,18 @@ describe('portal conversation accessibility and recovery', () => {
     mountDetail();
     const download = await screen.findByRole('button', { name: 'Download size.txt' });
     expect(within(download).getByText(expected)).toBeTruthy();
+  });
+
+  it('keeps a long unbroken customer message complete inside a wrapping conversation bubble', async () => {
+    const longBody = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    vi.mocked(portalApi.get).mockImplementation(async path => (path === '/config'
+      ? { TICKET_PREFIX: '#' }
+      : { ...detail, articles: [{ ...article, body: longBody }] }) as never);
+    mountDetail();
+    const body = await screen.findByText(longBody);
+    expect(body).toHaveClass('min-w_0', 'ov-wrap_anywhere');
+    expect(body.parentElement).toHaveClass('min-w_0', 'ov-wrap_anywhere');
+    expect(screen.getByRole('region', { name: 'Conversation messages' })).toContainElement(body);
   });
 
   it.each([null, 42])('shows a truthful ticket reference in list and detail when number is %s', async ticketNumber => {
@@ -49,14 +83,57 @@ describe('portal conversation accessibility and recovery', () => {
     expect(await screen.findByText(new RegExp(`Ticket ${reference} • Created`))).toBeTruthy();
   });
 
-  it('names the shared create dialog, focuses its first field and returns focus after Escape', async () => {
+  it('renders ticket rows as Park Links and keeps client-side detail navigation', async () => {
+    setupReads();
+    render(<MemoryRouter initialEntries={['/tickets']}><Routes>
+      <Route path="/tickets" element={<TicketListPage />} />
+      <Route path="/tickets/:id" element={<h1>Conversation destination</h1>} />
+    </Routes></MemoryRouter>);
+    const link = await screen.findByRole('link', { name: /Accepted conversation/ });
+    expect(link).toHaveClass('link', 'link--variant_plain');
+    expect(link).toHaveAttribute('href', '/tickets/ticket');
+    await userEvent.click(link);
+    expect(screen.getByRole('heading', { name: 'Conversation destination' })).toBeInTheDocument();
+  });
+
+  it('renders the conversation back control as a labeled Park Link and navigates', async () => {
+    setupReads();
+    render(<MemoryRouter initialEntries={['/tickets/ticket']}><Routes>
+      <Route path="/tickets/:id" element={<TicketDetailPage />} />
+      <Route path="/tickets" element={<h1>Ticket list destination</h1>} />
+    </Routes></MemoryRouter>);
+    const back = await screen.findByRole('link', { name: 'Back to Tickets' });
+    expect(back).toHaveClass('link', 'link--variant_plain');
+    expect(back).toHaveAttribute('href', '/tickets');
+    await userEvent.click(back);
+    expect(screen.getByRole('heading', { name: 'Ticket list destination' })).toBeInTheDocument();
+  });
+
+  it('renders the conversation status with the official Park Badge recipe', async () => {
+    setupReads(); mountDetail();
+    const heading = await screen.findByRole('heading', { name: /Accepted conversation/ });
+    const status = within(heading).getByText('open');
+    expect(status).toHaveClass('badge', 'badge--variant_subtle');
+  });
+
+  it('uses Park Dialog and Field anatomy, focuses its first field and returns focus after Escape', async () => {
     setupReads(); mountList();
     const opener = await screen.findByRole('button', { name: 'New Ticket' });
     opener.focus(); fireEvent.click(opener);
-    await screen.findByRole('dialog', { name: 'Create New Ticket' });
-    await waitFor(() => expect(screen.getByLabelText('Subject')).toBe(document.activeElement));
+    const dialog = await screen.findByRole('dialog', { name: 'Create New Ticket' });
+    expect(dialog).toHaveClass('dialog__content');
+    expect(dialog.querySelector('.dialog__body')).toBeInTheDocument();
+    const subject = screen.getByLabelText('Subject');
+    expect(subject.closest('.field__root')).toBeInTheDocument();
+    await waitFor(() => expect(subject).toBe(document.activeElement));
     expect(screen.getByLabelText('Message')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveClass('button--variant_outline');
     fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    fireEvent.click(opener);
+    const reopened = await screen.findByRole('dialog', { name: 'Create New Ticket' });
+    fireEvent.click(within(reopened).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(opener));
     expect(portalApi.post).not.toHaveBeenCalled();
@@ -78,11 +155,15 @@ describe('portal conversation accessibility and recovery', () => {
     expect(within(dialog).getByRole('status').textContent).toContain('Creating ticket');
     fireEvent.click(submit);
     fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(portalApi.post).toHaveBeenCalledTimes(1);
     expect(dialog.getAttribute('data-state')).toBe('open');
     reject(new Error('The operator has stopped intake.'));
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('stopped intake');
     expect(subject.getAttribute('aria-describedby')).toBe(alert.id);
+    expect(message.getAttribute('aria-describedby')).toBe(alert.id);
     expect(subject.value).toBe('Draft subject'); expect(message.value).toBe('Draft message');
     expect(document.activeElement).toBe(submit);
     vi.mocked(portalApi.post).mockResolvedValueOnce({ ticket: { ...ticket, id: 'new-ticket', subject: 'Draft subject' } });
@@ -90,7 +171,9 @@ describe('portal conversation accessibility and recovery', () => {
     await screen.findByRole('link', { name: /Draft subject/ });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(opener));
-    expect(screen.getByRole('status').textContent).toContain('Ticket created');
+    const success = screen.getByRole('status');
+    expect(success).toHaveClass('alert__root');
+    expect(success.querySelector('.alert__description')).toHaveTextContent('Ticket created. It is now in your ticket list.');
     expect(portalApi.post).toHaveBeenCalledTimes(2);
   });
 
@@ -110,6 +193,7 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.get).mockRejectedValueOnce(new Error('Conversation unavailable'));
     mountDetail();
     expect((await screen.findByRole('alert')).textContent).toContain('Conversation unavailable');
+    expect(screen.getByRole('link', { name: 'Back to Tickets' })).toHaveClass('link', 'link--variant_underline');
     fireEvent.click(screen.getByRole('button', { name: 'Retry loading conversation' }));
     const heading = await screen.findByRole('heading', { name: /Accepted conversation/ });
     await waitFor(() => expect(document.activeElement).toBe(heading));
@@ -117,11 +201,24 @@ describe('portal conversation accessibility and recovery', () => {
     expect(portalApi.postForm).not.toHaveBeenCalled();
   });
 
+  it('shows a Park status notice when a closed conversation cannot receive replies', async () => {
+    vi.mocked(portalApi.get).mockImplementation(async path => (path === '/config' ? { TICKET_PREFIX: '#' }
+      : { ...detail, ticket: { ...ticket, status: 'closed' } }) as never);
+    mountDetail();
+    const notice = await screen.findByText('This ticket is closed. You cannot reply to it.');
+    expect(notice.closest('.alert__root')).toBeInTheDocument();
+    expect(notice.closest('[role="status"]')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Reply' })).not.toBeInTheDocument();
+  });
+
   it('names history, reply and attachment controls and restores focus when a selected file is removed', async () => {
     setupReads(); mountDetail();
-    await screen.findByRole('region', { name: 'Conversation messages' });
+    const feed = await screen.findByRole('region', { name: 'Conversation messages' });
+    expect(feed).toHaveClass('scroll-area__viewport');
+    expect(feed.closest('.card__root')).toHaveClass('card__root--variant_outline');
+    expect(feed.closest('.scroll-area__root')?.querySelector('.scroll-area__content')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to Tickets' })).toBeTruthy();
-    expect(screen.getByLabelText('Reply')).toBeTruthy();
+    expect(screen.getByLabelText('Reply').closest('.field__root')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download readable.txt' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Choose reply attachments'), { target: { files: [new File(['synthetic'], 'chosen.txt', { type: 'text/plain' })] } });
     const remove = screen.getByRole('button', { name: 'Remove chosen.txt' }); remove.focus(); fireEvent.click(remove);
@@ -129,6 +226,24 @@ describe('portal conversation accessibility and recovery', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Attach Files' }));
     expect(screen.getByText('Attachment removed.')).toBeTruthy();
     expect(portalApi.postForm).not.toHaveBeenCalled();
+  });
+
+  it('uses Park FileUpload anatomy and accepts the same file again after selection', async () => {
+    setupReads(); mountDetail();
+    const input = await screen.findByLabelText('Choose reply attachments') as HTMLInputElement;
+    const trigger = screen.getByRole('button', { name: 'Attach Files' });
+    expect(input).toHaveAttribute('type', 'file');
+    expect(input).toHaveAttribute('aria-hidden', 'true');
+    expect(trigger).toHaveAttribute('data-scope', 'file-upload');
+    expect(trigger).toHaveAttribute('data-part', 'trigger');
+    const file = new File(['synthetic'], 'repeat.txt', { type: 'text/plain' });
+    await userEvent.upload(input, file);
+    expect(screen.getAllByRole('button', { name: 'Remove repeat.txt' })).toHaveLength(1);
+    await userEvent.upload(input, file);
+    expect(screen.getAllByRole('button', { name: 'Remove repeat.txt' })).toHaveLength(2);
+    const replyStatus = screen.getByRole('status', { name: 'Reply status' });
+    expect(replyStatus).toHaveClass('alert__root', 'alert__root--status_info');
+    expect(replyStatus.querySelector('.alert__description')).toHaveTextContent('1 attachment added.');
   });
 
   it('retains a failed reply draft and selected file, announces failure and prevents duplicate pending uploads', async () => {
@@ -144,6 +259,8 @@ describe('portal conversation accessibility and recovery', () => {
     expect(message.readOnly).toBe(true);
     reject(new Error('Attachment transfer unavailable'));
     const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Attachment transfer unavailable');
     expect(message.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
     expect(message.value).toBe('Preserved reply');
     expect(screen.getByRole('button', { name: 'Remove chosen.txt' })).toBeTruthy();
@@ -158,8 +275,12 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.post).mockResolvedValue({});
     vi.mocked(portalApi.get).mockRejectedValueOnce(new Error('Refresh unavailable'));
     const submit = screen.getByRole('button', { name: 'Send Reply' }); submit.focus(); fireEvent.click(submit);
-    await screen.findByRole('alert');
-    expect(screen.getByText(/Reply sent. Refresh messages/)).toBeTruthy();
+    const refreshAlert = await screen.findByRole('alert');
+    expect(refreshAlert).toHaveClass('alert__root');
+    expect(refreshAlert.querySelector('.alert__description')).toHaveTextContent('Refresh unavailable');
+    const replyNotice = screen.getByRole('status', { name: 'Reply status' });
+    expect(replyNotice).toHaveClass('alert__root', 'alert__root--status_warning');
+    expect(replyNotice.querySelector('.alert__description')).toHaveTextContent('Reply sent. Refresh messages to retrieve the saved response; do not send it again.');
     expect(screen.getByText('Accepted message')).toBeTruthy();
     expect(message.value).toBe(''); expect(document.activeElement).toBe(submit);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh messages' }));
@@ -191,6 +312,9 @@ describe('portal conversation accessibility and recovery', () => {
     vi.mocked(portalApi.post).mockResolvedValueOnce({});
     fireEvent.click(submit);
     await screen.findByText('Reply sent.');
+    const replyStatus = screen.getByRole('status', { name: 'Reply status' });
+    expect(replyStatus).toHaveClass('alert__root', 'alert__root--status_success');
+    expect(replyStatus.querySelector('.alert__description')).toHaveTextContent('Reply sent.');
     expect(portalApi.postForm).toHaveBeenCalledTimes(3);
     expect(vi.mocked(portalApi.postForm).mock.calls[2][1].get('file')).toBe(first);
     expect(portalApi.post).toHaveBeenCalledExactlyOnceWith('/tickets/ticket/messages', {
@@ -238,7 +362,10 @@ describe('portal conversation accessibility and recovery', () => {
     const button = await screen.findByRole('button', { name: 'Download readable.txt' });
     vi.mocked(portalApi.download).mockRejectedValueOnce(new Error('Download unavailable'));
     button.focus(); fireEvent.click(button);
-    await screen.findByRole('alert'); expect(document.activeElement).toBe(button);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('alert__root');
+    expect(alert.querySelector('.alert__description')).toHaveTextContent('Download unavailable');
+    expect(document.activeElement).toBe(button);
     vi.mocked(portalApi.download).mockResolvedValueOnce(); fireEvent.click(button);
     await screen.findByText('Attachment download started.');
     expect(screen.queryByRole('alert')).toBeNull();

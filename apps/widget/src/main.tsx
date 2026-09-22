@@ -1,9 +1,15 @@
 import primitiveStyles from '@luminatick/ui/styles.css?inline';
+import atkinsonRegular from '@fontsource/atkinson-hyperlegible/400.css?inline';
+import atkinsonBold from '@fontsource/atkinson-hyperlegible/700.css?inline';
+import interRegular from '@fontsource/inter/400.css?inline';
+import interMedium from '@fontsource/inter/500.css?inline';
+import interSemibold from '@fontsource/inter/600.css?inline';
 import { EnvironmentProvider } from '@luminatick/ui/ark';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import widgetStyles from './index.css?inline';
+import { w } from './widgetStyles';
+import { appendLegacyWidgetCss } from './compatibility-styles';
 
 // The widget is intended to be self-initializing when the script is included.
 (function () {
@@ -20,35 +26,21 @@ import widgetStyles from './index.css?inline';
   const shadow = container.attachShadow({ mode: 'open' });
   const root = document.createElement('div');
   root.id = 'lumina-widget-root';
+  root.className = w.host;
+  // The generated light palette selector must match inside the ShadowRoot.
+  root.classList.add('light');
   shadow.appendChild(root);
   const primitiveStyleElement = document.createElement('style');
-  primitiveStyleElement.textContent = primitiveStyles;
+  // The IIFE is the widget's only required host asset. Keep font faces with
+  // Park/Panda rules inside the ShadowRoot instead of emitting a host CSS file.
+  primitiveStyleElement.textContent = [
+    atkinsonRegular, atkinsonBold, interRegular, interMedium, interSemibold,
+    primitiveStyles,
+  ].join('\n');
   shadow.appendChild(primitiveStyleElement);
-  const widgetStyleElement = document.createElement('style');
-  // Vite compiles this import; widget utility styles stay inside the shadow tree.
-  widgetStyleElement.textContent = widgetStyles;
-  shadow.appendChild(widgetStyleElement);
-
-  const styles = document.createElement('style');
-  // Widget positioning remains scoped to this shadow tree.
-  styles.textContent = `
-    #lumina-widget-root {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 999999;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    }
-  `;
-  shadow.appendChild(styles);
-
-  // Retain optional legacy shadow-scoped additions for existing embedders.
-  if ((window as any).LUMINA_WIDGET_CSS) {
-    const tailwindStyles = document.createElement('style');
-    tailwindStyles.textContent = (window as any).LUMINA_WIDGET_CSS;
-    shadow.appendChild(tailwindStyles);
-  }
-
+  // Keep the historical host opt-in inside this ShadowRoot and after the
+  // generated sheet; without a primitive string, default rendering is unchanged.
+  appendLegacyWidgetCss(shadow);
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <EnvironmentProvider value={() => shadow}>
