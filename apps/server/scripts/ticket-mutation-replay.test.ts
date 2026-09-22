@@ -3,6 +3,7 @@ import test from 'node:test';
 import { withTwoTenantFixture, type FixtureResponse, type LocalTenantFixture } from './local-tenant-fixture';
 import { createSystemTenantScope, createVerifiedTenantScope } from '../src/auth/scope';
 import { TicketMutationReplayRepository } from '../src/repositories/ticket-mutation-replay.repository';
+import { createRepositories } from '../src/repositories';
 import { TicketMutationError, TicketMutationReplayService } from '../src/services/ticket-mutation-replay.service';
 import { createRequestCanonicalMutationSli, type RequestCanonicalMutationSliSnapshot } from '../src/observability/request-canonical-mutation-sli';
 import { initializeLocalBetaFixture } from './local-beta-fixture';
@@ -430,6 +431,59 @@ test('concurrent portal replies with an attachment commit one article/attachment
       receipts: beforeLost.receipts + 1,
     }, 'A lost HTTP response must recover one already committed result without a second mutation');
     t.diagnostic(JSON.stringify({ concurrentReplyAttempts: 5, committedArticleRows: 1, committedAttachmentRows: 1, notificationAttempts: fixture.notificationAttempts(), responseLostRecoveryMutations: 1 }));
+  });
+});
+
+test('canonical customer reply resurfaces only its tenant ticket once, including on receipt replay', async () => {
+  await withTwoTenantFixture(async fixture => {
+    const tenantA = fixture.principals.customerA.tenantId;
+    const tenantB = fixture.principals.customerB.tenantId;
+    const token = await portalToken(fixture, 'customerA', 'snoozed-reply');
+    const key = await apiKey(fixture);
+    const created = await apiCreate(fixture, key, 'snoozed-reply-target', {
+      subject: 'Snoozed reply target', customer_email: fixture.principals.customerA.email, body: 'Initial message',
+    }, 'snoozed-reply-target');
+    await expectStatus(created, 201, 'Snoozed reply target creation');
+    const target = ticketId(await created.json<Json>());
+    const deadline = '2099-01-01T00:00:00.000Z';
+    await fixture.db.batch([
+      fixture.db.prepare('UPDATE ticket_support_state SET snoozed_until=?,resurface_reason=NULL WHERE tenant_id=? AND ticket_id=?')
+        .bind(deadline, tenantA, target),
+      fixture.db.prepare('UPDATE ticket_support_state SET snoozed_until=?,resurface_reason=NULL WHERE tenant_id=? AND ticket_id=?')
+        .bind(deadline, tenantB, 'fixture-ticket'),
+    ]);
+    const state = async (tenantId: string, ticket: string) => fixture.db.prepare(
+      'SELECT snoozed_until,resurface_reason,revision FROM ticket_support_state WHERE tenant_id=? AND ticket_id=?',
+    ).bind(tenantId, ticket).first<{ snoozed_until: string | null; resurface_reason: string | null; revision: number }>();
+    const before = await state(tenantA, target);
+    const beforeOtherTenant = await state(tenantB, 'fixture-ticket');
+    assert.equal(before?.snoozed_until, deadline);
+    assert.equal(beforeOtherTenant?.snoozed_until, deadline);
+    const queuesA = createRepositories(createVerifiedTenantScope(tenantA, fixture.principals.operatorA.localId, ['admin'], 1), fixture.db).queues;
+    const queueIds = async (queue: 'actionable' | 'snoozed') => (await queuesA.list({ queue })).items.map(item => item.ticket.id);
+    assert.equal((await queueIds('snoozed')).includes(target), true);
+    assert.equal((await queueIds('actionable')).includes(target), false);
+
+    const reply = await portalReply(fixture, token, target, 'wake-snoozed-ticket', { message: 'New customer activity' }, 'wake-snoozed-ticket');
+    await expectStatus(reply, 201, 'Canonical customer reply');
+    const accepted = await reply.json<Json>();
+    assert.deepEqual(await state(tenantA, target), {
+      snoozed_until: null, resurface_reason: 'customer_reply', revision: before!.revision + 1,
+    });
+    assert.deepEqual(await state(tenantB, 'fixture-ticket'), beforeOtherTenant);
+    assert.equal((await queueIds('snoozed')).includes(target), false);
+    assert.equal((await queueIds('actionable')).includes(target), true);
+    const eventCount = async () => (await fixture.db.prepare(`SELECT count(*) AS count FROM support_state_events
+      WHERE tenant_id=? AND ticket_id=? AND json_extract(facts,'$.after.resurfaceReason')='customer_reply'`)
+      .bind(tenantA, target).first<{ count: number }>())?.count ?? 0;
+    assert.equal(await eventCount(), 1, 'The resurface is audited once');
+
+    const replay = await portalReply(fixture, token, target, 'wake-snoozed-ticket', { message: 'New customer activity' }, 'wake-snoozed-ticket-replay');
+    await expectStatus(replay, 201, 'Canonical reply receipt replay');
+    assert.equal(replay.headers.get('Idempotency-Replayed'), 'true');
+    assert.equal(articleId(await replay.json<Json>()), articleId(accepted));
+    assert.equal((await state(tenantA, target))?.revision, before!.revision + 1);
+    assert.equal(await eventCount(), 1, 'Replay cannot add a second resurface event');
   });
 });
 

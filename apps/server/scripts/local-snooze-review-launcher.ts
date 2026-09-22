@@ -18,6 +18,7 @@ import type { runFundedLocalSnoozeStep } from '../src/auth/automation-compositio
 
 const serverRoot = resolve(import.meta.dirname, '..');
 const tenants = ['fixture-tenant-a', 'fixture-tenant-b'] as const;
+export const snoozeReviewDashboardPort = 5176;
 type DueResult = Awaited<ReturnType<typeof runFundedLocalSnoozeStep>>;
 type DueRpc = { runDue: (tenant: string, purpose: 'new-work' | 'recovery') => Promise<DueResult>;
   [Symbol.dispose]?: () => void };
@@ -53,6 +54,8 @@ export type IsolatedSnoozeReview = Readonly<{
   /** Host-only test inspection. Never mount this as an HTTP route. */
   db: D1Database;
   dueSnapshot: () => ReturnType<Awaited<ReturnType<typeof createLocalSnoozeController>>['snapshot']>;
+  /** Restart this run's runtime against its persisted D1 and due marker. */
+  restart: () => Promise<void>;
   dispose: () => Promise<void>;
 }>;
 
@@ -60,8 +63,9 @@ export type IsolatedSnoozeReview = Readonly<{
  * loopback port; bootstrap responds 503 until both policies are committed. */
 export async function startIsolatedSnoozeReview(input: { port: number; intervalWindowMs: number;
   scheduler?: Scheduler }): Promise<IsolatedSnoozeReview> {
-  if (!Number.isSafeInteger(input.port) || input.port < 1024 || input.port > 65535 || input.port === 8787) {
-    throw new Error('Choose an isolated loopback port other than 8787');
+  if (!Number.isSafeInteger(input.port) || input.port < 1024 || input.port > 65535
+    || input.port === 8787 || input.port === snoozeReviewDashboardPort) {
+    throw new Error('Choose an isolated loopback port other than 8787 or the review dashboard port');
   }
   if (!Number.isSafeInteger(input.intervalWindowMs) || input.intervalWindowMs < 60_000
     || input.intervalWindowMs > 86_400_000) throw new Error('Local budget window must be 1 minute to 24 hours');
@@ -82,8 +86,8 @@ export async function startIsolatedSnoozeReview(input: { port: number; intervalW
     d1Databases: { DB: 'snooze-review-d1' } };
   const appBindings = { ...secrets, ENVIRONMENT: 'local', LOCAL_BETA_ENABLED: 'true',
     BUDGET_ADMISSION_POLICY: 'ticket-mutations-v1', PORTAL_URL: 'http://localhost:5174',
-    DASHBOARD_URL: 'http://localhost:5173',
-    CORS_ORIGINS: 'http://localhost:5174,http://localhost:5173,http://127.0.0.1:5174,http://127.0.0.1:5173',
+    DASHBOARD_URL: `http://127.0.0.1:${snoozeReviewDashboardPort}`,
+    CORS_ORIGINS: `http://localhost:5174,http://127.0.0.1:5174,http://127.0.0.1:${snoozeReviewDashboardPort}`,
     LOCAL_RUNTIME_ORIGIN: origin };
   const options = (live: boolean) => convertV4MiniflareOptions({ host: '127.0.0.1', port: input.port,
     resourcePersistencePath: state, workers: live ? [
@@ -104,15 +108,47 @@ export async function startIsolatedSnoozeReview(input: { port: number; intervalW
   let mf: Miniflare | undefined;
   let controller: Awaited<ReturnType<typeof createLocalSnoozeController>> | undefined;
   let rpc: DueRpc | undefined;
+  let db: D1Database;
+  let restarting: Promise<void> | undefined;
+  let disposed = false;
   const dispose = createReviewDisposal({
     controller: async () => { await controller?.dispose(); },
     rpc: () => { rpc?.[Symbol.dispose]?.(); },
     runtime: async () => { await mf?.dispose(); },
     files: () => rm(directory, { recursive: true, force: true }),
   });
+  const restart = (): Promise<void> => {
+    if (disposed) throw new Error('Local review has been disposed');
+    if (restarting) return restarting;
+    restarting = (async () => {
+      await controller?.dispose();
+      controller = undefined;
+      rpc?.[Symbol.dispose]?.();
+      rpc = undefined;
+      await mf?.dispose();
+      mf = new Miniflare(options(true));
+      db = await mf.getD1Database('DB', 'review-app');
+      const publicUrl = await mf.ready;
+      assert.equal(publicUrl.hostname, '127.0.0.1');
+      assert.equal(publicUrl.port, String(input.port));
+      const health = await fetch(new URL('/health', publicUrl), { signal: AbortSignal.timeout(5_000) });
+      assert.equal(health.status, 200, 'Restarted review app did not become healthy');
+      await health.body?.cancel();
+      rpc = await mf.getWorker('due-private') as unknown as DueRpc;
+      controller = await createLocalSnoozeController({ tenantIds: tenants, markerPath, mode: 'restart',
+        scheduler: input.scheduler, invoke: (tenant, purpose) => rpc!.runDue(tenant, purpose) });
+      await controller.start();
+    })().catch(async error => {
+      disposed = true;
+      try { await dispose(); }
+      catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Local review restart and cleanup both failed'); }
+      throw error;
+    }).finally(() => { restarting = undefined; });
+    return restarting;
+  };
   try {
     mf = new Miniflare(options(false));
-    let db = await mf.getD1Database('DB', 'review-app');
+    db = await mf.getD1Database('DB', 'review-app');
     for (const file of readdirSync(join(serverRoot, 'migrations')).filter(name => name.endsWith('.sql')).sort()) {
       await db.batch(splitSql(readFileSync(join(serverRoot, 'migrations', file), 'utf8')).map(sql => db.prepare(sql)));
     }
@@ -160,7 +196,9 @@ export async function startIsolatedSnoozeReview(input: { port: number; intervalW
     controller = await createLocalSnoozeController({ tenantIds: tenants, markerPath, mode: 'fresh',
       scheduler: input.scheduler, invoke: (tenant, purpose) => rpc!.runDue(tenant, purpose) });
     await controller.start();
-    return { origin, credentials: bootstrap.credentials, db, dueSnapshot: () => controller!.snapshot(), dispose };
+    return { origin, credentials: bootstrap.credentials, get db() { return db; },
+      dueSnapshot: () => controller!.snapshot(), restart,
+      dispose: async () => { if (restarting) await restarting; disposed = true; await dispose(); } };
   } catch (error) {
     try { await dispose(); }
     catch (cleanupError) { throw new AggregateError([error, cleanupError], 'Local review setup and cleanup both failed'); }

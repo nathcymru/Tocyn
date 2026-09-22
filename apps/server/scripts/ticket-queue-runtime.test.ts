@@ -50,12 +50,18 @@ test('queue predicates keep tenant-scoped snoozes out of actionable lists and re
     const saved = await reposA.ticketFilters.create({ name: 'High priority', conditions: [{ field: 'priority', operator: 'equals', value: 'high' }] });
     const narrowed = await reposA.queues.list({ queue: 'actionable', filterId: saved.id });
     assert.deepEqual(narrowed.items.map(item => item.ticket.id), ['open'], 'saved filters refine, rather than replace, queue predicates');
+    assert.equal(await reposA.queues.count({ queue: 'snoozed', filterId: saved.id }), 1);
 
     assert.deepEqual(await reposA.supportStates.resurfaceDue('2098-12-31T23:59:59.999Z'), []);
     assert.deepEqual(await reposA.supportStates.resurfaceDue('2099-01-01T00:00:00.000Z'), ['snoozed']);
     assert.deepEqual(await reposA.supportStates.resurfaceDue('2100-01-01T00:00:00.000Z'), [], 'due retry is idempotent');
     assert.deepEqual((await reposA.queues.list({ queue: 'snoozed' })).items, []);
     assert.deepEqual((await reposA.queues.list({ queue: 'actionable' })).items.map(item => item.ticket.id).sort(), ['open', 'snoozed']);
+    const resurfacedSaved = await reposA.queues.list({ queue: 'actionable', filterId: saved.id });
+    assert.deepEqual(resurfacedSaved.items.map(item => item.ticket.id).sort(), ['open', 'snoozed']);
+    assert.equal(resurfacedSaved.total, await reposA.queues.count({ queue: 'actionable', filterId: saved.id }));
+    assert.equal(await reposA.queues.count({ queue: 'snoozed', filterId: saved.id }), 0);
+    assert.equal(await reposB.queues.count({ queue: 'snoozed' }), 1, 'tenant B snooze remains untouched by tenant A resurface');
   } finally {
     await mf.dispose();
   }
